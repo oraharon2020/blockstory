@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS order_item_costs (
   product_id INTEGER,
   product_name TEXT,
   item_cost DECIMAL(10, 2) DEFAULT 0,
+  order_date DATE,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(order_id, line_item_id)
 );
@@ -24,3 +25,4 @@ CREATE TABLE IF NOT EXISTS order_item_costs (
 CREATE INDEX IF NOT EXISTS idx_product_costs_product_id ON product_costs(product_id);
 CREATE INDEX IF NOT EXISTS idx_product_costs_product_name ON product_costs(product_name);
 CREATE INDEX IF NOT EXISTS idx_order_item_costs_order_id ON order_item_costs(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_item_costs_order_date ON order_item_costs(order_date);

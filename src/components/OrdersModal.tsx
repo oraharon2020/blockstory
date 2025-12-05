@@ -181,6 +181,9 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
 
     setItemCostStates(new Map(itemCostStates.set(key, { ...state, saving: true })));
 
+    // Extract the date from order.date_created (format: "2025-12-05T10:30:00")
+    const orderDate = order.date_created.split('T')[0];
+
     try {
       const res = await fetch('/api/order-item-costs', {
         method: 'POST',
@@ -192,6 +195,7 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
           product_name: item.name,
           item_cost: parseFloat(state.cost) || 0,
           save_as_default: saveAsDefault,
+          order_date: orderDate,
         }),
       });
 

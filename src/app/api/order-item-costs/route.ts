@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { order_id, line_item_id, product_id, product_name, item_cost, save_as_default } = body;
+    const { order_id, line_item_id, product_id, product_name, item_cost, save_as_default, order_date } = body;
 
     if (!order_id || !line_item_id) {
       return NextResponse.json({ error: 'Order ID and Line Item ID are required' }, { status: 400 });
@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
         .from(TABLES.ORDER_ITEM_COSTS)
         .update({
           item_cost: item_cost || 0,
+          order_date: order_date || null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', existing.id)
@@ -83,6 +84,7 @@ export async function POST(request: NextRequest) {
           product_id: product_id || null,
           product_name: product_name || '',
           item_cost: item_cost || 0,
+          order_date: order_date || null,
           updated_at: new Date().toISOString(),
         })
         .select()

@@ -9,7 +9,6 @@ interface SettingsFormData {
   consumerKey: string;
   consumerSecret: string;
   vatRate: number;
-  materialsRate: number;
   creditCardRate: number;
   shippingCost: number;
 }
@@ -23,7 +22,6 @@ export default function SettingsPage() {
     consumerKey: '',
     consumerSecret: '',
     vatRate: 17,
-    materialsRate: 30,
     creditCardRate: 2.5,
     shippingCost: 0,
   });
@@ -51,7 +49,6 @@ export default function SettingsPage() {
           consumerKey: json.data.consumerKey || '',
           consumerSecret: json.data.consumerSecret || '',
           vatRate: parseFloat(json.data.vatRate) || 17,
-          materialsRate: parseFloat(json.data.materialsRate) || 30,
           creditCardRate: parseFloat(json.data.creditCardRate) || 2.5,
           shippingCost: parseFloat(json.data.shippingCost) || 0,
         });
@@ -96,7 +93,6 @@ export default function SettingsPage() {
           wooUrl: settings.wooUrl,
           consumerKey: settings.consumerKey,
           consumerSecret: settings.consumerSecret,
-          materialsRate: settings.materialsRate / 100,
         }),
       });
 
@@ -329,7 +325,7 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-gray-50 rounded-xl p-5">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     מע"מ
@@ -344,22 +340,6 @@ export default function SettingsPage() {
                     <span className="text-gray-500 text-lg">%</span>
                   </div>
                   <p className="text-xs text-gray-500 mt-2">אחוז המע"מ הסטנדרטי בישראל</p>
-                </div>
-
-                <div className="bg-gray-50 rounded-xl p-5">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    עלות חומרי גלם
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      value={settings.materialsRate}
-                      onChange={(e) => setSettings({ ...settings, materialsRate: parseFloat(e.target.value) || 0 })}
-                      className="w-24 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-center text-lg font-semibold"
-                    />
-                    <span className="text-gray-500 text-lg">%</span>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">אחוז משוער מההכנסה</p>
                 </div>
 
                 <div className="bg-gray-50 rounded-xl p-5">

@@ -56,27 +56,58 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
   const fetchData = useCallback(async (showLoading = true) => {
     try {
       if (showLoading) setLoading(true);
-      const res = await fetch(`/api/cashflow?start=${startDate}&end=${endDate}`);
-      const json = await res.json();
       
-      if (json.data) {
-        const dataMap = new Map(json.data.map((d: DailyData) => [d.date, d]));
+      // Fetch cashflow data and daily costs in parallel
+      const [cashflowRes, costsRes] = await Promise.all([
+        fetch(`/api/cashflow?start=${startDate}&end=${endDate}`),
+        fetch(`/api/daily-costs?startDate=${startDate}&endDate=${endDate}`),
+      ]);
+      
+      const cashflowJson = await cashflowRes.json();
+      const costsJson = await costsRes.json();
+      
+      // Get costs by date
+      const costsByDate: Record<string, number> = costsJson.costsByDate || {};
+      
+      if (cashflowJson.data) {
+        const dataMap = new Map(cashflowJson.data.map((d: DailyData) => [d.date, d]));
         const allDays = getMonthDays(month, year);
         
         const dates: DailyData[] = allDays.map(dateStr => {
           const existing = dataMap.get(dateStr) as DailyData | undefined;
-          return existing || {
+          const materialsCost = costsByDate[dateStr] || 0;
+          
+          if (existing) {
+            // Recalculate totals with real materials cost
+            const totalExpenses = 
+              (existing.googleAdsCost || 0) +
+              (existing.facebookAdsCost || 0) +
+              (existing.shippingCost || 0) +
+              materialsCost +
+              (existing.creditCardFees || 0) +
+              (existing.vat || 0);
+            const profit = (existing.revenue || 0) - totalExpenses;
+            
+            return {
+              ...existing,
+              materialsCost,
+              totalExpenses,
+              profit,
+            };
+          }
+          
+          return {
             date: dateStr,
             revenue: 0,
             ordersCount: 0,
             googleAdsCost: 0,
             facebookAdsCost: 0,
             shippingCost: 0,
-            materialsCost: 0,
+            materialsCost,
             creditCardFees: 0,
             vat: 0,
-            totalExpenses: 0,
-            profit: 0,
+            totalExpenses: materialsCost,
+            profit: -materialsCost,
             roi: 0,
           };
         });
@@ -122,7 +153,8 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
   };
 
   const handleCellClick = (date: string, field: keyof DailyData, value: number) => {
-    const editableFields: (keyof DailyData)[] = ['googleAdsCost', 'facebookAdsCost', 'materialsCost'];
+    // materialsCost is now calculated automatically from order item costs
+    const editableFields: (keyof DailyData)[] = ['googleAdsCost', 'facebookAdsCost'];
     if (!editableFields.includes(field)) return;
     
     setEditingCell({ date, field });
@@ -360,7 +392,11 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
                   <td className="px-3 py-2 text-gray-600">{renderEditableCell(row, 'googleAdsCost', row.googleAdsCost)}</td>
                   <td className="px-3 py-2 text-gray-600">{renderEditableCell(row, 'facebookAdsCost', row.facebookAdsCost)}</td>
                   <td className="px-3 py-2 text-gray-600">{formatCurrency(row.shippingCost)}</td>
-                  <td className="px-3 py-2 text-gray-600">{renderEditableCell(row, 'materialsCost', row.materialsCost)}</td>
+                  <td className="px-3 py-2 text-gray-600">
+                    <span className={row.materialsCost > 0 ? 'text-orange-600' : 'text-gray-400'}>
+                      {formatCurrency(row.materialsCost)}
+                    </span>
+                  </td>
                   <td className="px-3 py-2 text-gray-600">{formatCurrency(row.creditCardFees)}</td>
                   <td className="px-3 py-2 text-gray-600">{formatCurrency(row.vat)}</td>
                   <td className="px-3 py-2 font-medium text-red-600">{formatCurrency(row.totalExpenses)}</td>
