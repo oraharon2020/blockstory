@@ -5,6 +5,7 @@ import { DailyData } from '@/types';
 import { formatCurrency, formatPercent } from '@/lib/calculations';
 import { getMonthDays } from './MonthPicker';
 import OrdersModal from './OrdersModal';
+import ExpensesManager from './ExpensesManager';
 import { 
   RefreshCw, 
   TrendingUp, 
@@ -16,7 +17,8 @@ import {
   Check,
   X,
   Zap,
-  ZapOff
+  ZapOff,
+  Receipt
 } from 'lucide-react';
 
 interface CashflowTableProps {
@@ -31,17 +33,32 @@ interface EditingCell {
   field: keyof DailyData;
 }
 
+interface ExpensesByDate {
+  [date: string]: {
+    vat: number;
+    vatAmount: number;
+    noVat: number;
+  };
+}
+
 const DAYS_HE = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 const AUTO_REFRESH_INTERVAL = 30000;
 
+interface DailyDataWithExpenses extends DailyData {
+  expensesVat: number;
+  expensesVatAmount: number;
+  expensesNoVat: number;
+}
+
 export default function CashflowTable({ month, year, onSync, isLoading }: CashflowTableProps) {
-  const [data, setData] = useState<DailyData[]>([]);
+  const [data, setData] = useState<DailyDataWithExpenses[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [editValue, setEditValue] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [showExpensesManager, setShowExpensesManager] = useState(false);
   
   // Orders modal state
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -57,44 +74,77 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
     try {
       if (showLoading) setLoading(true);
       
-      // Fetch cashflow data and daily costs in parallel
-      const [cashflowRes, costsRes] = await Promise.all([
+      // Fetch cashflow data, daily costs, and expenses in parallel
+      const [cashflowRes, costsRes, expensesRes] = await Promise.all([
         fetch(`/api/cashflow?start=${startDate}&end=${endDate}`),
         fetch(`/api/daily-costs?startDate=${startDate}&endDate=${endDate}`),
+        fetch(`/api/expenses?startDate=${startDate}&endDate=${endDate}`),
       ]);
       
       const cashflowJson = await cashflowRes.json();
       const costsJson = await costsRes.json();
+      const expensesJson = await expensesRes.json();
       
       // Get costs by date
       const costsByDate: Record<string, number> = costsJson.costsByDate || {};
+      
+      // Process expenses by date
+      const expensesByDate: ExpensesByDate = {};
+      (expensesJson.vatExpenses || []).forEach((exp: any) => {
+        const date = exp.expense_date;
+        if (!expensesByDate[date]) {
+          expensesByDate[date] = { vat: 0, vatAmount: 0, noVat: 0 };
+        }
+        expensesByDate[date].vat += exp.amount || 0;
+        expensesByDate[date].vatAmount += exp.vat_amount || 0;
+      });
+      (expensesJson.noVatExpenses || []).forEach((exp: any) => {
+        const date = exp.expense_date;
+        if (!expensesByDate[date]) {
+          expensesByDate[date] = { vat: 0, vatAmount: 0, noVat: 0 };
+        }
+        expensesByDate[date].noVat += exp.amount || 0;
+      });
       
       if (cashflowJson.data) {
         const dataMap = new Map(cashflowJson.data.map((d: DailyData) => [d.date, d]));
         const allDays = getMonthDays(month, year);
         
-        const dates: DailyData[] = allDays.map(dateStr => {
+        const dates: DailyDataWithExpenses[] = allDays.map(dateStr => {
           const existing = dataMap.get(dateStr) as DailyData | undefined;
           const materialsCost = costsByDate[dateStr] || 0;
+          const dayExpenses = expensesByDate[dateStr] || { vat: 0, vatAmount: 0, noVat: 0 };
           
           if (existing) {
-            // Recalculate totals with real materials cost
+            // Recalculate totals with real materials cost and expenses
+            // VAT is now: revenue VAT - deductible VAT from expenses
+            const revenueVat = existing.vat || 0;
+            const netVat = Math.max(0, revenueVat - dayExpenses.vatAmount);
+            
             const totalExpenses = 
               (existing.googleAdsCost || 0) +
               (existing.facebookAdsCost || 0) +
               (existing.shippingCost || 0) +
               materialsCost +
               (existing.creditCardFees || 0) +
-              (existing.vat || 0);
+              netVat +
+              dayExpenses.vat +
+              dayExpenses.noVat;
             const profit = (existing.revenue || 0) - totalExpenses;
             
             return {
               ...existing,
               materialsCost,
+              vat: netVat,
               totalExpenses,
               profit,
+              expensesVat: dayExpenses.vat,
+              expensesVatAmount: dayExpenses.vatAmount,
+              expensesNoVat: dayExpenses.noVat,
             };
           }
+          
+          const totalExpenses = materialsCost + dayExpenses.vat + dayExpenses.noVat;
           
           return {
             date: dateStr,
@@ -106,9 +156,12 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
             materialsCost,
             creditCardFees: 0,
             vat: 0,
-            totalExpenses: materialsCost,
-            profit: -materialsCost,
+            totalExpenses,
+            profit: -totalExpenses,
             roi: 0,
+            expensesVat: dayExpenses.vat,
+            expensesVatAmount: dayExpenses.vatAmount,
+            expensesNoVat: dayExpenses.noVat,
           };
         });
         
@@ -171,13 +224,26 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
       
       const updatedRow = { ...existingRow, [editingCell.field]: numValue };
       
+      // Get expenses for this day
+      const dayExpenses = {
+        vat: existingRow?.expensesVat || 0,
+        vatAmount: existingRow?.expensesVatAmount || 0,
+        noVat: existingRow?.expensesNoVat || 0,
+      };
+      
+      // Calculate net VAT (revenue VAT - deductible VAT from expenses)
+      const revenueVat = updatedRow.vat || 0;
+      const netVat = Math.max(0, revenueVat - dayExpenses.vatAmount);
+      
       const totalExpenses = 
         (updatedRow.googleAdsCost || 0) +
         (updatedRow.facebookAdsCost || 0) +
         (updatedRow.shippingCost || 0) +
         (updatedRow.materialsCost || 0) +
         (updatedRow.creditCardFees || 0) +
-        (updatedRow.vat || 0);
+        netVat +
+        dayExpenses.vat +
+        dayExpenses.noVat;
       
       const profit = (updatedRow.revenue || 0) - totalExpenses;
       const roi = totalExpenses > 0 ? (profit / totalExpenses) * 100 : 0;
@@ -264,10 +330,12 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
       materialsCost: acc.materialsCost + row.materialsCost,
       creditCardFees: acc.creditCardFees + row.creditCardFees,
       vat: acc.vat + row.vat,
+      expensesVat: acc.expensesVat + row.expensesVat,
+      expensesNoVat: acc.expensesNoVat + row.expensesNoVat,
       totalExpenses: acc.totalExpenses + row.totalExpenses,
       profit: acc.profit + row.profit,
     }),
-    { revenue: 0, ordersCount: 0, googleAdsCost: 0, facebookAdsCost: 0, shippingCost: 0, materialsCost: 0, creditCardFees: 0, vat: 0, totalExpenses: 0, profit: 0 }
+    { revenue: 0, ordersCount: 0, googleAdsCost: 0, facebookAdsCost: 0, shippingCost: 0, materialsCost: 0, creditCardFees: 0, vat: 0, expensesVat: 0, expensesNoVat: 0, totalExpenses: 0, profit: 0 }
   );
 
   const avgROI = totals.totalExpenses > 0 ? (totals.profit / totals.totalExpenses) * 100 : 0;
@@ -292,6 +360,15 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowExpensesManager(true)}
+              className="flex items-center gap-2 bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors"
+              title="ניהול הוצאות"
+            >
+              <Receipt className="w-5 h-5" />
+              <span className="hidden sm:inline">הוצאות</span>
+            </button>
+            
             <button
               onClick={() => setAutoRefresh(!autoRefresh)}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
@@ -364,6 +441,8 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
                 <th className="px-3 py-3 text-right font-semibold text-gray-600">משלוח</th>
                 <th className="px-3 py-3 text-right font-semibold text-gray-600">חומרים</th>
                 <th className="px-3 py-3 text-right font-semibold text-gray-600">אשראי</th>
+                <th className="px-3 py-3 text-right font-semibold text-gray-600 bg-purple-50">מוכר</th>
+                <th className="px-3 py-3 text-right font-semibold text-gray-600 bg-amber-50">חו"ל</th>
                 <th className="px-3 py-3 text-right font-semibold text-gray-600">מע"מ</th>
                 <th className="px-3 py-3 text-right font-semibold text-gray-600">הוצאות</th>
                 <th className="px-3 py-3 text-right font-semibold text-gray-600">רווח</th>
@@ -398,6 +477,16 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
                     </span>
                   </td>
                   <td className="px-3 py-2 text-gray-600">{formatCurrency(row.creditCardFees)}</td>
+                  <td className="px-3 py-2 bg-purple-50/50">
+                    <span className={row.expensesVat > 0 ? 'text-purple-600' : 'text-gray-400'}>
+                      {formatCurrency(row.expensesVat)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 bg-amber-50/50">
+                    <span className={row.expensesNoVat > 0 ? 'text-amber-600' : 'text-gray-400'}>
+                      {formatCurrency(row.expensesNoVat)}
+                    </span>
+                  </td>
                   <td className="px-3 py-2 text-gray-600">{formatCurrency(row.vat)}</td>
                   <td className="px-3 py-2 font-medium text-red-600">{formatCurrency(row.totalExpenses)}</td>
                   <td className={`px-3 py-2 font-bold ${row.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -420,6 +509,8 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
                 <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.shippingCost)}</td>
                 <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.materialsCost)}</td>
                 <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.creditCardFees)}</td>
+                <td className="px-3 py-3 text-purple-600 bg-purple-100/50">{formatCurrency(totals.expensesVat)}</td>
+                <td className="px-3 py-3 text-amber-600 bg-amber-100/50">{formatCurrency(totals.expensesNoVat)}</td>
                 <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.vat)}</td>
                 <td className="px-3 py-3 text-red-600">{formatCurrency(totals.totalExpenses)}</td>
                 <td className={`px-3 py-3 ${totals.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -442,6 +533,36 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
         orders={orders}
         isLoading={loadingOrders}
       />
+      
+      {/* Expenses Manager Modal */}
+      {showExpensesManager && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">ניהול הוצאות</h2>
+              <button
+                onClick={() => {
+                  setShowExpensesManager(false);
+                  fetchData(false);
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <ExpensesManager
+                month={month}
+                year={year}
+                onClose={() => {
+                  setShowExpensesManager(false);
+                  fetchData(false);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -26,3 +26,32 @@ CREATE INDEX IF NOT EXISTS idx_product_costs_product_id ON product_costs(product
 CREATE INDEX IF NOT EXISTS idx_product_costs_product_name ON product_costs(product_name);
 CREATE INDEX IF NOT EXISTS idx_order_item_costs_order_id ON order_item_costs(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_item_costs_order_date ON order_item_costs(order_date);
+
+-- Expenses with VAT (Israeli suppliers - VAT deductible)
+CREATE TABLE IF NOT EXISTS expenses_vat (
+  id SERIAL PRIMARY KEY,
+  expense_date DATE NOT NULL,
+  description TEXT NOT NULL,
+  amount DECIMAL(10, 2) NOT NULL,
+  vat_amount DECIMAL(10, 2) DEFAULT 0,
+  supplier_name TEXT,
+  is_recurring BOOLEAN DEFAULT FALSE,
+  category TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Expenses without VAT (Foreign suppliers - no VAT)
+CREATE TABLE IF NOT EXISTS expenses_no_vat (
+  id SERIAL PRIMARY KEY,
+  expense_date DATE NOT NULL,
+  description TEXT NOT NULL,
+  amount DECIMAL(10, 2) NOT NULL,
+  supplier_name TEXT,
+  is_recurring BOOLEAN DEFAULT FALSE,
+  category TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes for expenses tables
+CREATE INDEX IF NOT EXISTS idx_expenses_vat_date ON expenses_vat(expense_date);
+CREATE INDEX IF NOT EXISTS idx_expenses_no_vat_date ON expenses_no_vat(expense_date);

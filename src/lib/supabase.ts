@@ -11,4 +11,6 @@ export const TABLES = {
   SETTINGS: 'settings',
   PRODUCT_COSTS: 'product_costs',
   ORDER_ITEM_COSTS: 'order_item_costs',
+  EXPENSES_VAT: 'expenses_vat',
+  EXPENSES_NO_VAT: 'expenses_no_vat',
 } as const;
