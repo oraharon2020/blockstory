@@ -30,11 +30,11 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
   const [showAddForm, setShowAddForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copying, setCopying] = useState(false);
+  const [vatRate, setVatRate] = useState(17); // Default 17%
   const [newExpense, setNewExpense] = useState({
     expense_date: '',
     description: '',
     amount: '',
-    vat_amount: '',
     supplier_name: '',
     is_recurring: false,
     category: '',
@@ -47,7 +47,26 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
 
   useEffect(() => {
     loadExpenses();
+    loadSettings();
   }, [month, year]);
+
+  const loadSettings = async () => {
+    try {
+      const res = await fetch('/api/settings');
+      const json = await res.json();
+      if (json.data) {
+        const settings = json.data.reduce((acc: any, s: any) => {
+          acc[s.key] = s.value;
+          return acc;
+        }, {});
+        if (settings.vatRate) {
+          setVatRate(parseFloat(settings.vatRate) || 17);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    }
+  };
 
   const loadExpenses = async () => {
     setLoading(true);
@@ -63,10 +82,20 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
     }
   };
 
+  // Calculate VAT from total amount (amount includes VAT)
+  // Formula: VAT = amount * (vatRate / (100 + vatRate))
+  const calculateVatFromTotal = (totalAmount: number): number => {
+    return totalAmount * (vatRate / (100 + vatRate));
+  };
+
   const handleAdd = async () => {
     if (!newExpense.description || !newExpense.amount || !newExpense.expense_date) return;
     
     setSaving(true);
+    const amount = parseFloat(newExpense.amount) || 0;
+    // Calculate VAT automatically for VAT expenses
+    const vatAmount = activeTab === 'vat' ? calculateVatFromTotal(amount) : 0;
+    
     try {
       const res = await fetch('/api/expenses', {
         method: 'POST',
@@ -74,8 +103,8 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
         body: JSON.stringify({
           type: activeTab === 'vat' ? 'vat' : 'noVat',
           ...newExpense,
-          amount: parseFloat(newExpense.amount) || 0,
-          vat_amount: activeTab === 'vat' ? (parseFloat(newExpense.vat_amount) || 0) : 0,
+          amount: amount,
+          vat_amount: vatAmount,
         }),
       });
 
@@ -85,7 +114,6 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
           expense_date: '',
           description: '',
           amount: '',
-          vat_amount: '',
           supplier_name: '',
           is_recurring: false,
           category: '',
@@ -273,30 +301,22 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">ספק</label>
-              <input
-                type="text"
-                value={newExpense.supplier_name}
-                onChange={(e) => setNewExpense({ ...newExpense, supplier_name: e.target.value })}
-                placeholder="שם הספק"
-                className="w-full px-3 py-2 border rounded-lg text-sm"
-              />
-            </div>
-            {activeTab === 'vat' && (
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">מע"מ</label>
-                <input
-                  type="number"
-                  value={newExpense.vat_amount}
-                  onChange={(e) => setNewExpense({ ...newExpense, vat_amount: e.target.value })}
-                  placeholder="סכום המע״מ"
-                  className="w-full px-3 py-2 border rounded-lg text-sm"
-                />
-              </div>
-            )}
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">ספק</label>
+            <input
+              type="text"
+              value={newExpense.supplier_name}
+              onChange={(e) => setNewExpense({ ...newExpense, supplier_name: e.target.value })}
+              placeholder="שם הספק"
+              className="w-full px-3 py-2 border rounded-lg text-sm"
+            />
           </div>
+          
+          {activeTab === 'vat' && newExpense.amount && (
+            <div className="text-xs text-green-600 bg-green-50 p-2 rounded">
+              מע"מ לקיזוז (חישוב אוטומטי {vatRate}%): {formatCurrency(calculateVatFromTotal(parseFloat(newExpense.amount) || 0))}
+            </div>
+          )}
 
           <div className="flex items-center gap-2">
             <input
