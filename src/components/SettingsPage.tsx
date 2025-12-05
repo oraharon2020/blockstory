@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings, Save, Loader2, Eye, EyeOff, TestTube, Check, X } from 'lucide-react';
+import { Settings, Save, Loader2, Eye, EyeOff, TestTube, Check, X, Store, Calculator, Package, HelpCircle } from 'lucide-react';
 import ProductCostsManager from './ProductCostsManager';
 
 interface SettingsFormData {
@@ -14,7 +14,10 @@ interface SettingsFormData {
   shippingCost: number;
 }
 
+type TabType = 'woocommerce' | 'business' | 'products';
+
 export default function SettingsPage() {
+  const [activeTab, setActiveTab] = useState<TabType>('woocommerce');
   const [settings, setSettings] = useState<SettingsFormData>({
     wooUrl: '',
     consumerKey: '',
@@ -128,212 +131,310 @@ export default function SettingsPage() {
     );
   }
 
+  const tabs = [
+    { id: 'woocommerce' as TabType, label: 'חיבור WooCommerce', icon: Store, color: 'purple' },
+    { id: 'business' as TabType, label: 'פרמטרים עסקיים', icon: Calculator, color: 'green' },
+    { id: 'products' as TabType, label: 'עלויות מוצרים', icon: Package, color: 'orange' },
+  ];
+
   return (
-    <div className="max-w-2xl mx-auto" dir="rtl">
+    <div className="max-w-4xl mx-auto" dir="rtl">
       <div className="bg-white rounded-xl shadow-lg overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-gray-700 to-gray-800 text-white p-6">
           <div className="flex items-center gap-3">
             <Settings className="w-8 h-8" />
             <div>
-              <h1 className="text-2xl font-bold">הגדרות API</h1>
-              <p className="text-gray-300">הגדרת חיבור ל-WooCommerce ופרמטרים עסקיים</p>
+              <h1 className="text-2xl font-bold">הגדרות מערכת</h1>
+              <p className="text-gray-300">ניהול חיבורים, פרמטרים עסקיים ועלויות מוצרים</p>
             </div>
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
-          {/* WooCommerce Settings */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-              <span className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
-                <span className="text-purple-600 font-bold text-sm">W</span>
-              </span>
-              הגדרות WooCommerce
-            </h2>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                כתובת החנות
-              </label>
-              <input
-                type="url"
-                value={settings.wooUrl}
-                onChange={(e) => setSettings({ ...settings, wooUrl: e.target.value })}
-                placeholder="https://your-store.com"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Consumer Key
-              </label>
-              <div className="relative">
-                <input
-                  type={showSecrets.consumerKey ? 'text' : 'password'}
-                  value={settings.consumerKey}
-                  onChange={(e) => setSettings({ ...settings, consumerKey: e.target.value })}
-                  placeholder="ck_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                  className="w-full px-4 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+        {/* Tabs */}
+        <div className="border-b">
+          <div className="flex">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
                 <button
-                  type="button"
-                  onClick={() => setShowSecrets({ ...showSecrets, consumerKey: !showSecrets.consumerKey })}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-6 py-4 font-medium transition-all border-b-2 ${
+                    isActive
+                      ? `border-${tab.color}-600 text-${tab.color}-600 bg-${tab.color}-50`
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                  }`}
+                  style={isActive ? {
+                    borderColor: tab.color === 'purple' ? '#9333ea' : tab.color === 'green' ? '#16a34a' : '#ea580c',
+                    color: tab.color === 'purple' ? '#9333ea' : tab.color === 'green' ? '#16a34a' : '#ea580c',
+                    backgroundColor: tab.color === 'purple' ? '#faf5ff' : tab.color === 'green' ? '#f0fdf4' : '#fff7ed',
+                  } : {}}
                 >
-                  {showSecrets.consumerKey ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  <Icon className="w-5 h-5" />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        <div className="p-6">
+          {/* WooCommerce Tab */}
+          {activeTab === 'woocommerce' && (
+            <div className="space-y-6">
+              <div className="flex items-start gap-4 p-4 bg-purple-50 rounded-lg border border-purple-100">
+                <Store className="w-10 h-10 text-purple-600 flex-shrink-0" />
+                <div>
+                  <h3 className="font-semibold text-purple-900">חיבור לחנות WooCommerce</h3>
+                  <p className="text-purple-700 text-sm">הזן את פרטי ה-API כדי לסנכרן הזמנות אוטומטית</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    כתובת החנות
+                  </label>
+                  <input
+                    type="url"
+                    value={settings.wooUrl}
+                    onChange={(e) => setSettings({ ...settings, wooUrl: e.target.value })}
+                    placeholder="https://your-store.com"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Consumer Key
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showSecrets.consumerKey ? 'text' : 'password'}
+                        value={settings.consumerKey}
+                        onChange={(e) => setSettings({ ...settings, consumerKey: e.target.value })}
+                        placeholder="ck_xxxx..."
+                        className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSecrets({ ...showSecrets, consumerKey: !showSecrets.consumerKey })}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        {showSecrets.consumerKey ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Consumer Secret
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showSecrets.consumerSecret ? 'text' : 'password'}
+                        value={settings.consumerSecret}
+                        onChange={(e) => setSettings({ ...settings, consumerSecret: e.target.value })}
+                        placeholder="cs_xxxx..."
+                        className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSecrets({ ...showSecrets, consumerSecret: !showSecrets.consumerSecret })}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        {showSecrets.consumerSecret ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Test Connection */}
+                <div className="flex items-center gap-4 pt-2">
+                  <button
+                    onClick={handleTest}
+                    disabled={testing || !settings.wooUrl || !settings.consumerKey || !settings.consumerSecret}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {testing ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <TestTube className="w-5 h-5" />
+                    )}
+                    <span>בדיקת חיבור</span>
+                  </button>
+
+                  {testResult && (
+                    <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${testResult.success ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {testResult.success ? <Check className="w-5 h-5" /> : <X className="w-5 h-5" />}
+                      <span>{testResult.message}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Help Box */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
+                <div className="flex items-start gap-3">
+                  <HelpCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="font-medium text-blue-800 mb-2">איך להשיג את מפתחות ה-API?</h3>
+                    <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
+                      <li>היכנס לפאנל הניהול של WooCommerce</li>
+                      <li>לך ל-WooCommerce → הגדרות → מתקדם → REST API</li>
+                      <li>לחץ על "הוסף מפתח"</li>
+                      <li>בחר הרשאות "קריאה" ולחץ על "צור מפתח API"</li>
+                      <li>העתק את ה-Consumer Key וה-Consumer Secret</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <div className="flex justify-end pt-4 border-t">
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${
+                    saved
+                      ? 'bg-green-600 text-white'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  {saving ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : saved ? (
+                    <Check className="w-5 h-5" />
+                  ) : (
+                    <Save className="w-5 h-5" />
+                  )}
+                  <span>{saved ? 'נשמר!' : 'שמור הגדרות'}</span>
                 </button>
               </div>
             </div>
+          )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Consumer Secret
-              </label>
-              <div className="relative">
-                <input
-                  type={showSecrets.consumerSecret ? 'text' : 'password'}
-                  value={settings.consumerSecret}
-                  onChange={(e) => setSettings({ ...settings, consumerSecret: e.target.value })}
-                  placeholder="cs_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                  className="w-full px-4 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+          {/* Business Settings Tab */}
+          {activeTab === 'business' && (
+            <div className="space-y-6">
+              <div className="flex items-start gap-4 p-4 bg-green-50 rounded-lg border border-green-100">
+                <Calculator className="w-10 h-10 text-green-600 flex-shrink-0" />
+                <div>
+                  <h3 className="font-semibold text-green-900">פרמטרים עסקיים</h3>
+                  <p className="text-green-700 text-sm">הגדרת אחוזי מיסים, עלויות ועמלות לחישוב רווחיות</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-gray-50 rounded-xl p-5">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    מע"מ
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={settings.vatRate}
+                      onChange={(e) => setSettings({ ...settings, vatRate: parseFloat(e.target.value) || 0 })}
+                      className="w-24 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-center text-lg font-semibold"
+                    />
+                    <span className="text-gray-500 text-lg">%</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">אחוז המע"מ הסטנדרטי בישראל</p>
+                </div>
+
+                <div className="bg-gray-50 rounded-xl p-5">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    עלות חומרי גלם
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={settings.materialsRate}
+                      onChange={(e) => setSettings({ ...settings, materialsRate: parseFloat(e.target.value) || 0 })}
+                      className="w-24 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-center text-lg font-semibold"
+                    />
+                    <span className="text-gray-500 text-lg">%</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">אחוז משוער מההכנסה</p>
+                </div>
+
+                <div className="bg-gray-50 rounded-xl p-5">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    עמלת אשראי
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={settings.creditCardRate}
+                      onChange={(e) => setSettings({ ...settings, creditCardRate: parseFloat(e.target.value) || 0 })}
+                      className="w-24 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-center text-lg font-semibold"
+                    />
+                    <span className="text-gray-500 text-lg">%</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">עמלה שגובה חברת האשראי</p>
+                </div>
+
+                <div className="bg-gray-50 rounded-xl p-5">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    עלות משלוח בפועל
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={settings.shippingCost}
+                      onChange={(e) => setSettings({ ...settings, shippingCost: parseFloat(e.target.value) || 0 })}
+                      className="w-24 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-center text-lg font-semibold"
+                    />
+                    <span className="text-gray-500 text-lg">₪</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">0 = לפי מחיר ללקוח</p>
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <div className="flex justify-end pt-4 border-t">
                 <button
-                  type="button"
-                  onClick={() => setShowSecrets({ ...showSecrets, consumerSecret: !showSecrets.consumerSecret })}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  onClick={handleSave}
+                  disabled={saving}
+                  className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${
+                    saved
+                      ? 'bg-green-600 text-white'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
                 >
-                  {showSecrets.consumerSecret ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  {saving ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : saved ? (
+                    <Check className="w-5 h-5" />
+                  ) : (
+                    <Save className="w-5 h-5" />
+                  )}
+                  <span>{saved ? 'נשמר!' : 'שמור הגדרות'}</span>
                 </button>
               </div>
             </div>
+          )}
 
-            {/* Test Connection Button */}
-            <button
-              onClick={handleTest}
-              disabled={testing || !settings.wooUrl || !settings.consumerKey || !settings.consumerSecret}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {testing ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <TestTube className="w-5 h-5" />
-              )}
-              <span>בדיקת חיבור</span>
-            </button>
-
-            {/* Test Result */}
-            {testResult && (
-              <div className={`flex items-center gap-2 p-3 rounded-lg ${testResult.success ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                {testResult.success ? <Check className="w-5 h-5" /> : <X className="w-5 h-5" />}
-                <span>{testResult.message}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Business Settings */}
-          <div className="space-y-4 pt-4 border-t">
-            <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-              <span className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-                <span className="text-green-600 font-bold text-sm">₪</span>
-              </span>
-              פרמטרים עסקיים
-            </h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  מע"מ (%)
-                </label>
-                <input
-                  type="number"
-                  value={settings.vatRate}
-                  onChange={(e) => setSettings({ ...settings, vatRate: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+          {/* Product Costs Tab */}
+          {activeTab === 'products' && (
+            <div className="space-y-6">
+              <div className="flex items-start gap-4 p-4 bg-orange-50 rounded-lg border border-orange-100">
+                <Package className="w-10 h-10 text-orange-600 flex-shrink-0" />
+                <div>
+                  <h3 className="font-semibold text-orange-900">עלויות מוצרים</h3>
+                  <p className="text-orange-700 text-sm">ניהול עלויות ברירת מחדל לכל מוצר - נשמרות אוטומטית מהזמנות</p>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  עלות חומרי גלם (%)
-                </label>
-                <input
-                  type="number"
-                  value={settings.materialsRate}
-                  onChange={(e) => setSettings({ ...settings, materialsRate: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  עמלת אשראי (%)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={settings.creditCardRate}
-                  onChange={(e) => setSettings({ ...settings, creditCardRate: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
+              <ProductCostsManager />
             </div>
-
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                עלות משלוח בפועל (₪ להזמנה)
-              </label>
-              <input
-                type="number"
-                step="0.5"
-                value={settings.shippingCost}
-                onChange={(e) => setSettings({ ...settings, shippingCost: parseFloat(e.target.value) || 0 })}
-                placeholder="השאר 0 לחישוב לפי מחיר ללקוח"
-                className="w-full max-w-xs px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <p className="text-sm text-gray-500 mt-1">אם תשאיר 0, יחושב לפי מחיר המשלוח שהלקוח שילם</p>
-            </div>
-          </div>
-
-          {/* Info Box */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h3 className="font-medium text-blue-800 mb-2">איך להשיג את מפתחות ה-API?</h3>
-            <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
-              <li>היכנס לפאנל הניהול של WooCommerce</li>
-              <li>לך ל-WooCommerce → הגדרות → מתקדם → REST API</li>
-              <li>לחץ על "הוסף מפתח"</li>
-              <li>בחר הרשאות "קריאה" ולחץ על "צור מפתח API"</li>
-              <li>העתק את ה-Consumer Key וה-Consumer Secret</li>
-            </ol>
-          </div>
-
-          {/* Save Button */}
-          <div className="flex justify-end pt-4">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${
-                saved
-                  ? 'bg-green-600 text-white'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
-            >
-              {saving ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : saved ? (
-                <Check className="w-5 h-5" />
-              ) : (
-                <Save className="w-5 h-5" />
-              )}
-              <span>{saved ? 'נשמר!' : 'שמור הגדרות'}</span>
-            </button>
-          </div>
-
-          {/* Product Costs Section */}
-          <div className="pt-6 border-t">
-            <ProductCostsManager />
-          </div>
+          )}
         </div>
       </div>
     </div>
