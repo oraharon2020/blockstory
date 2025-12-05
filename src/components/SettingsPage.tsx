@@ -44,9 +44,9 @@ export default function SettingsPage() {
           wooUrl: json.data.wooUrl || '',
           consumerKey: json.data.consumerKey || '',
           consumerSecret: json.data.consumerSecret || '',
-          vatRate: json.data.vatRate || 17,
-          materialsRate: json.data.materialsRate || 30,
-          creditCardRate: json.data.creditCardRate || 2.5,
+          vatRate: parseFloat(json.data.vatRate) || 17,
+          materialsRate: parseFloat(json.data.materialsRate) || 30,
+          creditCardRate: parseFloat(json.data.creditCardRate) || 2.5,
         });
       }
     } catch (error) {

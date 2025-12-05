@@ -35,16 +35,25 @@ function toSnakeCase(data: any): any {
 
 export async function GET() {
   try {
+    // Get all settings as key-value pairs
     const { data, error } = await supabase
       .from(TABLES.SETTINGS)
-      .select('*')
-      .single();
+      .select('key, value');
 
-    if (error && error.code !== 'PGRST116') {
+    if (error) {
+      console.error('Settings fetch error:', error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ data: toCamelCase(data) || null });
+    // Convert array of {key, value} to object
+    const settings: Record<string, string> = {};
+    if (data) {
+      data.forEach((item: { key: string; value: string }) => {
+        settings[item.key] = item.value;
+      });
+    }
+
+    return NextResponse.json({ data: settings });
   } catch (error) {
     console.error('Settings fetch error:', error);
     return NextResponse.json(
@@ -57,19 +66,25 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const dbData = toSnakeCase(body);
-
-    const { data, error } = await supabase
-      .from(TABLES.SETTINGS)
-      .upsert({ id: 1, ...dbData, updated_at: new Date().toISOString() })
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    
+    // Save each setting as a separate row
+    const entries = Object.entries(body);
+    
+    for (const [key, value] of entries) {
+      const { error } = await supabase
+        .from(TABLES.SETTINGS)
+        .upsert(
+          { key, value: String(value), updated_at: new Date().toISOString() },
+          { onConflict: 'key' }
+        );
+      
+      if (error) {
+        console.error(`Error saving setting ${key}:`, error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
     }
 
-    return NextResponse.json({ data: toCamelCase(data) });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Settings save error:', error);
     return NextResponse.json(
