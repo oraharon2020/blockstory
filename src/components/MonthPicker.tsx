@@ -171,19 +171,19 @@ export function getMonthDays(month: number, year: number): string[] {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   
   for (let day = 1; day <= daysInMonth; day++) {
-    const date = new Date(year, month, day);
-    days.push(date.toISOString().split('T')[0]);
+    // Use local date formatting to avoid timezone issues
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    days.push(dateStr);
   }
   
   return days;
 }
 
 export function getMonthRange(month: number, year: number): { start: string; end: string } {
-  const start = new Date(year, month, 1);
-  const end = new Date(year, month + 1, 0);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
   
   return {
-    start: start.toISOString().split('T')[0],
-    end: end.toISOString().split('T')[0],
+    start: `${year}-${String(month + 1).padStart(2, '0')}-01`,
+    end: `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`,
   };
 }
