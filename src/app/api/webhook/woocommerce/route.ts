@@ -12,6 +12,11 @@ import {
 const VALID_STATUSES = ['completed', 'processing', 'on-hold'];
 const CANCELLED_STATUSES = ['cancelled', 'refunded', 'failed'];
 
+// GET handler for webhook verification (WooCommerce sends a ping)
+export async function GET() {
+  return NextResponse.json({ status: 'ok', message: 'Webhook endpoint ready' });
+}
+
 // WooCommerce Webhook handler
 // This endpoint receives real-time order notifications from WooCommerce
 export async function POST(request: NextRequest) {
@@ -40,15 +45,22 @@ export async function POST(request: NextRequest) {
 
     console.log(`📦 Order ${orderId} - Status: ${orderStatus}, Total: ${orderTotal}`);
 
-    // Get settings for rates
-    const { data: settings } = await supabase
+    // Get settings for rates (key-value format)
+    const { data: settingsData } = await supabase
       .from(TABLES.SETTINGS)
-      .select('*')
-      .single();
+      .select('key, value');
 
-    const materialsRate = (settings?.materialsRate || 30) / 100;
-    const vatRate = (settings?.vatRate || 17) / 100;
-    const creditCardRate = (settings?.creditCardRate || 2.5) / 100;
+    // Convert to object
+    const settings: Record<string, string> = {};
+    if (settingsData) {
+      settingsData.forEach((item: { key: string; value: string }) => {
+        settings[item.key] = item.value;
+      });
+    }
+
+    const materialsRate = (parseFloat(settings.materialsRate) || 30) / 100;
+    const vatRate = (parseFloat(settings.vatRate) || 17) / 100;
+    const creditCardRate = (parseFloat(settings.creditCardRate) || 2.5) / 100;
 
     // Handle different webhook topics
     if (topic === 'order.created') {
