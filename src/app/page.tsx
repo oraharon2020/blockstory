@@ -24,28 +24,21 @@ export default function DashboardPage() {
       }
 
       const { wooUrl, consumerKey, consumerSecret, materialsRate = 30 } = settingsJson.data;
-      const { start, end } = getMonthRange(selectedMonth.month, selectedMonth.year);
-
-      // Parse dates without timezone issues
-      const [startYear, startMonth, startDay] = start.split('-').map(Number);
-      const [endYear, endMonth, endDay] = end.split('-').map(Number);
       
-      let currentDay = startDay;
-      let currentMonth = startMonth;
-      let currentYear = startYear;
+      // Calculate days in month
+      const daysInMonth = new Date(selectedMonth.year, selectedMonth.month + 1, 0).getDate();
       
       const today = new Date();
       const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
       
       // Loop through all days in the month
-      while (currentYear < endYear || 
-             (currentYear === endYear && currentMonth < endMonth) || 
-             (currentYear === endYear && currentMonth === endMonth && currentDay <= endDay)) {
-        
-        const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`;
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${selectedMonth.year}-${String(selectedMonth.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         
         // Don't sync future dates
         if (dateStr > todayStr) break;
+        
+        console.log(`Syncing: ${dateStr}`);
         
         await fetch('/api/sync', {
           method: 'POST',
@@ -58,18 +51,6 @@ export default function DashboardPage() {
             materialsRate: materialsRate / 100,
           }),
         });
-        
-        // Move to next day
-        currentDay++;
-        const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
-        if (currentDay > daysInMonth) {
-          currentDay = 1;
-          currentMonth++;
-          if (currentMonth > 12) {
-            currentMonth = 1;
-            currentYear++;
-          }
-        }
       }
 
       // Force re-render
