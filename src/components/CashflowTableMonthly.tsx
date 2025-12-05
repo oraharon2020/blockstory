@@ -49,8 +49,9 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
   const [loadingOrders, setLoadingOrders] = useState(false);
 
   // Get date range for the month
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
   const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-  const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0];
+  const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
 
   const fetchData = useCallback(async (showLoading = true) => {
     try {
