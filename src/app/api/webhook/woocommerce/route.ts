@@ -21,13 +21,21 @@ export async function GET() {
 // This endpoint receives real-time order notifications from WooCommerce
 export async function POST(request: NextRequest) {
   try {
-    // Verify webhook signature (optional but recommended)
-    const signature = request.headers.get('x-wc-webhook-signature');
+    const contentType = request.headers.get('content-type') || '';
+    const topic = request.headers.get('x-wc-webhook-topic');
     
+    // Handle ping/verification request (WooCommerce sends form data for ping)
+    if (!contentType.includes('application/json')) {
+      console.log('📥 Webhook ping received');
+      return NextResponse.json({ status: 'ok', message: 'Webhook verified' });
+    }
+
     const body = await request.json();
     
-    // WooCommerce sends different event types
-    const topic = request.headers.get('x-wc-webhook-topic');
+    // Handle empty body or ping
+    if (!body || Object.keys(body).length === 0) {
+      return NextResponse.json({ status: 'ok', message: 'Ping received' });
+    }
     
     console.log(`📥 Webhook received - Topic: ${topic}`);
 
