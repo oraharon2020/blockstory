@@ -74,6 +74,8 @@ export async function POST(request: NextRequest) {
     };
 
     // Upsert to Supabase
+    console.log(`💾 Saving to Supabase: ${date} - Revenue: ${revenue}`);
+    
     const { data, error } = await supabase
       .from(TABLES.DAILY_DATA)
       .upsert(dailyData, { onConflict: 'date' })
@@ -81,10 +83,12 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error('Supabase error:', error);
+      console.error(`❌ Supabase error for ${date}:`, error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    console.log(`✅ Saved ${date} successfully`);
+    
     return NextResponse.json({ 
       data,
       ordersCount: orders.length,
