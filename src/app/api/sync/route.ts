@@ -26,6 +26,15 @@ export async function POST(request: NextRequest) {
 
     // Fetch orders for the date
     const orders = await fetchOrdersByDate(wooClient, date);
+    
+    // Debug log
+    console.log(`📅 Syncing ${date}: Found ${orders.length} orders`);
+    if (orders.length > 0) {
+      orders.forEach((o: any) => {
+        console.log(`  - Order #${o.id}: ${o.total} (status: ${o.status}, date: ${o.date_created})`);
+      });
+    }
+    
     const stats = calculateDailyStats(orders);
 
     // Calculate all metrics
