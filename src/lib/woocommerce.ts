@@ -9,6 +9,9 @@ export function createWooCommerceClient(url: string, consumerKey: string, consum
   });
 }
 
+// Order statuses that count as revenue
+const VALID_ORDER_STATUSES = ['completed', 'processing', 'on-hold'];
+
 export async function fetchOrders(
   client: WooCommerceRestApi,
   dateFrom: string,
@@ -19,7 +22,7 @@ export async function fetchOrders(
       after: `${dateFrom}T00:00:00`,
       before: `${dateTo}T23:59:59`,
       per_page: 100,
-      status: ['completed', 'processing'],
+      status: VALID_ORDER_STATUSES,
     });
     return response.data;
   } catch (error) {
@@ -37,7 +40,7 @@ export async function fetchOrdersByDate(
       after: `${date}T00:00:00`,
       before: `${date}T23:59:59`,
       per_page: 100,
-      status: ['completed', 'processing'],
+      status: VALID_ORDER_STATUSES,
     });
     return response.data;
   } catch (error) {

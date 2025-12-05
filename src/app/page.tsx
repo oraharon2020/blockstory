@@ -26,15 +26,26 @@ export default function DashboardPage() {
       const { wooUrl, consumerKey, consumerSecret, materialsRate = 30 } = settingsJson.data;
       const { start, end } = getMonthRange(selectedMonth.month, selectedMonth.year);
 
-      const startDate = new Date(start);
-      const endDate = new Date(end);
+      // Parse dates without timezone issues
+      const [startYear, startMonth, startDay] = start.split('-').map(Number);
+      const [endYear, endMonth, endDay] = end.split('-').map(Number);
+      
+      let currentDay = startDay;
+      let currentMonth = startMonth;
+      let currentYear = startYear;
+      
       const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
       
-      // Don't sync future dates
-      const syncEndDate = endDate > today ? today : endDate;
-      
-      while (startDate <= syncEndDate) {
-        const dateStr = startDate.toISOString().split('T')[0];
+      // Loop through all days in the month
+      while (currentYear < endYear || 
+             (currentYear === endYear && currentMonth < endMonth) || 
+             (currentYear === endYear && currentMonth === endMonth && currentDay <= endDay)) {
+        
+        const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`;
+        
+        // Don't sync future dates
+        if (dateStr > todayStr) break;
         
         await fetch('/api/sync', {
           method: 'POST',
@@ -48,7 +59,17 @@ export default function DashboardPage() {
           }),
         });
         
-        startDate.setDate(startDate.getDate() + 1);
+        // Move to next day
+        currentDay++;
+        const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+        if (currentDay > daysInMonth) {
+          currentDay = 1;
+          currentMonth++;
+          if (currentMonth > 12) {
+            currentMonth = 1;
+            currentYear++;
+          }
+        }
       }
 
       // Force re-render
