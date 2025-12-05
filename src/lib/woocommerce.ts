@@ -18,11 +18,13 @@ export async function fetchOrders(
   dateTo: string
 ) {
   try {
+    // Use dates_are_gmt=false to use the store's timezone
     const response = await client.get('orders', {
-      after: `${dateFrom}T00:00:00+02:00`,
-      before: `${dateTo}T23:59:59+02:00`,
+      after: `${dateFrom}T00:00:00`,
+      before: `${dateTo}T23:59:59`,
       per_page: 100,
       status: VALID_ORDER_STATUSES,
+      dates_are_gmt: false,
     });
     return response.data;
   } catch (error) {
@@ -36,13 +38,13 @@ export async function fetchOrdersByDate(
   date: string
 ) {
   try {
-    // Use wider time range to account for timezone differences
-    // Israel is UTC+2/+3, so we extend the range
+    // Use dates_are_gmt=false to use the store's timezone (Jerusalem)
     const response = await client.get('orders', {
-      after: `${date}T00:00:00+02:00`,
-      before: `${date}T23:59:59+02:00`,
+      after: `${date}T00:00:00`,
+      before: `${date}T23:59:59`,
       per_page: 100,
       status: VALID_ORDER_STATUSES,
+      dates_are_gmt: false,
     });
     return response.data;
   } catch (error) {
