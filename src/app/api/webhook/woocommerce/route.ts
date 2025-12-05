@@ -256,13 +256,3 @@ async function recalculateDayFromWooCommerce(date: string, settings: any) {
     throw error;
   }
 }
-
-// GET endpoint to verify webhook is working
-export async function GET() {
-  return NextResponse.json({ 
-    status: 'active',
-    message: 'WooCommerce webhook endpoint is ready',
-    supportedTopics: ['order.created', 'order.updated', 'order.deleted'],
-    timestamp: new Date().toISOString()
-  });
-}
