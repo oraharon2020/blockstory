@@ -80,7 +80,8 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
           };
         });
         
-        setData(dates.reverse());
+        // Sort by date ascending (1st at top, 31st at bottom)
+        setData(dates.sort((a, b) => a.date.localeCompare(b.date)));
         setLastUpdate(new Date());
       }
     } catch (error) {
