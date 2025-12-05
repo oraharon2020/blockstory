@@ -53,9 +53,17 @@ export async function fetchOrdersByDate(
   }
 }
 
-export function calculateDailyStats(orders: any[]) {
+export function calculateDailyStats(orders: any[], fixedShippingCost: number = 0) {
   const revenue = orders.reduce((sum, order) => sum + parseFloat(order.total || '0'), 0);
-  const shippingCost = orders.reduce((sum, order) => sum + parseFloat(order.shipping_total || '0'), 0);
+  
+  // Count orders with shipping (not pickup/free)
+  const ordersWithShipping = orders.filter(order => parseFloat(order.shipping_total || '0') > 0).length;
+  
+  // If fixed shipping cost is set, use it per order. Otherwise use customer-paid shipping.
+  const shippingCost = fixedShippingCost > 0 
+    ? ordersWithShipping * fixedShippingCost
+    : orders.reduce((sum, order) => sum + parseFloat(order.shipping_total || '0'), 0);
+  
   const ordersCount = orders.length;
 
   return {

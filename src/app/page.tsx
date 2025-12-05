@@ -23,7 +23,7 @@ export default function DashboardPage() {
         return;
       }
 
-      const { wooUrl, consumerKey, consumerSecret, materialsRate = 30 } = settingsJson.data;
+      const { wooUrl, consumerKey, consumerSecret, materialsRate = 30, shippingCost = 0 } = settingsJson.data;
       
       // Calculate days in month
       const daysInMonth = new Date(selectedMonth.year, selectedMonth.month + 1, 0).getDate();
@@ -49,6 +49,7 @@ export default function DashboardPage() {
             consumerKey,
             consumerSecret,
             materialsRate: materialsRate / 100,
+            shippingCost: parseFloat(shippingCost) || 0,
           }),
         });
       }

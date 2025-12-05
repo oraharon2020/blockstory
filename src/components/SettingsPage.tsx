@@ -10,6 +10,7 @@ interface SettingsFormData {
   vatRate: number;
   materialsRate: number;
   creditCardRate: number;
+  shippingCost: number;
 }
 
 export default function SettingsPage() {
@@ -20,6 +21,7 @@ export default function SettingsPage() {
     vatRate: 17,
     materialsRate: 30,
     creditCardRate: 2.5,
+    shippingCost: 0,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -47,6 +49,7 @@ export default function SettingsPage() {
           vatRate: parseFloat(json.data.vatRate) || 17,
           materialsRate: parseFloat(json.data.materialsRate) || 30,
           creditCardRate: parseFloat(json.data.creditCardRate) || 2.5,
+          shippingCost: parseFloat(json.data.shippingCost) || 0,
         });
       }
     } catch (error) {
@@ -274,6 +277,21 @@ export default function SettingsPage() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                עלות משלוח בפועל (₪ להזמנה)
+              </label>
+              <input
+                type="number"
+                step="0.5"
+                value={settings.shippingCost}
+                onChange={(e) => setSettings({ ...settings, shippingCost: parseFloat(e.target.value) || 0 })}
+                placeholder="השאר 0 לחישוב לפי מחיר ללקוח"
+                className="w-full max-w-xs px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <p className="text-sm text-gray-500 mt-1">אם תשאיר 0, יחושב לפי מחיר המשלוח שהלקוח שילם</p>
             </div>
           </div>
 

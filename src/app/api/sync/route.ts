@@ -12,7 +12,7 @@ import {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { date, wooUrl, consumerKey, consumerSecret, materialsRate = 0.3 } = body;
+    const { date, wooUrl, consumerKey, consumerSecret, materialsRate = 0.3, shippingCost = 0 } = body;
 
     if (!date || !wooUrl || !consumerKey || !consumerSecret) {
       return NextResponse.json(
@@ -35,7 +35,8 @@ export async function POST(request: NextRequest) {
       });
     }
     
-    const stats = calculateDailyStats(orders);
+    // Pass fixed shipping cost to calculate stats
+    const stats = calculateDailyStats(orders, shippingCost);
 
     // Calculate all metrics
     const revenue = stats.revenue;
