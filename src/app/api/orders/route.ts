@@ -10,13 +10,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Missing date' }, { status: 400 });
     }
 
-    // Get WooCommerce settings
-    const { data: settings } = await supabase
+    // Get WooCommerce settings (key-value format)
+    const { data: settingsData } = await supabase
       .from(TABLES.SETTINGS)
-      .select('*')
-      .single();
+      .select('key, value');
 
-    if (!settings?.wooUrl || !settings?.consumerKey || !settings?.consumerSecret) {
+    // Convert to object
+    const settings: Record<string, string> = {};
+    if (settingsData) {
+      settingsData.forEach((item: { key: string; value: string }) => {
+        settings[item.key] = item.value;
+      });
+    }
+
+    if (!settings.wooUrl || !settings.consumerKey || !settings.consumerSecret) {
       return NextResponse.json(
         { error: 'WooCommerce not configured' },
         { status: 400 }
@@ -38,6 +45,7 @@ export async function GET(request: NextRequest) {
       per_page: 100,
       orderby: 'date',
       order: 'desc',
+      dates_are_gmt: false,
     });
 
     return NextResponse.json({ orders: response.data });
