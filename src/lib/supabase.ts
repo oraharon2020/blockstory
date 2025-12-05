@@ -9,4 +9,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export const TABLES = {
   DAILY_DATA: 'daily_cashflow',
   SETTINGS: 'settings',
+  PRODUCT_COSTS: 'product_costs',
+  ORDER_ITEM_COSTS: 'order_item_costs',
 } as const;

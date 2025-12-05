@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Settings, Save, Loader2, Eye, EyeOff, TestTube, Check, X } from 'lucide-react';
+import ProductCostsManager from './ProductCostsManager';
 
 interface SettingsFormData {
   wooUrl: string;
@@ -327,6 +328,11 @@ export default function SettingsPage() {
               )}
               <span>{saved ? 'נשמר!' : 'שמור הגדרות'}</span>
             </button>
+          </div>
+
+          {/* Product Costs Section */}
+          <div className="pt-6 border-t">
+            <ProductCostsManager />
           </div>
         </div>
       </div>
