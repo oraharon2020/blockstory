@@ -24,11 +24,12 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Handle magic link (OTP) verification
-  if (token_hash && type === 'magiclink') {
+  // Handle magic link (OTP) verification - includes magiclink, signup, invite
+  if (token_hash && (type === 'magiclink' || type === 'signup' || type === 'invite' || type === 'email')) {
+    const otpType = type === 'signup' ? 'signup' : type === 'invite' ? 'invite' : type === 'email' ? 'email' : 'magiclink';
     const { data, error } = await supabase.auth.verifyOtp({
       token_hash,
-      type: 'magiclink',
+      type: otpType as any,
     });
 
     if (error) {
