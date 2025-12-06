@@ -65,39 +65,15 @@ export default function UserManager({ isOpen, onClose }: UserManagerProps) {
     
     setLoading(true);
     try {
-      // Get all user-business relationships for this business
-      const { data, error } = await supabase
-        .from('user_businesses')
-        .select(`
-          id,
-          user_id,
-          role,
-          invited_at,
-          accepted_at
-        `)
-        .eq('business_id', businessId);
-
-      if (error) throw error;
-
-      // Get user details for each
-      const usersWithDetails: BusinessUser[] = [];
+      // Use API route to get users (needs service key for auth.admin)
+      const response = await fetch(`/api/business-users?businessId=${businessId}`);
+      const data = await response.json();
       
-      for (const ub of data || []) {
-        // Get user info from auth.users (we'll use email from the invite or fetch it)
-        const { data: userData } = await supabase.auth.admin?.getUserById?.(ub.user_id) || {};
-        
-        usersWithDetails.push({
-          id: ub.id,
-          user_id: ub.user_id,
-          email: userData?.user?.email || 'טוען...',
-          full_name: userData?.user?.user_metadata?.full_name,
-          role: ub.role,
-          invited_at: ub.invited_at,
-          accepted_at: ub.accepted_at,
-        });
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to load users');
       }
 
-      setUsers(usersWithDetails);
+      setUsers(data.users || []);
     } catch (error) {
       console.error('Error loading users:', error);
     } finally {
