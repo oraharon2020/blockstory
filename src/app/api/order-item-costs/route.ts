@@ -1,6 +1,60 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, TABLES } from '@/lib/supabase';
 
+// Helper function to update daily materials cost from order item costs
+async function updateDailyMaterialsCost(orderDate: string, businessId: string) {
+  try {
+    // Get all item costs for orders on this date
+    const { data: itemCosts } = await supabase
+      .from(TABLES.ORDER_ITEM_COSTS)
+      .select('item_cost')
+      .eq('order_date', orderDate)
+      .eq('business_id', businessId);
+    
+    const totalMaterialsCost = itemCosts?.reduce((sum, item) => sum + (parseFloat(item.item_cost) || 0), 0) || 0;
+    
+    // Get existing daily data
+    const { data: existingDaily } = await supabase
+      .from(TABLES.DAILY_DATA)
+      .select('*')
+      .eq('date', orderDate)
+      .eq('business_id', businessId)
+      .single();
+    
+    if (existingDaily) {
+      // Recalculate total expenses and profit
+      const totalExpenses = 
+        (existingDaily.google_ads_cost || 0) +
+        (existingDaily.facebook_ads_cost || 0) +
+        (existingDaily.tiktok_ads_cost || 0) +
+        (existingDaily.shipping_cost || 0) +
+        totalMaterialsCost +
+        (existingDaily.credit_card_fees || 0) +
+        (existingDaily.vat || 0);
+      
+      const revenue = existingDaily.revenue || 0;
+      const profit = revenue - totalExpenses;
+      const roi = revenue > 0 ? (profit / revenue) * 100 : (profit < 0 ? -100 : 0);
+      
+      // Update daily data
+      await supabase
+        .from(TABLES.DAILY_DATA)
+        .update({
+          materials_cost: totalMaterialsCost,
+          total_expenses: totalExpenses,
+          profit,
+          roi,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingDaily.id);
+      
+      console.log(`Updated daily materials cost for ${orderDate}: ${totalMaterialsCost}`);
+    }
+  } catch (error) {
+    console.error('Error updating daily materials cost:', error);
+  }
+}
+
 // Helper function to update daily shipping cost
 async function updateDailyShippingCost(orderDate: string, businessId: string) {
   try {
@@ -173,6 +227,11 @@ export async function POST(request: NextRequest) {
         await updateDailyShippingCost(order_date, businessId);
       }
 
+      // Update daily materials cost
+      if (order_date && businessId) {
+        await updateDailyMaterialsCost(order_date, businessId);
+      }
+
       return NextResponse.json({ data, updated: true });
     } else {
       // Insert new
@@ -217,6 +276,11 @@ export async function POST(request: NextRequest) {
       // Update daily shipping cost if shipping_cost was provided
       if (shipping_cost !== undefined && order_date && businessId) {
         await updateDailyShippingCost(order_date, businessId);
+      }
+
+      // Update daily materials cost
+      if (order_date && businessId) {
+        await updateDailyMaterialsCost(order_date, businessId);
       }
 
       return NextResponse.json({ data, created: true });
