@@ -1,13 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import LoginPage from '@/components/LoginPage';
-import Sidebar from '@/components/Sidebar';
 import BusinessSelector from '@/components/BusinessSelector';
 import BusinessManager from '@/components/BusinessManager';
 import UserManager from '@/components/UserManager';
-import { Loader2, Plus, Store } from 'lucide-react';
+import { Loader2, Plus, Store, LayoutDashboard, Package, Settings } from 'lucide-react';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -15,8 +16,15 @@ interface AppShellProps {
 
 export default function AppShell({ children }: AppShellProps) {
   const { user, loading, businesses, currentBusiness } = useAuth();
+  const pathname = usePathname();
   const [showBusinessManager, setShowBusinessManager] = useState(false);
   const [showUserManager, setShowUserManager] = useState(false);
+
+  const navigation = [
+    { name: 'דשבורד', href: '/', icon: LayoutDashboard },
+    { name: 'עלויות מוצרים', href: '/products', icon: Package },
+    { name: 'הגדרות', href: '/settings', icon: Settings },
+  ];
 
   // Loading state
   if (loading) {
@@ -77,6 +85,28 @@ export default function AppShell({ children }: AppShellProps) {
               onManageUsers={() => setShowUserManager(true)}
             />
           </div>
+          
+          {/* Navigation Links */}
+          <nav className="flex items-center gap-1">
+            {navigation.map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                    isActive
+                      ? 'bg-white/20 text-white font-medium'
+                      : 'text-white/80 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  <item.icon className="w-4 h-4" />
+                  <span className="text-sm">{item.name}</span>
+                </Link>
+              );
+            })}
+          </nav>
+
           <div className="text-sm text-white/80">
             {user?.email}
           </div>

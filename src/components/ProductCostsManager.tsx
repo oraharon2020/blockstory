@@ -13,7 +13,11 @@ interface ProductCost {
   updated_at: string;
 }
 
-export default function ProductCostsManager() {
+interface ProductCostsManagerProps {
+  businessId?: string;
+}
+
+export default function ProductCostsManager({ businessId }: ProductCostsManagerProps) {
   const [products, setProducts] = useState<ProductCost[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -25,12 +29,14 @@ export default function ProductCostsManager() {
   const [showAddForm, setShowAddForm] = useState(false);
 
   useEffect(() => {
-    loadProducts();
-  }, []);
+    if (businessId) {
+      loadProducts();
+    }
+  }, [businessId]);
 
   const loadProducts = async () => {
     try {
-      const res = await fetch('/api/product-costs');
+      const res = await fetch(`/api/product-costs?businessId=${businessId}`);
       const json = await res.json();
       if (json.data) {
         setProducts(json.data);
@@ -54,6 +60,7 @@ export default function ProductCostsManager() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          businessId,
           product_id: product.product_id,
           sku: product.sku,
           product_name: product.product_name,
@@ -101,6 +108,7 @@ export default function ProductCostsManager() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          businessId,
           product_name: newProduct.name,
           unit_cost: parseFloat(newProduct.cost) || 0,
         }),

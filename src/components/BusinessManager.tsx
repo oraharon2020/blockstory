@@ -5,8 +5,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { 
   X, Plus, Trash2, Loader2, Store, Settings, 
-  Save, AlertCircle, Check, ExternalLink 
+  Save, AlertCircle, Check, ExternalLink, ListChecks 
 } from 'lucide-react';
+import OrderStatusSelector from './OrderStatusSelector';
 
 interface BusinessManagerProps {
   isOpen: boolean;
@@ -25,6 +26,7 @@ interface BusinessWithSettings {
     vatRate?: string;
     shippingCostPerOrder?: string;
     creditCardFeePercent?: string;
+    validOrderStatuses?: string[];
   };
 }
 
@@ -70,6 +72,7 @@ export default function BusinessManager({ isOpen, onClose }: BusinessManagerProp
             vatRate: String(settings.vat_rate || 17),
             shippingCostPerOrder: String(settings.shipping_cost || 0),
             creditCardFeePercent: String(settings.credit_card_rate || 1.5),
+            validOrderStatuses: settings.valid_order_statuses || ['completed', 'processing'],
           } : undefined,
         });
       }
@@ -209,6 +212,7 @@ export default function BusinessManager({ isOpen, onClose }: BusinessManagerProp
           vat_rate: parseFloat(settings.vatRate || '17'),
           shipping_cost: parseFloat(settings.shippingCostPerOrder || '0'),
           credit_card_rate: parseFloat(settings.creditCardFeePercent || '1.5'),
+          valid_order_statuses: settings.validOrderStatuses || ['completed', 'processing'],
           updated_at: new Date().toISOString(),
         }, { onConflict: 'business_id' });
 
@@ -452,6 +456,24 @@ export default function BusinessManager({ isOpen, onClose }: BusinessManagerProp
                         />
                       </div>
                     </div>
+
+                    {/* Order Status Selection */}
+                    {selectedBusiness.settings?.wooUrl && (
+                      <div className="border-t pt-4">
+                        <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                          <ListChecks className="w-4 h-4" />
+                          סטטוסי הזמנות
+                        </h4>
+                        <OrderStatusSelector
+                          businessId={selectedBusiness.id}
+                          selectedStatuses={selectedBusiness.settings?.validOrderStatuses || ['completed', 'processing']}
+                          onChange={(statuses) => setSelectedBusiness({
+                            ...selectedBusiness,
+                            settings: { ...selectedBusiness.settings, validOrderStatuses: statuses }
+                          })}
+                        />
+                      </div>
+                    )}
 
                     <div className="border-t pt-4">
                       <h4 className="text-sm font-medium text-gray-700 mb-3">הגדרות עסקיות</h4>

@@ -17,7 +17,7 @@ interface SettingsFormData {
   validOrderStatuses: string[];
 }
 
-type TabType = 'woocommerce' | 'statuses' | 'business' | 'products';
+type TabType = 'woocommerce' | 'business' | 'products';
 
 export default function SettingsPage() {
   const { currentBusiness } = useAuth();
@@ -149,7 +149,6 @@ export default function SettingsPage() {
 
   const tabs = [
     { id: 'woocommerce' as TabType, label: 'חיבור WooCommerce', icon: Store, color: 'purple' },
-    { id: 'statuses' as TabType, label: 'סטטוסי הזמנות', icon: ListChecks, color: 'blue' },
     { id: 'business' as TabType, label: 'פרמטרים עסקיים', icon: Calculator, color: 'green' },
     { id: 'products' as TabType, label: 'עלויות מוצרים', icon: Package, color: 'orange' },
   ];
@@ -163,7 +162,7 @@ export default function SettingsPage() {
             <Settings className="w-8 h-8" />
             <div>
               <h1 className="text-2xl font-bold">הגדרות {currentBusiness?.name}</h1>
-              <p className="text-gray-300">ניהול חיבורים, סטטוסים, פרמטרים עסקיים ועלויות מוצרים</p>
+              <p className="text-gray-300">ניהול חיבורים, פרמטרים עסקיים ועלויות מוצרים</p>
             </div>
           </div>
         </div>
@@ -311,6 +310,29 @@ export default function SettingsPage() {
                 </div>
               </div>
 
+              {/* Order Statuses Selection */}
+              <div className="border-t pt-6 mt-6">
+                <div className="flex items-start gap-4 p-4 bg-indigo-50 rounded-lg border border-indigo-100 mb-4">
+                  <ListChecks className="w-8 h-8 text-indigo-600 flex-shrink-0" />
+                  <div>
+                    <h3 className="font-semibold text-indigo-900">סטטוסי הזמנות להכללה</h3>
+                    <p className="text-indigo-700 text-sm">בחר אילו סטטוסי הזמנות יכללו בחישוב ההכנסות</p>
+                  </div>
+                </div>
+
+                {currentBusiness?.id && settings.wooUrl && (
+                  <OrderStatusSelector
+                    businessId={currentBusiness.id}
+                    selectedStatuses={settings.validOrderStatuses}
+                    onChange={(statuses) => setSettings({ ...settings, validOrderStatuses: statuses })}
+                  />
+                )}
+
+                {(!settings.wooUrl || !settings.consumerKey) && (
+                  <p className="text-gray-500 text-sm">הזן פרטי חיבור WooCommerce כדי לראות את רשימת הסטטוסים</p>
+                )}
+              </div>
+
               {/* Save Button */}
               <div className="flex justify-end pt-4 border-t">
                 <button
@@ -321,49 +343,6 @@ export default function SettingsPage() {
                       ? 'bg-green-600 text-white'
                       : 'bg-blue-600 text-white hover:bg-blue-700'
                   }`}
-                >
-                  {saving ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : saved ? (
-                    <Check className="w-5 h-5" />
-                  ) : (
-                    <Save className="w-5 h-5" />
-                  )}
-                  <span>{saved ? 'נשמר!' : 'שמור הגדרות'}</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Order Statuses Tab */}
-          {activeTab === 'statuses' && (
-            <div className="space-y-6">
-              <div className="flex items-start gap-4 p-4 bg-blue-50 rounded-lg border border-blue-100">
-                <ListChecks className="w-10 h-10 text-blue-600 flex-shrink-0" />
-                <div>
-                  <h3 className="font-semibold text-blue-900">סטטוסי הזמנות</h3>
-                  <p className="text-blue-700 text-sm">בחר אילו סטטוסי הזמנות יכללו בחישוב ההכנסות והרווחים</p>
-                </div>
-              </div>
-
-              {currentBusiness?.id && (
-                <OrderStatusSelector
-                  businessId={currentBusiness.id}
-                  selectedStatuses={settings.validOrderStatuses}
-                  onChange={(statuses) => setSettings({ ...settings, validOrderStatuses: statuses })}
-                />
-              )}
-
-              {/* Save Button */}
-              <div className="flex justify-end pt-4 border-t">
-                <button
-                  onClick={handleSave}
-                  disabled={saving || settings.validOrderStatuses.length === 0}
-                  className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${
-                    saved
-                      ? 'bg-green-600 text-white'
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   {saving ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
@@ -476,7 +455,7 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <ProductCostsManager />
+              <ProductCostsManager businessId={currentBusiness?.id} />
             </div>
           )}
         </div>
