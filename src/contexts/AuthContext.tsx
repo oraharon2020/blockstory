@@ -91,26 +91,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Process pending invitations for a user
+  const processInvitations = async (userId: string, email: string) => {
+    try {
+      console.log('🔄 Processing invitations for:', email);
+      const response = await fetch('/api/process-invitations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, email }),
+      });
+      const result = await response.json();
+      console.log('📨 Invitations processed:', result);
+      return result;
+    } catch (error) {
+      console.error('Error processing invitations:', error);
+    }
+  };
+
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        loadBusinesses(session.user.id).finally(() => setLoading(false));
-      } else {
-        setLoading(false);
+        // First, try to process any pending invitations
+        if (session.user.email) {
+          await processInvitations(session.user.id, session.user.email);
+        }
+        // Then load businesses
+        await loadBusinesses(session.user.id);
       }
+      setLoading(false);
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('🔐 Auth event:', event);
         setSession(session);
         setUser(session?.user ?? null);
 
         if (event === 'SIGNED_IN' && session?.user) {
+          // Process pending invitations first
+          if (session.user.email) {
+            await processInvitations(session.user.id, session.user.email);
+          }
+          // Then load businesses
           await loadBusinesses(session.user.id);
         } else if (event === 'SIGNED_OUT') {
           setBusinesses([]);
