@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings, Save, Loader2, Eye, EyeOff, TestTube, Check, X, Store, Calculator, Package, HelpCircle } from 'lucide-react';
+import { Settings, Save, Loader2, Eye, EyeOff, TestTube, Check, X, Store, Calculator, Package, HelpCircle, ListChecks } from 'lucide-react';
 import ProductCostsManager from './ProductCostsManager';
+import OrderStatusSelector from './OrderStatusSelector';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SettingsFormData {
   wooUrl: string;
@@ -11,11 +13,14 @@ interface SettingsFormData {
   vatRate: number;
   creditCardRate: number;
   shippingCost: number;
+  materialsRate: number;
+  validOrderStatuses: string[];
 }
 
-type TabType = 'woocommerce' | 'business' | 'products';
+type TabType = 'woocommerce' | 'statuses' | 'business' | 'products';
 
 export default function SettingsPage() {
+  const { currentBusiness } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('woocommerce');
   const [settings, setSettings] = useState<SettingsFormData>({
     wooUrl: '',
@@ -24,6 +29,8 @@ export default function SettingsPage() {
     vatRate: 17,
     creditCardRate: 2.5,
     shippingCost: 0,
+    materialsRate: 30,
+    validOrderStatuses: ['completed', 'processing'],
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -36,12 +43,17 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    loadSettings();
-  }, []);
+    if (currentBusiness?.id) {
+      loadSettings();
+    }
+  }, [currentBusiness?.id]);
 
   const loadSettings = async () => {
+    if (!currentBusiness?.id) return;
+    
     try {
-      const res = await fetch('/api/settings');
+      // Load business-specific settings
+      const res = await fetch(`/api/business-settings?businessId=${currentBusiness.id}`);
       const json = await res.json();
       if (json.data) {
         setSettings({
@@ -51,6 +63,8 @@ export default function SettingsPage() {
           vatRate: parseFloat(json.data.vatRate) || 17,
           creditCardRate: parseFloat(json.data.creditCardRate) || 2.5,
           shippingCost: parseFloat(json.data.shippingCost) || 0,
+          materialsRate: parseFloat(json.data.materialsRate) || 30,
+          validOrderStatuses: json.data.validOrderStatuses || ['completed', 'processing'],
         });
       }
     } catch (error) {
@@ -61,12 +75,17 @@ export default function SettingsPage() {
   };
 
   const handleSave = async () => {
+    if (!currentBusiness?.id) return;
+    
     setSaving(true);
     try {
-      const res = await fetch('/api/settings', {
+      const res = await fetch('/api/business-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
+        body: JSON.stringify({
+          businessId: currentBusiness.id,
+          ...settings,
+        }),
       });
 
       if (res.ok) {
@@ -93,6 +112,7 @@ export default function SettingsPage() {
           wooUrl: settings.wooUrl,
           consumerKey: settings.consumerKey,
           consumerSecret: settings.consumerSecret,
+          businessId: currentBusiness?.id,
         }),
       });
 
@@ -129,6 +149,7 @@ export default function SettingsPage() {
 
   const tabs = [
     { id: 'woocommerce' as TabType, label: 'חיבור WooCommerce', icon: Store, color: 'purple' },
+    { id: 'statuses' as TabType, label: 'סטטוסי הזמנות', icon: ListChecks, color: 'blue' },
     { id: 'business' as TabType, label: 'פרמטרים עסקיים', icon: Calculator, color: 'green' },
     { id: 'products' as TabType, label: 'עלויות מוצרים', icon: Package, color: 'orange' },
   ];
@@ -141,8 +162,8 @@ export default function SettingsPage() {
           <div className="flex items-center gap-3">
             <Settings className="w-8 h-8" />
             <div>
-              <h1 className="text-2xl font-bold">הגדרות מערכת</h1>
-              <p className="text-gray-300">ניהול חיבורים, פרמטרים עסקיים ועלויות מוצרים</p>
+              <h1 className="text-2xl font-bold">הגדרות {currentBusiness?.name}</h1>
+              <p className="text-gray-300">ניהול חיבורים, סטטוסים, פרמטרים עסקיים ועלויות מוצרים</p>
             </div>
           </div>
         </div>
@@ -300,6 +321,49 @@ export default function SettingsPage() {
                       ? 'bg-green-600 text-white'
                       : 'bg-blue-600 text-white hover:bg-blue-700'
                   }`}
+                >
+                  {saving ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : saved ? (
+                    <Check className="w-5 h-5" />
+                  ) : (
+                    <Save className="w-5 h-5" />
+                  )}
+                  <span>{saved ? 'נשמר!' : 'שמור הגדרות'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Order Statuses Tab */}
+          {activeTab === 'statuses' && (
+            <div className="space-y-6">
+              <div className="flex items-start gap-4 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                <ListChecks className="w-10 h-10 text-blue-600 flex-shrink-0" />
+                <div>
+                  <h3 className="font-semibold text-blue-900">סטטוסי הזמנות</h3>
+                  <p className="text-blue-700 text-sm">בחר אילו סטטוסי הזמנות יכללו בחישוב ההכנסות והרווחים</p>
+                </div>
+              </div>
+
+              {currentBusiness?.id && (
+                <OrderStatusSelector
+                  businessId={currentBusiness.id}
+                  selectedStatuses={settings.validOrderStatuses}
+                  onChange={(statuses) => setSettings({ ...settings, validOrderStatuses: statuses })}
+                />
+              )}
+
+              {/* Save Button */}
+              <div className="flex justify-end pt-4 border-t">
+                <button
+                  onClick={handleSave}
+                  disabled={saving || settings.validOrderStatuses.length === 0}
+                  className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${
+                    saved
+                      ? 'bg-green-600 text-white'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   {saving ? (
                     <Loader2 className="w-5 h-5 animate-spin" />

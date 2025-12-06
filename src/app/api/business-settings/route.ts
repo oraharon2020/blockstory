@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
       credit_card_rate: settings.creditCardRate,
       shipping_cost: settings.shippingCost,
       materials_rate: settings.materialsRate,
+      valid_order_statuses: settings.validOrderStatuses || ['completed', 'processing'],
       updated_at: new Date().toISOString(),
     };
 

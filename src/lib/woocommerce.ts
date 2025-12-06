@@ -9,21 +9,23 @@ export function createWooCommerceClient(url: string, consumerKey: string, consum
   });
 }
 
-// Order statuses that count as revenue
-const VALID_ORDER_STATUSES = ['completed', 'processing', 'on-hold'];
+// Default order statuses that count as revenue
+const DEFAULT_VALID_STATUSES = ['completed', 'processing', 'on-hold'];
 
 export async function fetchOrders(
   client: WooCommerceRestApi,
   dateFrom: string,
-  dateTo: string
+  dateTo: string,
+  validStatuses?: string[]
 ) {
   try {
+    const statuses = validStatuses || DEFAULT_VALID_STATUSES;
     // Use dates_are_gmt=false to use the store's timezone
     const response = await client.get('orders', {
       after: `${dateFrom}T00:00:00`,
       before: `${dateTo}T23:59:59`,
       per_page: 100,
-      status: VALID_ORDER_STATUSES,
+      status: statuses,
       dates_are_gmt: false,
     });
     return response.data;
@@ -35,15 +37,17 @@ export async function fetchOrders(
 
 export async function fetchOrdersByDate(
   client: WooCommerceRestApi,
-  date: string
+  date: string,
+  validStatuses?: string[]
 ) {
   try {
+    const statuses = validStatuses || DEFAULT_VALID_STATUSES;
     // Use dates_are_gmt=false to use the store's timezone (Jerusalem)
     const response = await client.get('orders', {
       after: `${date}T00:00:00`,
       before: `${date}T23:59:59`,
       per_page: 100,
-      status: VALID_ORDER_STATUSES,
+      status: statuses,
       dates_are_gmt: false,
     });
     return response.data;

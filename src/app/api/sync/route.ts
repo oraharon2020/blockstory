@@ -12,7 +12,7 @@ import {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { date, wooUrl, consumerKey, consumerSecret, materialsRate = 0.3, shippingCost = 0, businessId } = body;
+    const { date, wooUrl, consumerKey, consumerSecret, materialsRate = 0.3, shippingCost = 0, businessId, validOrderStatuses } = body;
 
     if (!date || !wooUrl || !consumerKey || !consumerSecret) {
       return NextResponse.json(
@@ -21,14 +21,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get valid statuses from business settings if not provided
+    let statuses = validOrderStatuses;
+    if (!statuses && businessId) {
+      const { data: businessSettings } = await supabase
+        .from('business_settings')
+        .select('valid_order_statuses')
+        .eq('business_id', businessId)
+        .single();
+      
+      statuses = businessSettings?.valid_order_statuses;
+    }
+
     // Create WooCommerce client
     const wooClient = createWooCommerceClient(wooUrl, consumerKey, consumerSecret);
 
-    // Fetch orders for the date
-    const orders = await fetchOrdersByDate(wooClient, date);
+    // Fetch orders for the date with valid statuses
+    const orders = await fetchOrdersByDate(wooClient, date, statuses);
     
     // Debug log
-    console.log(`📅 Syncing ${date}: Found ${orders.length} orders`);
+    console.log(`📅 Syncing ${date}: Found ${orders.length} orders (statuses: ${statuses?.join(', ') || 'default'})`);
     if (orders.length > 0) {
       orders.forEach((o: any) => {
         console.log(`  - Order #${o.id}: ${o.total} (status: ${o.status}, date: ${o.date_created})`);
