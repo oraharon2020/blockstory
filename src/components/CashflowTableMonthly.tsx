@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { DailyData } from '@/types';
 import { formatCurrency, formatPercent } from '@/lib/calculations';
 import { getMonthDays } from './MonthPicker';
@@ -20,7 +20,8 @@ import {
   Zap,
   ZapOff,
   Receipt,
-  Users
+  Users,
+  Settings2
 } from 'lucide-react';
 
 interface CashflowTableProps {
@@ -47,6 +48,35 @@ const DAYS_HE = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי
 const AUTO_REFRESH_INTERVAL = 30000; // 30 seconds - refresh from DB
 const AUTO_SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes - sync from WooCommerce
 
+// Column definitions for monthly table
+interface ColumnDef {
+  key: string;
+  label: string;
+  required?: boolean;
+}
+
+const ALL_COLUMNS: ColumnDef[] = [
+  { key: 'day', label: 'יום', required: true },
+  { key: 'date', label: 'תאריך', required: true },
+  { key: 'revenue', label: 'הכנסות', required: true },
+  { key: 'ordersCount', label: 'הזמנות' },
+  { key: 'googleAdsCost', label: 'גוגל' },
+  { key: 'facebookAdsCost', label: 'פייסבוק' },
+  { key: 'tiktokAdsCost', label: 'טיקטוק' },
+  { key: 'shippingCost', label: 'משלוח' },
+  { key: 'materialsCost', label: 'חומרים' },
+  { key: 'creditCardFees', label: 'אשראי' },
+  { key: 'employeeCost', label: 'שכר' },
+  { key: 'expensesVat', label: 'מוכר (עם מע"מ)' },
+  { key: 'expensesNoVat', label: 'חו"ל (ללא מע"מ)' },
+  { key: 'vat', label: 'מע"מ' },
+  { key: 'totalExpenses', label: 'הוצאות' },
+  { key: 'profit', label: 'רווח', required: true },
+  { key: 'roi', label: '% רווח' },
+];
+
+const DEFAULT_VISIBLE_COLUMNS = ALL_COLUMNS.map(c => c.key);
+
 interface DailyDataWithExpenses extends DailyData {
   expensesVat: number;
   expensesVatAmount: number;
@@ -65,6 +95,9 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
   const [autoSync, setAutoSync] = useState(true); // Auto sync from WooCommerce
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [showExpensesManager, setShowExpensesManager] = useState(false);
+  const [showColumnSettings, setShowColumnSettings] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_VISIBLE_COLUMNS);
+  const columnSettingsRef = useRef<HTMLDivElement>(null);
   
   // Orders modal state
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -73,6 +106,48 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
   
   // Employee daily cost
   const [employeeDailyCost, setEmployeeDailyCost] = useState(0);
+
+  // Load visible columns from localStorage
+  useEffect(() => {
+    if (currentBusiness?.id) {
+      const saved = localStorage.getItem(`columns_monthly_${currentBusiness.id}`);
+      if (saved) {
+        try {
+          setVisibleColumns(JSON.parse(saved));
+        } catch {
+          setVisibleColumns(DEFAULT_VISIBLE_COLUMNS);
+        }
+      }
+    }
+  }, [currentBusiness?.id]);
+
+  // Save visible columns to localStorage
+  const toggleColumn = (columnKey: string) => {
+    const column = ALL_COLUMNS.find(c => c.key === columnKey);
+    if (column?.required) return;
+    
+    const newColumns = visibleColumns.includes(columnKey)
+      ? visibleColumns.filter(c => c !== columnKey)
+      : [...visibleColumns, columnKey];
+    
+    setVisibleColumns(newColumns);
+    if (currentBusiness?.id) {
+      localStorage.setItem(`columns_monthly_${currentBusiness.id}`, JSON.stringify(newColumns));
+    }
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (columnSettingsRef.current && !columnSettingsRef.current.contains(event.target as Node)) {
+        setShowColumnSettings(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const isColumnVisible = (key: string) => visibleColumns.includes(key);
 
   // Get date range for the month
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -434,6 +509,46 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {/* Column settings dropdown */}
+            <div className="relative" ref={columnSettingsRef}>
+              <button
+                onClick={() => setShowColumnSettings(!showColumnSettings)}
+                className="flex items-center gap-2 bg-white/20 hover:bg-white/30 px-3 py-2 rounded-lg transition-colors"
+                title="הגדרות עמודות"
+              >
+                <Settings2 className="w-4 h-4" />
+                <span className="text-sm hidden sm:inline">עמודות</span>
+              </button>
+              
+              {showColumnSettings && (
+                <div className="absolute left-0 top-full mt-2 bg-white rounded-lg shadow-xl border p-3 z-50 min-w-[200px]">
+                  <div className="text-gray-700 font-medium mb-2 text-sm">בחר עמודות להצגה:</div>
+                  <div className="space-y-1 max-h-[300px] overflow-y-auto">
+                    {ALL_COLUMNS.map(column => (
+                      <label
+                        key={column.key}
+                        className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-gray-50 ${
+                          column.required ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={visibleColumns.includes(column.key)}
+                          onChange={() => toggleColumn(column.key)}
+                          disabled={column.required}
+                          className="w-4 h-4 text-blue-600 rounded"
+                        />
+                        <span className="text-gray-700 text-sm">{column.label}</span>
+                        {column.required && (
+                          <span className="text-xs text-gray-400">(חובה)</span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <button
               onClick={() => setShowExpensesManager(true)}
               className="flex items-center gap-2 bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors"
@@ -513,112 +628,132 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
           <table className="w-full text-sm" dir="rtl">
             <thead className="bg-gray-100">
               <tr>
-                <th className="px-3 py-3 text-right font-semibold text-gray-600 sticky right-0 bg-gray-100 w-16">יום</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-600 w-10">תאריך</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-600">הכנסות</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-600">הזמנות</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-600">גוגל</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-600">פייסבוק</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-600">טיקטוק</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-600">משלוח</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-600">חומרים</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-600">אשראי</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-600 bg-indigo-50">שכר</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-600 bg-purple-50">מוכר</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-600 bg-amber-50">חו"ל</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-600">מע"מ</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-600">הוצאות</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-600">רווח</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-600 group relative">
-                  <span className="cursor-help">% רווח <span className="text-xs text-gray-400">ⓘ</span></span>
-                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 font-normal">
-                    אחוז רווח מההכנסות (רווח ÷ הכנסות × 100)
-                  </div>
-                </th>
+                {isColumnVisible('day') && <th className="px-3 py-3 text-right font-semibold text-gray-600 sticky right-0 bg-gray-100 w-16">יום</th>}
+                {isColumnVisible('date') && <th className="px-3 py-3 text-right font-semibold text-gray-600 w-10">תאריך</th>}
+                {isColumnVisible('revenue') && <th className="px-3 py-3 text-right font-semibold text-gray-600">הכנסות</th>}
+                {isColumnVisible('ordersCount') && <th className="px-3 py-3 text-right font-semibold text-gray-600">הזמנות</th>}
+                {isColumnVisible('googleAdsCost') && <th className="px-3 py-3 text-right font-semibold text-gray-600">גוגל</th>}
+                {isColumnVisible('facebookAdsCost') && <th className="px-3 py-3 text-right font-semibold text-gray-600">פייסבוק</th>}
+                {isColumnVisible('tiktokAdsCost') && <th className="px-3 py-3 text-right font-semibold text-gray-600">טיקטוק</th>}
+                {isColumnVisible('shippingCost') && <th className="px-3 py-3 text-right font-semibold text-gray-600">משלוח</th>}
+                {isColumnVisible('materialsCost') && <th className="px-3 py-3 text-right font-semibold text-gray-600">חומרים</th>}
+                {isColumnVisible('creditCardFees') && <th className="px-3 py-3 text-right font-semibold text-gray-600">אשראי</th>}
+                {isColumnVisible('employeeCost') && <th className="px-3 py-3 text-right font-semibold text-gray-600 bg-indigo-50">שכר</th>}
+                {isColumnVisible('expensesVat') && <th className="px-3 py-3 text-right font-semibold text-gray-600 bg-purple-50">מוכר</th>}
+                {isColumnVisible('expensesNoVat') && <th className="px-3 py-3 text-right font-semibold text-gray-600 bg-amber-50">חו"ל</th>}
+                {isColumnVisible('vat') && <th className="px-3 py-3 text-right font-semibold text-gray-600">מע"מ</th>}
+                {isColumnVisible('totalExpenses') && <th className="px-3 py-3 text-right font-semibold text-gray-600">הוצאות</th>}
+                {isColumnVisible('profit') && <th className="px-3 py-3 text-right font-semibold text-gray-600">רווח</th>}
+                {isColumnVisible('roi') && (
+                  <th className="px-3 py-3 text-right font-semibold text-gray-600 group relative">
+                    <span className="cursor-help">% רווח <span className="text-xs text-gray-400">ⓘ</span></span>
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 font-normal">
+                      אחוז רווח מההכנסות (רווח ÷ הכנסות × 100)
+                    </div>
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
               {data.map((row, index) => (
                 <tr key={row.date} className={`border-b hover:bg-gray-50 group ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
-                  <td className="px-3 py-2 font-medium text-gray-900 sticky right-0 bg-inherit text-xs">{getDayName(row.date)}</td>
-                  <td className="px-3 py-2 text-gray-600 font-bold">{formatDate(row.date)}</td>
-                  <td className="px-3 py-2 font-medium text-gray-900">{formatCurrency(row.revenue)}</td>
-                  <td className="px-3 py-2">
-                    <button
-                      onClick={() => handleOrdersClick(row.date, row.ordersCount)}
-                      disabled={row.ordersCount === 0}
-                      className={`font-medium px-2 py-1 rounded ${
-                        row.ordersCount > 0 
-                          ? 'text-blue-600 hover:bg-blue-50 cursor-pointer' 
-                          : 'text-gray-400'
-                      }`}
-                    >
-                      {row.ordersCount}
-                    </button>
-                  </td>
-                  <td className="px-3 py-2 text-gray-600">{renderEditableCell(row, 'googleAdsCost', row.googleAdsCost)}</td>
-                  <td className="px-3 py-2 text-gray-600">{renderEditableCell(row, 'facebookAdsCost', row.facebookAdsCost)}</td>
-                  <td className="px-3 py-2 text-gray-600">{renderEditableCell(row, 'tiktokAdsCost', row.tiktokAdsCost || 0)}</td>
-                  <td className="px-3 py-2 text-gray-600">{formatCurrency(row.shippingCost)}</td>
-                  <td className="px-3 py-2 text-gray-600">
-                    <span className={row.materialsCost > 0 ? 'text-orange-600' : 'text-gray-400'}>
-                      {formatCurrency(row.materialsCost)}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-gray-600">{formatCurrency(row.creditCardFees)}</td>
-                  <td className="px-3 py-2 bg-indigo-50/50">
-                    <span className={row.employeeCost > 0 ? 'text-indigo-600' : 'text-gray-400'}>
-                      {formatCurrency(row.employeeCost)}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 bg-purple-50/50">
-                    <span className={row.expensesVat > 0 ? 'text-purple-600' : 'text-gray-400'}>
-                      {formatCurrency(row.expensesVat)}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 bg-amber-50/50">
-                    <span className={row.expensesNoVat > 0 ? 'text-amber-600' : 'text-gray-400'}>
-                      {formatCurrency(row.expensesNoVat)}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-gray-600">{formatCurrency(row.vat)}</td>
-                  <td className="px-3 py-2 font-medium text-red-600">{formatCurrency(row.totalExpenses)}</td>
-                  <td className={`px-3 py-2 font-bold ${row.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatCurrency(row.profit)}
-                  </td>
-                  <td className={`px-3 py-2 font-medium ${row.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {row.revenue > 0 
-                      ? formatPercent((row.profit / row.revenue) * 100)
-                      : row.profit < 0 
-                        ? formatPercent(-100) 
-                        : formatPercent(0)}
-                  </td>
+                  {isColumnVisible('day') && <td className="px-3 py-2 font-medium text-gray-900 sticky right-0 bg-inherit text-xs">{getDayName(row.date)}</td>}
+                  {isColumnVisible('date') && <td className="px-3 py-2 text-gray-600 font-bold">{formatDate(row.date)}</td>}
+                  {isColumnVisible('revenue') && <td className="px-3 py-2 font-medium text-gray-900">{formatCurrency(row.revenue)}</td>}
+                  {isColumnVisible('ordersCount') && (
+                    <td className="px-3 py-2">
+                      <button
+                        onClick={() => handleOrdersClick(row.date, row.ordersCount)}
+                        disabled={row.ordersCount === 0}
+                        className={`font-medium px-2 py-1 rounded ${
+                          row.ordersCount > 0 
+                            ? 'text-blue-600 hover:bg-blue-50 cursor-pointer' 
+                            : 'text-gray-400'
+                        }`}
+                      >
+                        {row.ordersCount}
+                      </button>
+                    </td>
+                  )}
+                  {isColumnVisible('googleAdsCost') && <td className="px-3 py-2 text-gray-600">{renderEditableCell(row, 'googleAdsCost', row.googleAdsCost)}</td>}
+                  {isColumnVisible('facebookAdsCost') && <td className="px-3 py-2 text-gray-600">{renderEditableCell(row, 'facebookAdsCost', row.facebookAdsCost)}</td>}
+                  {isColumnVisible('tiktokAdsCost') && <td className="px-3 py-2 text-gray-600">{renderEditableCell(row, 'tiktokAdsCost', row.tiktokAdsCost || 0)}</td>}
+                  {isColumnVisible('shippingCost') && <td className="px-3 py-2 text-gray-600">{formatCurrency(row.shippingCost)}</td>}
+                  {isColumnVisible('materialsCost') && (
+                    <td className="px-3 py-2 text-gray-600">
+                      <span className={row.materialsCost > 0 ? 'text-orange-600' : 'text-gray-400'}>
+                        {formatCurrency(row.materialsCost)}
+                      </span>
+                    </td>
+                  )}
+                  {isColumnVisible('creditCardFees') && <td className="px-3 py-2 text-gray-600">{formatCurrency(row.creditCardFees)}</td>}
+                  {isColumnVisible('employeeCost') && (
+                    <td className="px-3 py-2 bg-indigo-50/50">
+                      <span className={row.employeeCost > 0 ? 'text-indigo-600' : 'text-gray-400'}>
+                        {formatCurrency(row.employeeCost)}
+                      </span>
+                    </td>
+                  )}
+                  {isColumnVisible('expensesVat') && (
+                    <td className="px-3 py-2 bg-purple-50/50">
+                      <span className={row.expensesVat > 0 ? 'text-purple-600' : 'text-gray-400'}>
+                        {formatCurrency(row.expensesVat)}
+                      </span>
+                    </td>
+                  )}
+                  {isColumnVisible('expensesNoVat') && (
+                    <td className="px-3 py-2 bg-amber-50/50">
+                      <span className={row.expensesNoVat > 0 ? 'text-amber-600' : 'text-gray-400'}>
+                        {formatCurrency(row.expensesNoVat)}
+                      </span>
+                    </td>
+                  )}
+                  {isColumnVisible('vat') && <td className="px-3 py-2 text-gray-600">{formatCurrency(row.vat)}</td>}
+                  {isColumnVisible('totalExpenses') && <td className="px-3 py-2 font-medium text-red-600">{formatCurrency(row.totalExpenses)}</td>}
+                  {isColumnVisible('profit') && (
+                    <td className={`px-3 py-2 font-bold ${row.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(row.profit)}
+                    </td>
+                  )}
+                  {isColumnVisible('roi') && (
+                    <td className={`px-3 py-2 font-medium ${row.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {row.revenue > 0 
+                        ? formatPercent((row.profit / row.revenue) * 100)
+                        : row.profit < 0 
+                          ? formatPercent(-100) 
+                          : formatPercent(0)}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
             <tfoot className="bg-blue-50 font-bold">
               <tr>
-                <td className="px-3 py-3 sticky right-0 bg-blue-50">סה"כ</td>
-                <td className="px-3 py-3"></td>
-                <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.revenue)}</td>
-                <td className="px-3 py-3 text-gray-900">{totals.ordersCount}</td>
-                <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.googleAdsCost)}</td>
-                <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.facebookAdsCost)}</td>
-                <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.tiktokAdsCost)}</td>
-                <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.shippingCost)}</td>
-                <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.materialsCost)}</td>
-                <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.creditCardFees)}</td>
-                <td className="px-3 py-3 text-indigo-600 bg-indigo-100/50">{formatCurrency(totals.employeeCost)}</td>
-                <td className="px-3 py-3 text-purple-600 bg-purple-100/50">{formatCurrency(totals.expensesVat)}</td>
-                <td className="px-3 py-3 text-amber-600 bg-amber-100/50">{formatCurrency(totals.expensesNoVat)}</td>
-                <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.vat)}</td>
-                <td className="px-3 py-3 text-red-600">{formatCurrency(totals.totalExpenses)}</td>
-                <td className={`px-3 py-3 ${totals.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatCurrency(totals.profit)}
-                </td>
-                <td className={`px-3 py-3 ${avgROI >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatPercent(avgROI)}
-                </td>
+                {isColumnVisible('day') && <td className="px-3 py-3 sticky right-0 bg-blue-50">סה"כ</td>}
+                {isColumnVisible('date') && <td className="px-3 py-3"></td>}
+                {isColumnVisible('revenue') && <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.revenue)}</td>}
+                {isColumnVisible('ordersCount') && <td className="px-3 py-3 text-gray-900">{totals.ordersCount}</td>}
+                {isColumnVisible('googleAdsCost') && <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.googleAdsCost)}</td>}
+                {isColumnVisible('facebookAdsCost') && <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.facebookAdsCost)}</td>}
+                {isColumnVisible('tiktokAdsCost') && <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.tiktokAdsCost)}</td>}
+                {isColumnVisible('shippingCost') && <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.shippingCost)}</td>}
+                {isColumnVisible('materialsCost') && <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.materialsCost)}</td>}
+                {isColumnVisible('creditCardFees') && <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.creditCardFees)}</td>}
+                {isColumnVisible('employeeCost') && <td className="px-3 py-3 text-indigo-600 bg-indigo-100/50">{formatCurrency(totals.employeeCost)}</td>}
+                {isColumnVisible('expensesVat') && <td className="px-3 py-3 text-purple-600 bg-purple-100/50">{formatCurrency(totals.expensesVat)}</td>}
+                {isColumnVisible('expensesNoVat') && <td className="px-3 py-3 text-amber-600 bg-amber-100/50">{formatCurrency(totals.expensesNoVat)}</td>}
+                {isColumnVisible('vat') && <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.vat)}</td>}
+                {isColumnVisible('totalExpenses') && <td className="px-3 py-3 text-red-600">{formatCurrency(totals.totalExpenses)}</td>}
+                {isColumnVisible('profit') && (
+                  <td className={`px-3 py-3 ${totals.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(totals.profit)}
+                  </td>
+                )}
+                {isColumnVisible('roi') && (
+                  <td className={`px-3 py-3 ${avgROI >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatPercent(avgROI)}
+                  </td>
+                )}
               </tr>
             </tfoot>
           </table>
