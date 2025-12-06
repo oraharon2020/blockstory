@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Loader2, Receipt, Globe, Check, X, Copy } from 'lucide-react';
+import { Plus, Trash2, Loader2, Receipt, Globe, Check, X, Copy, Users } from 'lucide-react';
 import { formatCurrency } from '@/lib/calculations';
+import EmployeesManager from './EmployeesManager';
 
 interface Expense {
   id: number;
@@ -26,7 +27,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
   const [vatExpenses, setVatExpenses] = useState<Expense[]>([]);
   const [noVatExpenses, setNoVatExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'vat' | 'noVat'>('vat');
+  const [activeTab, setActiveTab] = useState<'vat' | 'noVat' | 'employees'>('vat');
   const [showAddForm, setShowAddForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copying, setCopying] = useState(false);
@@ -242,28 +243,44 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
             {formatCurrency(noVatTotal)}
           </span>
         </button>
+        <button
+          onClick={() => setActiveTab('employees')}
+          className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors border-b-2 ${
+            activeTab === 'employees'
+              ? 'border-indigo-600 text-indigo-600 bg-indigo-50'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>עובדים</span>
+        </button>
       </div>
 
-      {/* Add Button */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-        >
-          <Plus className="w-4 h-4" />
-          הוסף הוצאה
-        </button>
-        
-        <button
-          onClick={handleCopyFromPreviousMonth}
-          disabled={copying}
-          className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm disabled:opacity-50"
-          title="העתק הוצאות מהחודש הקודם"
-        >
-          {copying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
-          העתק מחודש קודם
-        </button>
-      </div>
+      {/* Employees Tab */}
+      {activeTab === 'employees' ? (
+        <EmployeesManager month={month} year={year} />
+      ) : (
+        <>
+          {/* Add Button */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+            >
+              <Plus className="w-4 h-4" />
+              הוסף הוצאה
+            </button>
+            
+            <button
+              onClick={handleCopyFromPreviousMonth}
+              disabled={copying}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm disabled:opacity-50"
+              title="העתק הוצאות מהחודש הקודם"
+            >
+              {copying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
+              העתק מחודש קודם
+            </button>
+          </div>
 
       {/* Add Form */}
       {showAddForm && (
@@ -420,6 +437,8 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
           <p className="font-bold text-purple-600">{formatCurrency(vatVatTotal)}</p>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

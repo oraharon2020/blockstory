@@ -25,6 +25,7 @@ export interface DailyData {
   ordersCount: number; // מספר הזמנות
   googleAdsCost: number; // הוצאות פרסום גוגל
   facebookAdsCost: number; // הוצאות פרסום פייסבוק
+  tiktokAdsCost: number; // הוצאות פרסום טיקטוק
   shippingCost: number; // הוצאות משלוח
   materialsCost: number; // חומרי גלם
   creditCardFees: number; // עמלת אשראי

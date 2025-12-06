@@ -19,7 +19,8 @@ import {
   X,
   Zap,
   ZapOff,
-  Receipt
+  Receipt,
+  Users
 } from 'lucide-react';
 
 interface CashflowTableProps {
@@ -49,6 +50,7 @@ interface DailyDataWithExpenses extends DailyData {
   expensesVat: number;
   expensesVatAmount: number;
   expensesNoVat: number;
+  employeeCost: number;
 }
 
 export default function CashflowTable({ month, year, onSync, isLoading }: CashflowTableProps) {
@@ -66,6 +68,9 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  
+  // Employee daily cost
+  const [employeeDailyCost, setEmployeeDailyCost] = useState(0);
 
   // Get date range for the month
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -85,16 +90,22 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
     try {
       if (showLoading) setLoading(true);
       
-      // Fetch cashflow data, daily costs, and expenses in parallel
-      const [cashflowRes, costsRes, expensesRes] = await Promise.all([
+      // Fetch cashflow data, daily costs, expenses, and employee cost in parallel
+      const [cashflowRes, costsRes, expensesRes, employeesRes] = await Promise.all([
         fetch(`/api/cashflow?${buildQueryParams({ start: startDate, end: endDate })}`),
         fetch(`/api/daily-costs?${buildQueryParams({ startDate, endDate })}`),
         fetch(`/api/expenses?${buildQueryParams({ startDate, endDate })}`),
+        fetch(`/api/employees?${buildQueryParams({ month: String(month + 1), year: String(year) })}`),
       ]);
       
       const cashflowJson = await cashflowRes.json();
       const costsJson = await costsRes.json();
       const expensesJson = await expensesRes.json();
+      const employeesJson = await employeesRes.json();
+      
+      // Get employee daily cost
+      const dailyEmpCost = employeesJson.dailyCost || 0;
+      setEmployeeDailyCost(dailyEmpCost);
       
       // Get costs by date
       const costsByDate: Record<string, number> = costsJson.costsByDate || {};
@@ -135,12 +146,14 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
             const totalExpenses = 
               (existing.googleAdsCost || 0) +
               (existing.facebookAdsCost || 0) +
+              (existing.tiktokAdsCost || 0) +
               (existing.shippingCost || 0) +
               materialsCost +
               (existing.creditCardFees || 0) +
               netVat +
               dayExpenses.vat +
-              dayExpenses.noVat;
+              dayExpenses.noVat +
+              dailyEmpCost;
             const profit = (existing.revenue || 0) - totalExpenses;
             
             return {
@@ -152,10 +165,11 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
               expensesVat: dayExpenses.vat,
               expensesVatAmount: dayExpenses.vatAmount,
               expensesNoVat: dayExpenses.noVat,
+              employeeCost: dailyEmpCost,
             };
           }
           
-          const totalExpenses = materialsCost + dayExpenses.vat + dayExpenses.noVat;
+          const totalExpenses = materialsCost + dayExpenses.vat + dayExpenses.noVat + dailyEmpCost;
           
           return {
             date: dateStr,
@@ -163,6 +177,7 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
             ordersCount: 0,
             googleAdsCost: 0,
             facebookAdsCost: 0,
+            tiktokAdsCost: 0,
             shippingCost: 0,
             materialsCost,
             creditCardFees: 0,
@@ -173,6 +188,7 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
             expensesVat: dayExpenses.vat,
             expensesVatAmount: dayExpenses.vatAmount,
             expensesNoVat: dayExpenses.noVat,
+            employeeCost: dailyEmpCost,
           };
         });
         
@@ -218,7 +234,7 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
 
   const handleCellClick = (date: string, field: keyof DailyData, value: number) => {
     // materialsCost is now calculated automatically from order item costs
-    const editableFields: (keyof DailyData)[] = ['googleAdsCost', 'facebookAdsCost'];
+    const editableFields: (keyof DailyData)[] = ['googleAdsCost', 'facebookAdsCost', 'tiktokAdsCost'];
     if (!editableFields.includes(field)) return;
     
     setEditingCell({ date, field });
@@ -249,6 +265,7 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
       const totalExpenses = 
         (updatedRow.googleAdsCost || 0) +
         (updatedRow.facebookAdsCost || 0) +
+        (updatedRow.tiktokAdsCost || 0) +
         (updatedRow.shippingCost || 0) +
         (updatedRow.materialsCost || 0) +
         (updatedRow.creditCardFees || 0) +
@@ -338,16 +355,18 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
       ordersCount: acc.ordersCount + row.ordersCount,
       googleAdsCost: acc.googleAdsCost + row.googleAdsCost,
       facebookAdsCost: acc.facebookAdsCost + row.facebookAdsCost,
+      tiktokAdsCost: acc.tiktokAdsCost + (row.tiktokAdsCost || 0),
       shippingCost: acc.shippingCost + row.shippingCost,
       materialsCost: acc.materialsCost + row.materialsCost,
       creditCardFees: acc.creditCardFees + row.creditCardFees,
       vat: acc.vat + row.vat,
       expensesVat: acc.expensesVat + row.expensesVat,
       expensesNoVat: acc.expensesNoVat + row.expensesNoVat,
+      employeeCost: acc.employeeCost + row.employeeCost,
       totalExpenses: acc.totalExpenses + row.totalExpenses,
       profit: acc.profit + row.profit,
     }),
-    { revenue: 0, ordersCount: 0, googleAdsCost: 0, facebookAdsCost: 0, shippingCost: 0, materialsCost: 0, creditCardFees: 0, vat: 0, expensesVat: 0, expensesNoVat: 0, totalExpenses: 0, profit: 0 }
+    { revenue: 0, ordersCount: 0, googleAdsCost: 0, facebookAdsCost: 0, tiktokAdsCost: 0, shippingCost: 0, materialsCost: 0, creditCardFees: 0, vat: 0, expensesVat: 0, expensesNoVat: 0, employeeCost: 0, totalExpenses: 0, profit: 0 }
   );
 
   const avgROI = totals.totalExpenses > 0 ? (totals.profit / totals.totalExpenses) * 100 : 0;
@@ -450,9 +469,11 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
                 <th className="px-3 py-3 text-right font-semibold text-gray-600">הזמנות</th>
                 <th className="px-3 py-3 text-right font-semibold text-gray-600">גוגל</th>
                 <th className="px-3 py-3 text-right font-semibold text-gray-600">פייסבוק</th>
+                <th className="px-3 py-3 text-right font-semibold text-gray-600">טיקטוק</th>
                 <th className="px-3 py-3 text-right font-semibold text-gray-600">משלוח</th>
                 <th className="px-3 py-3 text-right font-semibold text-gray-600">חומרים</th>
                 <th className="px-3 py-3 text-right font-semibold text-gray-600">אשראי</th>
+                <th className="px-3 py-3 text-right font-semibold text-gray-600 bg-indigo-50">שכר</th>
                 <th className="px-3 py-3 text-right font-semibold text-gray-600 bg-purple-50">מוכר</th>
                 <th className="px-3 py-3 text-right font-semibold text-gray-600 bg-amber-50">חו"ל</th>
                 <th className="px-3 py-3 text-right font-semibold text-gray-600">מע"מ</th>
@@ -482,6 +503,7 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
                   </td>
                   <td className="px-3 py-2 text-gray-600">{renderEditableCell(row, 'googleAdsCost', row.googleAdsCost)}</td>
                   <td className="px-3 py-2 text-gray-600">{renderEditableCell(row, 'facebookAdsCost', row.facebookAdsCost)}</td>
+                  <td className="px-3 py-2 text-gray-600">{renderEditableCell(row, 'tiktokAdsCost', row.tiktokAdsCost || 0)}</td>
                   <td className="px-3 py-2 text-gray-600">{formatCurrency(row.shippingCost)}</td>
                   <td className="px-3 py-2 text-gray-600">
                     <span className={row.materialsCost > 0 ? 'text-orange-600' : 'text-gray-400'}>
@@ -489,6 +511,11 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
                     </span>
                   </td>
                   <td className="px-3 py-2 text-gray-600">{formatCurrency(row.creditCardFees)}</td>
+                  <td className="px-3 py-2 bg-indigo-50/50">
+                    <span className={row.employeeCost > 0 ? 'text-indigo-600' : 'text-gray-400'}>
+                      {formatCurrency(row.employeeCost)}
+                    </span>
+                  </td>
                   <td className="px-3 py-2 bg-purple-50/50">
                     <span className={row.expensesVat > 0 ? 'text-purple-600' : 'text-gray-400'}>
                       {formatCurrency(row.expensesVat)}
@@ -518,9 +545,11 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
                 <td className="px-3 py-3 text-gray-900">{totals.ordersCount}</td>
                 <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.googleAdsCost)}</td>
                 <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.facebookAdsCost)}</td>
+                <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.tiktokAdsCost)}</td>
                 <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.shippingCost)}</td>
                 <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.materialsCost)}</td>
                 <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.creditCardFees)}</td>
+                <td className="px-3 py-3 text-indigo-600 bg-indigo-100/50">{formatCurrency(totals.employeeCost)}</td>
                 <td className="px-3 py-3 text-purple-600 bg-purple-100/50">{formatCurrency(totals.expensesVat)}</td>
                 <td className="px-3 py-3 text-amber-600 bg-amber-100/50">{formatCurrency(totals.expensesNoVat)}</td>
                 <td className="px-3 py-3 text-gray-900">{formatCurrency(totals.vat)}</td>
