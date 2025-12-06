@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('start');
     const endDate = searchParams.get('end');
+    const businessId = searchParams.get('businessId');
 
     if (!startDate || !endDate) {
       return NextResponse.json(
@@ -45,12 +46,21 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch data from Supabase
-    const { data, error } = await supabase
+    let query = supabase
       .from(TABLES.DAILY_DATA)
       .select('*')
       .gte('date', startDate)
-      .lte('date', endDate)
-      .order('date', { ascending: false });
+      .lte('date', endDate);
+    
+    // Filter by business_id if provided
+    if (businessId) {
+      query = query.eq('business_id', businessId);
+    } else {
+      // Legacy support - get data without business_id
+      query = query.is('business_id', null);
+    }
+    
+    const { data, error } = await query.order('date', { ascending: false });
 
     if (error) {
       console.error('Supabase error:', error);
@@ -70,7 +80,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const dbData = toSnakeCase(body);
+    const { businessId, ...rest } = body;
+    const dbData = toSnakeCase(rest);
 
     if (!dbData.date) {
       return NextResponse.json(
@@ -79,12 +90,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Upsert data to Supabase
+    // Add business_id if provided
+    if (businessId) {
+      dbData.business_id = businessId;
+    }
+
+    // Upsert data to Supabase - use composite key if businessId provided
+    const conflictTarget = businessId ? 'date,business_id' : 'date';
     const { data, error } = await supabase
       .from(TABLES.DAILY_DATA)
       .upsert(
         { ...dbData, updated_at: new Date().toISOString() },
-        { onConflict: 'date' }
+        { onConflict: conflictTarget }
       )
       .select()
       .single();

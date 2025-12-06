@@ -28,10 +28,16 @@ CREATE TABLE IF NOT EXISTS user_businesses (
 -- 3. Business settings (WooCommerce credentials, etc.)
 CREATE TABLE IF NOT EXISTS business_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  business_id UUID REFERENCES businesses(id) ON DELETE CASCADE,
-  key TEXT NOT NULL,
-  value TEXT,
-  UNIQUE(business_id, key)
+  business_id UUID REFERENCES businesses(id) ON DELETE CASCADE UNIQUE,
+  woo_url TEXT,
+  consumer_key TEXT,
+  consumer_secret TEXT,
+  vat_rate NUMERIC DEFAULT 17,
+  credit_card_rate NUMERIC DEFAULT 1.5,
+  shipping_cost NUMERIC DEFAULT 0,
+  materials_rate NUMERIC DEFAULT 30,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- 4. Business columns configuration (which columns to show)
@@ -103,9 +109,19 @@ CREATE POLICY "Users can view their businesses" ON businesses
     id IN (SELECT business_id FROM user_businesses WHERE user_id = auth.uid())
   );
 
+-- Policy: Authenticated users can create businesses
+CREATE POLICY "Users can create businesses" ON businesses
+  FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+
 -- Policy: Owners can update their businesses
 CREATE POLICY "Owners can update businesses" ON businesses
   FOR UPDATE USING (
+    id IN (SELECT business_id FROM user_businesses WHERE user_id = auth.uid() AND role = 'owner')
+  );
+
+-- Policy: Owners can delete their businesses
+CREATE POLICY "Owners can delete businesses" ON businesses
+  FOR DELETE USING (
     id IN (SELECT business_id FROM user_businesses WHERE user_id = auth.uid() AND role = 'owner')
   );
 
@@ -113,9 +129,22 @@ CREATE POLICY "Owners can update businesses" ON businesses
 CREATE POLICY "Users can view their memberships" ON user_businesses
   FOR SELECT USING (user_id = auth.uid());
 
+-- Policy: Users can insert themselves as owner when creating business
+CREATE POLICY "Users can add themselves to businesses" ON user_businesses
+  FOR INSERT WITH CHECK (user_id = auth.uid());
+
 -- Policy: Owners/Admins can manage memberships
 CREATE POLICY "Admins can manage memberships" ON user_businesses
-  FOR ALL USING (
+  FOR UPDATE USING (
+    business_id IN (
+      SELECT business_id FROM user_businesses 
+      WHERE user_id = auth.uid() AND role IN ('owner', 'admin')
+    )
+  );
+
+-- Policy: Owners/Admins can delete memberships
+CREATE POLICY "Admins can delete memberships" ON user_businesses
+  FOR DELETE USING (
     business_id IN (
       SELECT business_id FROM user_businesses 
       WHERE user_id = auth.uid() AND role IN ('owner', 'admin')
@@ -128,12 +157,30 @@ CREATE POLICY "Users can view business settings" ON business_settings
     business_id IN (SELECT business_id FROM user_businesses WHERE user_id = auth.uid())
   );
 
--- Policy: Owners/Admins can manage settings
-CREATE POLICY "Admins can manage settings" ON business_settings
-  FOR ALL USING (
+-- Policy: Owners/Admins can insert settings
+CREATE POLICY "Admins can insert settings" ON business_settings
+  FOR INSERT WITH CHECK (
     business_id IN (
       SELECT business_id FROM user_businesses 
       WHERE user_id = auth.uid() AND role IN ('owner', 'admin')
+    )
+  );
+
+-- Policy: Owners/Admins can update settings
+CREATE POLICY "Admins can update settings" ON business_settings
+  FOR UPDATE USING (
+    business_id IN (
+      SELECT business_id FROM user_businesses 
+      WHERE user_id = auth.uid() AND role IN ('owner', 'admin')
+    )
+  );
+
+-- Policy: Owners can delete settings
+CREATE POLICY "Owners can delete settings" ON business_settings
+  FOR DELETE USING (
+    business_id IN (
+      SELECT business_id FROM user_businesses 
+      WHERE user_id = auth.uid() AND role = 'owner'
     )
   );
 

@@ -8,10 +8,20 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const date = searchParams.get('date');
+    const businessId = searchParams.get('businessId');
 
     // Query for VAT expenses
     let vatQuery = supabase.from(TABLES.EXPENSES_VAT).select('*');
     let noVatQuery = supabase.from(TABLES.EXPENSES_NO_VAT).select('*');
+
+    // Filter by business_id
+    if (businessId) {
+      vatQuery = vatQuery.eq('business_id', businessId);
+      noVatQuery = noVatQuery.eq('business_id', businessId);
+    } else {
+      vatQuery = vatQuery.is('business_id', null);
+      noVatQuery = noVatQuery.is('business_id', null);
+    }
 
     if (date) {
       vatQuery = vatQuery.eq('expense_date', date);
@@ -68,7 +78,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { type, expense_date, description, amount, vat_amount, supplier_name, is_recurring, category } = body;
+    const { type, expense_date, description, amount, vat_amount, supplier_name, is_recurring, category, businessId } = body;
 
     if (!expense_date || !description || amount === undefined) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -84,6 +94,11 @@ export async function POST(request: NextRequest) {
       is_recurring: is_recurring || false,
       category: category || null,
     };
+
+    // Add business_id if provided
+    if (businessId) {
+      insertData.business_id = businessId;
+    }
 
     // Only add vat_amount for VAT expenses
     if (type === 'vat') {

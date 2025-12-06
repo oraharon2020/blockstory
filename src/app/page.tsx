@@ -3,8 +3,10 @@
 import { useState, useCallback } from 'react';
 import CashflowTableMonthly from '@/components/CashflowTableMonthly';
 import MonthPicker, { getMonthRange } from '@/components/MonthPicker';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function DashboardPage() {
+  const { currentBusiness } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
@@ -50,6 +52,7 @@ export default function DashboardPage() {
             consumerSecret,
             materialsRate: materialsRate / 100,
             shippingCost: parseFloat(shippingCost) || 0,
+            businessId: currentBusiness?.id,
           }),
         });
       }

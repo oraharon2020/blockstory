@@ -5,25 +5,51 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const date = searchParams.get('date');
+    const businessId = searchParams.get('businessId');
 
     if (!date) {
       return NextResponse.json({ error: 'Missing date' }, { status: 400 });
     }
 
-    // Get WooCommerce settings (key-value format)
-    const { data: settingsData } = await supabase
-      .from(TABLES.SETTINGS)
-      .select('key, value');
+    let wooUrl: string | undefined;
+    let consumerKey: string | undefined;
+    let consumerSecret: string | undefined;
 
-    // Convert to object
-    const settings: Record<string, string> = {};
-    if (settingsData) {
-      settingsData.forEach((item: { key: string; value: string }) => {
-        settings[item.key] = item.value;
-      });
+    // Check for business-specific settings first
+    if (businessId) {
+      const { data: businessSettings } = await supabase
+        .from('business_settings')
+        .select('*')
+        .eq('business_id', businessId)
+        .single();
+      
+      if (businessSettings) {
+        wooUrl = businessSettings.woo_url;
+        consumerKey = businessSettings.consumer_key;
+        consumerSecret = businessSettings.consumer_secret;
+      }
     }
 
-    if (!settings.wooUrl || !settings.consumerKey || !settings.consumerSecret) {
+    // Fall back to global settings if no business settings
+    if (!wooUrl || !consumerKey || !consumerSecret) {
+      const { data: settingsData } = await supabase
+        .from(TABLES.SETTINGS)
+        .select('key, value');
+
+      // Convert to object
+      const settings: Record<string, string> = {};
+      if (settingsData) {
+        settingsData.forEach((item: { key: string; value: string }) => {
+          settings[item.key] = item.value;
+        });
+      }
+      
+      wooUrl = wooUrl || settings.wooUrl;
+      consumerKey = consumerKey || settings.consumerKey;
+      consumerSecret = consumerSecret || settings.consumerSecret;
+    }
+
+    if (!wooUrl || !consumerKey || !consumerSecret) {
       return NextResponse.json(
         { error: 'WooCommerce not configured' },
         { status: 400 }
@@ -33,9 +59,9 @@ export async function GET(request: NextRequest) {
     // Fetch orders from WooCommerce
     const WooCommerceRestApi = (await import('@woocommerce/woocommerce-rest-api')).default;
     const api = new WooCommerceRestApi({
-      url: settings.wooUrl,
-      consumerKey: settings.consumerKey,
-      consumerSecret: settings.consumerSecret,
+      url: wooUrl,
+      consumerKey: consumerKey,
+      consumerSecret: consumerSecret,
       version: 'wc/v3',
     });
 

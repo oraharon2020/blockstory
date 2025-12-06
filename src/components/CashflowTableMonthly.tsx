@@ -6,6 +6,7 @@ import { formatCurrency, formatPercent } from '@/lib/calculations';
 import { getMonthDays } from './MonthPicker';
 import OrdersModal from './OrdersModal';
 import ExpensesManager from './ExpensesManager';
+import { useAuth } from '@/contexts/AuthContext';
 import { 
   RefreshCw, 
   TrendingUp, 
@@ -51,6 +52,7 @@ interface DailyDataWithExpenses extends DailyData {
 }
 
 export default function CashflowTable({ month, year, onSync, isLoading }: CashflowTableProps) {
+  const { currentBusiness } = useAuth();
   const [data, setData] = useState<DailyDataWithExpenses[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
@@ -70,15 +72,24 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
   const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
   const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
 
+  // Build query params with businessId
+  const buildQueryParams = useCallback((params: Record<string, string>) => {
+    const queryParams = new URLSearchParams(params);
+    if (currentBusiness?.id) {
+      queryParams.set('businessId', currentBusiness.id);
+    }
+    return queryParams.toString();
+  }, [currentBusiness?.id]);
+
   const fetchData = useCallback(async (showLoading = true) => {
     try {
       if (showLoading) setLoading(true);
       
       // Fetch cashflow data, daily costs, and expenses in parallel
       const [cashflowRes, costsRes, expensesRes] = await Promise.all([
-        fetch(`/api/cashflow?start=${startDate}&end=${endDate}`),
-        fetch(`/api/daily-costs?startDate=${startDate}&endDate=${endDate}`),
-        fetch(`/api/expenses?startDate=${startDate}&endDate=${endDate}`),
+        fetch(`/api/cashflow?${buildQueryParams({ start: startDate, end: endDate })}`),
+        fetch(`/api/daily-costs?${buildQueryParams({ startDate, endDate })}`),
+        fetch(`/api/expenses?${buildQueryParams({ startDate, endDate })}`),
       ]);
       
       const cashflowJson = await cashflowRes.json();
@@ -174,7 +185,7 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, month, year]);
+  }, [startDate, endDate, month, year, buildQueryParams]);
 
   useEffect(() => {
     fetchData();
@@ -195,7 +206,7 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
     setOrders([]);
     
     try {
-      const res = await fetch(`/api/orders?date=${date}`);
+      const res = await fetch(`/api/orders?${buildQueryParams({ date })}`);
       const json = await res.json();
       setOrders(json.orders || []);
     } catch (error) {
@@ -257,6 +268,7 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
           totalExpenses,
           profit,
           roi,
+          businessId: currentBusiness?.id,
         }),
       });
 

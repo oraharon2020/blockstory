@@ -12,7 +12,7 @@ import {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { date, wooUrl, consumerKey, consumerSecret, materialsRate = 0.3, shippingCost = 0 } = body;
+    const { date, wooUrl, consumerKey, consumerSecret, materialsRate = 0.3, shippingCost = 0, businessId } = body;
 
     if (!date || !wooUrl || !consumerKey || !consumerSecret) {
       return NextResponse.json(
@@ -44,12 +44,19 @@ export async function POST(request: NextRequest) {
     const creditCardFees = calculateCreditCardFees(revenue);
     const vat = calculateVAT(revenue);
 
-    // Get existing data for manual entries (ads costs)
-    const { data: existingData } = await supabase
+    // Get existing data for manual entries (ads costs) - filter by business_id if provided
+    let existingQuery = supabase
       .from(TABLES.DAILY_DATA)
       .select('google_ads_cost, facebook_ads_cost')
-      .eq('date', date)
-      .single();
+      .eq('date', date);
+    
+    if (businessId) {
+      existingQuery = existingQuery.eq('business_id', businessId);
+    } else {
+      existingQuery = existingQuery.is('business_id', null);
+    }
+    
+    const { data: existingData } = await existingQuery.single();
 
     const googleAdsCost = existingData?.google_ads_cost || 0;
     const facebookAdsCost = existingData?.facebook_ads_cost || 0;
@@ -58,7 +65,7 @@ export async function POST(request: NextRequest) {
     const profit = calculateProfit(revenue, totalExpenses);
     const roi = calculateROI(profit, totalExpenses);
 
-    const dailyData = {
+    const dailyData: any = {
       date,
       revenue,
       orders_count: stats.ordersCount,
@@ -74,12 +81,18 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString(),
     };
 
-    // Upsert to Supabase
+    // Add business_id if provided
+    if (businessId) {
+      dailyData.business_id = businessId;
+    }
+
+    // Upsert to Supabase - use composite key if businessId provided
     console.log(`💾 Saving to Supabase: ${date} - Revenue: ${revenue}`);
     
+    const conflictTarget = businessId ? 'date,business_id' : 'date';
     const { data, error } = await supabase
       .from(TABLES.DAILY_DATA)
-      .upsert(dailyData, { onConflict: 'date' })
+      .upsert(dailyData, { onConflict: conflictTarget })
       .select()
       .single();
 

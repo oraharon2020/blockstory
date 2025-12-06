@@ -8,12 +8,20 @@ export async function GET(request: NextRequest) {
     const date = searchParams.get('date');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
+    const businessId = searchParams.get('businessId');
 
     if (!date && !startDate) {
       return NextResponse.json({ error: 'Date or date range is required' }, { status: 400 });
     }
 
     let query = supabase.from(TABLES.ORDER_ITEM_COSTS).select('*');
+
+    // Filter by business_id
+    if (businessId) {
+      query = query.eq('business_id', businessId);
+    } else {
+      query = query.is('business_id', null);
+    }
 
     if (date) {
       // Single date
