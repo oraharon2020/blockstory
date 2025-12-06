@@ -79,21 +79,58 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   'failed': { label: 'נכשלה', color: 'bg-red-100 text-red-700' },
 };
 
-// Get variations from meta_data (filter out internal WooCommerce keys)
+// Get variations from meta_data (filter out internal WooCommerce keys and HTML content)
 const getItemVariations = (item: LineItem): string[] => {
   if (!item.meta_data) return [];
   
-  // Filter out internal keys that start with _ or are system keys
+  // Filter out internal keys, system keys, and HTML content
   const variations = item.meta_data
-    .filter(meta => 
-      !meta.key.startsWith('_') && 
-      meta.value && 
-      typeof meta.value === 'string' &&
-      meta.key !== 'order_item_id'
-    )
+    .filter(meta => {
+      // Skip if no value or not a string
+      if (!meta.value || typeof meta.value !== 'string') return false;
+      
+      // Skip internal keys starting with _
+      if (meta.key.startsWith('_')) return false;
+      
+      // Skip system keys
+      if (meta.key === 'order_item_id') return false;
+      
+      // Skip HTML content (images, divs, etc.)
+      const value = meta.value.toLowerCase();
+      if (value.includes('<img') || 
+          value.includes('<div') || 
+          value.includes('<a ') ||
+          value.includes('<figure') ||
+          value.includes('href=') ||
+          value.includes('.jpg') ||
+          value.includes('.png') ||
+          value.includes('.gif') ||
+          value.includes('gf-download')) {
+        return false;
+      }
+      
+      // Skip very long values (likely HTML or encoded data)
+      if (meta.value.length > 100) return false;
+      
+      return true;
+    })
     .map(meta => {
-      const key = meta.display_key || meta.key;
-      const value = meta.display_value || meta.value;
+      let key = meta.display_key || meta.key;
+      let value = meta.display_value || meta.value;
+      
+      // Decode HTML entities in both key and value
+      const decodeHtml = (str: string) => str
+        .replace(/&#8362;/g, '₪')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#039;/g, "'")
+        .replace(/&nbsp;/g, ' ');
+      
+      key = decodeHtml(key);
+      value = decodeHtml(value);
+      
       return `${key}: ${value}`;
     });
   
