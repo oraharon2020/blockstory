@@ -7,6 +7,8 @@ export async function GET(request: NextRequest) {
     const date = searchParams.get('date');
     const businessId = searchParams.get('businessId');
 
+    console.log(`📦 Orders API: date=${date}, businessId=${businessId}`);
+
     if (!date) {
       return NextResponse.json({ error: 'Missing date' }, { status: 400 });
     }
@@ -17,16 +19,20 @@ export async function GET(request: NextRequest) {
 
     // Check for business-specific settings first
     if (businessId) {
-      const { data: businessSettings } = await supabase
+      console.log(`🔍 Looking for business settings for: ${businessId}`);
+      const { data: businessSettings, error: settingsError } = await supabase
         .from('business_settings')
         .select('*')
         .eq('business_id', businessId)
         .single();
       
+      console.log(`📋 Business settings result:`, businessSettings, settingsError);
+      
       if (businessSettings) {
-        wooUrl = businessSettings.woo_url;
-        consumerKey = businessSettings.consumer_key;
-        consumerSecret = businessSettings.consumer_secret;
+        wooUrl = businessSettings.woo_url?.trim();
+        consumerKey = businessSettings.consumer_key?.trim();
+        consumerSecret = businessSettings.consumer_secret?.trim();
+        console.log(`✅ Found business settings, wooUrl: ${wooUrl}`);
       }
     }
 
@@ -78,8 +84,9 @@ export async function GET(request: NextRequest) {
 
   } catch (error: any) {
     console.error('Orders fetch error:', error);
+    console.error('Error stack:', error.stack);
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch orders' },
+      { error: error.message || 'Failed to fetch orders', details: error.toString() },
       { status: 500 }
     );
   }
