@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Package, Save, Loader2, Trash2, Search, Plus, Check, Building2, ChevronDown, Star, X, Edit2 } from 'lucide-react';
+import { Package, Save, Loader2, Trash2, Search, Plus, Check, Building2, ChevronDown, Star, X, Edit2, Layers } from 'lucide-react';
 import { formatCurrency } from '@/lib/calculations';
 
 interface ProductCost {
@@ -11,6 +11,18 @@ interface ProductCost {
   product_name: string;
   unit_cost: number;
   supplier_name?: string;
+  updated_at: string;
+}
+
+interface VariationCost {
+  id: number;
+  product_id: number;
+  product_name: string;
+  variation_key: string;
+  variation_attributes?: Record<string, string>;
+  unit_cost: number;
+  supplier_name?: string;
+  supplier_id?: string;
   updated_at: string;
 }
 
@@ -28,8 +40,10 @@ interface ProductCostsManagerProps {
 
 export default function ProductCostsManager({ businessId }: ProductCostsManagerProps) {
   const [products, setProducts] = useState<ProductCost[]>([]);
+  const [variations, setVariations] = useState<VariationCost[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'products' | 'variations'>('products');
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState<string>('');
@@ -51,10 +65,11 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
 
-  // Load products and suppliers
+  // Load products, variations and suppliers
   useEffect(() => {
     if (businessId) {
       loadProducts();
+      loadVariations();
       loadSuppliers();
     }
   }, [businessId]);
@@ -70,6 +85,18 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
       console.error('Error loading products:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadVariations = async () => {
+    try {
+      const res = await fetch(`/api/product-variation-costs?businessId=${businessId}`);
+      const json = await res.json();
+      if (json.data) {
+        setVariations(json.data);
+      }
+    } catch (error) {
+      console.error('Error loading variations:', error);
     }
   };
 
@@ -331,6 +358,35 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-2 border-b">
+        <button
+          onClick={() => setActiveTab('products')}
+          className={`px-4 py-2 font-medium transition-colors ${
+            activeTab === 'products'
+              ? 'text-blue-600 border-b-2 border-blue-600'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <Package className="w-4 h-4" />
+            מוצרים ({products.length})
+          </span>
+        </button>
+        <button
+          onClick={() => setActiveTab('variations')}
+          className={`px-4 py-2 font-medium transition-colors ${
+            activeTab === 'variations'
+              ? 'text-green-600 border-b-2 border-green-600'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <Layers className="w-4 h-4" />
+            וריאציות ({variations.length})
+          </span>
+        </button>
+      </div>
       {/* Suppliers Modal */}
       {showSuppliersModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -547,8 +603,11 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
         </div>
       )}
 
-      {/* Stats Bar */}
-      <div className="flex flex-wrap gap-3 text-sm">
+      {/* Products Tab Content */}
+      {activeTab === 'products' && (
+        <>
+          {/* Stats Bar */}
+          <div className="flex flex-wrap gap-3 text-sm">
         <div className="bg-gray-100 px-3 py-1.5 rounded-full text-gray-600">
           סה״כ: {products.length} מוצרים
         </div>
@@ -778,6 +837,95 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
       <p className="text-sm text-gray-500">
         💡 טיפ: כשתזין עלות למוצר בפופאפ ההזמנות, היא תישמר כאן אוטומטית עם הספק שנבחר
       </p>
+        </>
+      )}
+
+      {/* Variations Tab Content */}
+      {activeTab === 'variations' && (
+        <div className="space-y-4">
+          {variations.length === 0 ? (
+            <div className="text-center py-12 bg-gray-50 rounded-lg">
+              <Layers className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-600">אין וריאציות שמורות</h3>
+              <p className="text-gray-500 mt-2">
+                כשתשמור עלות למוצר עם וריאציה (גודל, צבע וכו') ותלחץ "שמור כברירת מחדל",<br/>
+                הוריאציה תופיע כאן אוטומטית
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="text-sm text-gray-600 bg-green-50 p-3 rounded-lg">
+                💡 אלו מחירים שנשמרו עבור וריאציות ספציפיות של מוצרים (כמו גודל או צבע שונה)
+              </div>
+              <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-600">מוצר</th>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-600">וריאציה</th>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-600">ספק</th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-600">עלות</th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-600">עדכון</th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-600">פעולות</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {variations.map((variation, index) => (
+                      <tr key={variation.id} className={`border-b hover:bg-gray-50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                        <td className="px-4 py-3">
+                          <span className="font-medium text-gray-900">{variation.product_name}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-green-600 text-xs bg-green-50 px-2 py-1 rounded">
+                            {variation.variation_key || 'בסיסי'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          {variation.supplier_name ? (
+                            <span className="text-purple-600 text-xs bg-purple-50 px-2 py-1 rounded">
+                              {variation.supplier_name}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="font-medium text-green-600">
+                            {formatCurrency(variation.unit_cost)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-gray-500 text-xs">
+                            {new Date(variation.updated_at).toLocaleDateString('he-IL')}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <button
+                            onClick={async () => {
+                              if (!confirm('למחוק את הוריאציה?')) return;
+                              try {
+                                const res = await fetch(`/api/product-variation-costs?id=${variation.id}`, { method: 'DELETE' });
+                                if (res.ok) {
+                                  setVariations(variations.filter(v => v.id !== variation.id));
+                                }
+                              } catch (error) {
+                                console.error('Error deleting variation:', error);
+                              }
+                            }}
+                            className="p-1.5 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

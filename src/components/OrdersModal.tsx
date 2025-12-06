@@ -99,6 +99,9 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 const getItemVariations = (item: LineItem): string[] => {
   if (!item.meta_data) return [];
   
+  // Debug: log all meta_data to see what Gravity Forms sends
+  console.log('Item meta_data for', item.name, ':', JSON.stringify(item.meta_data, null, 2));
+  
   // Filter out internal keys, system keys, and HTML content
   const variations = item.meta_data
     .filter(meta => {
