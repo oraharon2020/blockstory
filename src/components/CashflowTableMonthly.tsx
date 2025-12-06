@@ -44,7 +44,8 @@ interface ExpensesByDate {
 }
 
 const DAYS_HE = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
-const AUTO_REFRESH_INTERVAL = 30000;
+const AUTO_REFRESH_INTERVAL = 30000; // 30 seconds - refresh from DB
+const AUTO_SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes - sync from WooCommerce
 
 interface DailyDataWithExpenses extends DailyData {
   expensesVat: number;
@@ -61,6 +62,7 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
   const [editValue, setEditValue] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [autoSync, setAutoSync] = useState(true); // Auto sync from WooCommerce
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [showExpensesManager, setShowExpensesManager] = useState(false);
   
@@ -139,15 +141,25 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
           
           if (existing) {
             // Recalculate totals with real materials cost and expenses
-            // VAT is now: revenue VAT - deductible VAT from expenses
+            // VAT calculation: revenue VAT - deductible VAT from all sources
             const revenueVat = existing.vat || 0;
-            const netVat = Math.max(0, revenueVat - dayExpenses.vatAmount);
+            const shippingCost = existing.shippingCost || 0;
+            
+            // Calculate VAT from shipping and materials (they include VAT)
+            // Formula: amount * (vatRate / (100 + vatRate)) where vatRate = 17%
+            const vatRate = 17;
+            const shippingVat = shippingCost * (vatRate / (100 + vatRate));
+            const materialsVat = materialsCost * (vatRate / (100 + vatRate));
+            
+            // Total deductible VAT = expenses VAT + shipping VAT + materials VAT
+            const totalDeductibleVat = dayExpenses.vatAmount + shippingVat + materialsVat;
+            const netVat = Math.max(0, revenueVat - totalDeductibleVat);
             
             const totalExpenses = 
               (existing.googleAdsCost || 0) +
               (existing.facebookAdsCost || 0) +
               (existing.tiktokAdsCost || 0) +
-              (existing.shippingCost || 0) +
+              shippingCost +
               materialsCost +
               (existing.creditCardFees || 0) +
               netVat +
@@ -213,6 +225,34 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
     return () => clearInterval(interval);
   }, [autoRefresh, fetchData]);
 
+  // Auto sync from WooCommerce every 5 minutes (only for today)
+  useEffect(() => {
+    if (!autoSync || !currentBusiness?.id) return;
+    
+    const syncToday = async () => {
+      const today = new Date().toISOString().split('T')[0];
+      // Only sync if we're viewing the current month
+      const currentMonth = new Date().getMonth();
+      const currentYear = new Date().getFullYear();
+      if (month === currentMonth && year === currentYear) {
+        console.log('🔄 Auto-syncing today from WooCommerce...');
+        try {
+          await fetch(`/api/sync?date=${today}&businessId=${currentBusiness.id}`);
+          await fetchData(false);
+        } catch (error) {
+          console.error('Auto-sync error:', error);
+        }
+      }
+    };
+    
+    // Sync immediately on mount
+    syncToday();
+    
+    // Then sync every 5 minutes
+    const interval = setInterval(syncToday, AUTO_SYNC_INTERVAL);
+    return () => clearInterval(interval);
+  }, [autoSync, currentBusiness?.id, month, year, fetchData]);
+
   // Fetch orders when clicking on order count
   const handleOrdersClick = async (date: string, ordersCount: number) => {
     if (ordersCount === 0) return;
@@ -273,8 +313,10 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
         dayExpenses.vat +
         dayExpenses.noVat;
       
-      const profit = (updatedRow.revenue || 0) - totalExpenses;
-      const roi = totalExpenses > 0 ? (profit / totalExpenses) * 100 : 0;
+      const revenue = updatedRow.revenue || 0;
+      const profit = revenue - totalExpenses;
+      // % רווח מההכנסות
+      const roi = revenue > 0 ? (profit / revenue) * 100 : (profit < 0 ? -100 : 0);
 
       await fetch('/api/cashflow', {
         method: 'POST',
@@ -369,7 +411,8 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
     { revenue: 0, ordersCount: 0, googleAdsCost: 0, facebookAdsCost: 0, tiktokAdsCost: 0, shippingCost: 0, materialsCost: 0, creditCardFees: 0, vat: 0, expensesVat: 0, expensesNoVat: 0, employeeCost: 0, totalExpenses: 0, profit: 0 }
   );
 
-  const avgROI = totals.totalExpenses > 0 ? (totals.profit / totals.totalExpenses) * 100 : 0;
+  // % רווח ממוצע מההכנסות
+  const avgROI = totals.revenue > 0 ? (totals.profit / totals.revenue) * 100 : (totals.profit < 0 ? -100 : 0);
 
   if (loading) {
     return (
@@ -401,11 +444,14 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
             </button>
             
             <button
-              onClick={() => setAutoRefresh(!autoRefresh)}
+              onClick={() => {
+                setAutoRefresh(!autoRefresh);
+                setAutoSync(!autoSync);
+              }}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
                 autoRefresh ? 'bg-green-500/20 text-green-100' : 'bg-white/10 text-white/70'
               }`}
-              title={autoRefresh ? 'רענון אוטומטי פעיל' : 'רענון אוטומטי כבוי'}
+              title={autoRefresh ? 'סנכרון אוטומטי פעיל (כל 5 דקות)' : 'סנכרון אוטומטי כבוי'}
             >
               {autoRefresh ? <Zap className="w-4 h-4" /> : <ZapOff className="w-4 h-4" />}
               <span className="text-sm hidden sm:inline">{autoRefresh ? 'חי' : 'כבוי'}</span>
@@ -447,13 +493,17 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
               {formatCurrency(totals.profit)}
             </div>
           </div>
-          <div className="bg-white rounded-lg p-4 shadow-sm">
-            <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
+          <div className="bg-white rounded-lg p-4 shadow-sm group relative">
+            <div className="flex items-center gap-2 text-gray-500 text-sm mb-1 cursor-help">
               <TrendingUp className="w-4 h-4" />
-              <span>ROI ממוצע</span>
+              <span>% רווח ממוצע</span>
+              <span className="text-xs text-gray-400">ⓘ</span>
             </div>
             <div className={`text-2xl font-bold ${avgROI >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {formatPercent(avgROI)}
+            </div>
+            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+              אחוז רווח מההכנסות (רווח ÷ הכנסות × 100)
             </div>
           </div>
         </div>
@@ -479,7 +529,12 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
                 <th className="px-3 py-3 text-right font-semibold text-gray-600">מע"מ</th>
                 <th className="px-3 py-3 text-right font-semibold text-gray-600">הוצאות</th>
                 <th className="px-3 py-3 text-right font-semibold text-gray-600">רווח</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-600">ROI</th>
+                <th className="px-3 py-3 text-right font-semibold text-gray-600 group relative">
+                  <span className="cursor-help">% רווח <span className="text-xs text-gray-400">ⓘ</span></span>
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 font-normal">
+                    אחוז רווח מההכנסות (רווח ÷ הכנסות × 100)
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -531,8 +586,12 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
                   <td className={`px-3 py-2 font-bold ${row.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {formatCurrency(row.profit)}
                   </td>
-                  <td className={`px-3 py-2 font-medium ${row.roi >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatPercent(row.roi)}
+                  <td className={`px-3 py-2 font-medium ${row.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {row.revenue > 0 
+                      ? formatPercent((row.profit / row.revenue) * 100)
+                      : row.profit < 0 
+                        ? formatPercent(-100) 
+                        : formatPercent(0)}
                   </td>
                 </tr>
               ))}

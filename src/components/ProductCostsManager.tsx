@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Package, Save, Loader2, Trash2, Search, Plus, Check } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Package, Save, Loader2, Trash2, Search, Plus, Check, Building2, ChevronDown, Star, X, Edit2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/calculations';
 
 interface ProductCost {
@@ -10,7 +10,16 @@ interface ProductCost {
   sku: string | null;
   product_name: string;
   unit_cost: number;
+  supplier_name?: string;
   updated_at: string;
+}
+
+interface Supplier {
+  id: string;
+  name: string;
+  contact_name?: string;
+  phone?: string;
+  email?: string;
 }
 
 interface ProductCostsManagerProps {
@@ -19,18 +28,34 @@ interface ProductCostsManagerProps {
 
 export default function ProductCostsManager({ businessId }: ProductCostsManagerProps) {
   const [products, setProducts] = useState<ProductCost[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState<string>('');
+  const [editSupplier, setEditSupplier] = useState<string>('');
   const [savingId, setSavingId] = useState<number | null>(null);
-  const [newProduct, setNewProduct] = useState({ name: '', cost: '' });
+  const [newProduct, setNewProduct] = useState({ name: '', cost: '', supplier: '' });
   const [addingNew, setAddingNew] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  
+  // Supplier management
+  const [showSuppliersModal, setShowSuppliersModal] = useState(false);
+  const [newSupplier, setNewSupplier] = useState({ name: '', contact_name: '', phone: '', email: '' });
+  const [addingSupplier, setAddingSupplier] = useState(false);
+  
+  // Filters
+  const [filterSupplier, setFilterSupplier] = useState<string>('');
+  const [filterCostStatus, setFilterCostStatus] = useState<'all' | 'with-cost' | 'no-cost'>('all');
+  const [sortBy, setSortBy] = useState<'name' | 'cost' | 'date'>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
 
+  // Load products and suppliers
   useEffect(() => {
     if (businessId) {
       loadProducts();
+      loadSuppliers();
     }
   }, [businessId]);
 
@@ -48,9 +73,20 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
     }
   };
 
+  const loadSuppliers = async () => {
+    try {
+      const res = await fetch(`/api/suppliers?businessId=${businessId}`);
+      const json = await res.json();
+      setSuppliers(json.suppliers || []);
+    } catch (error) {
+      console.error('Error loading suppliers:', error);
+    }
+  };
+
   const handleEdit = (product: ProductCost) => {
     setEditingId(product.id);
     setEditValue(product.unit_cost.toString());
+    setEditSupplier(product.supplier_name || '');
   };
 
   const handleSave = async (product: ProductCost) => {
@@ -65,16 +101,23 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
           sku: product.sku,
           product_name: product.product_name,
           unit_cost: parseFloat(editValue) || 0,
+          supplier_name: editSupplier || null,
         }),
       });
 
       if (res.ok) {
         setProducts(products.map(p => 
           p.id === product.id 
-            ? { ...p, unit_cost: parseFloat(editValue) || 0, updated_at: new Date().toISOString() }
+            ? { 
+                ...p, 
+                unit_cost: parseFloat(editValue) || 0, 
+                supplier_name: editSupplier || undefined,
+                updated_at: new Date().toISOString() 
+              }
             : p
         ));
         setEditingId(null);
+        setEditSupplier('');
       }
     } catch (error) {
       console.error('Error saving product cost:', error);
@@ -111,13 +154,13 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
           businessId,
           product_name: newProduct.name,
           unit_cost: parseFloat(newProduct.cost) || 0,
+          supplier_name: newProduct.supplier || null,
         }),
       });
 
       if (res.ok) {
-        const json = await res.json();
-        setProducts([...products, json.data]);
-        setNewProduct({ name: '', cost: '' });
+        await loadProducts();
+        setNewProduct({ name: '', cost: '', supplier: '' });
         setShowAddForm(false);
       }
     } catch (error) {
@@ -127,10 +170,122 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
     }
   };
 
-  const filteredProducts = products.filter(p =>
-    p.product_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  // Supplier management functions
+  const handleAddSupplier = async () => {
+    if (!newSupplier.name) return;
+    
+    setAddingSupplier(true);
+    try {
+      const res = await fetch('/api/suppliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'add_supplier',
+          businessId,
+          name: newSupplier.name,
+          contact_name: newSupplier.contact_name || null,
+          phone: newSupplier.phone || null,
+          email: newSupplier.email || null,
+        }),
+      });
+
+      if (res.ok) {
+        await loadSuppliers();
+        setNewSupplier({ name: '', contact_name: '', phone: '', email: '' });
+      }
+    } catch (error) {
+      console.error('Error adding supplier:', error);
+    } finally {
+      setAddingSupplier(false);
+    }
+  };
+
+  const handleUpdateSupplier = async () => {
+    if (!editingSupplier) return;
+    
+    try {
+      const res = await fetch('/api/suppliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessId,
+          id: editingSupplier.id,
+          name: editingSupplier.name,
+          contact_name: editingSupplier.contact_name || null,
+          phone: editingSupplier.phone || null,
+          email: editingSupplier.email || null,
+        }),
+      });
+
+      if (res.ok) {
+        await loadSuppliers();
+        setEditingSupplier(null);
+      }
+    } catch (error) {
+      console.error('Error updating supplier:', error);
+    }
+  };
+
+  const handleDeleteSupplier = async (id: string) => {
+    if (!confirm('האם למחוק את הספק?')) return;
+    
+    try {
+      const res = await fetch(`/api/suppliers?id=${id}`, {
+        method: 'DELETE',
+      });
+
+      if (res.ok) {
+        setSuppliers(suppliers.filter(s => s.id !== id));
+      }
+    } catch (error) {
+      console.error('Error deleting supplier:', error);
+    }
+  };
+
+  // Filtered and sorted products
+  const filteredProducts = products
+    .filter(p => {
+      // Text search
+      const matchesSearch = 
+        p.product_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (p.supplier_name && p.supplier_name.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+      // Supplier filter
+      const matchesSupplier = !filterSupplier || p.supplier_name === filterSupplier;
+      
+      // Cost status filter
+      const matchesCostStatus = 
+        filterCostStatus === 'all' ||
+        (filterCostStatus === 'with-cost' && p.unit_cost > 0) ||
+        (filterCostStatus === 'no-cost' && (!p.unit_cost || p.unit_cost === 0));
+      
+      return matchesSearch && matchesSupplier && matchesCostStatus;
+    })
+    .sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortBy) {
+        case 'name':
+          comparison = a.product_name.localeCompare(b.product_name, 'he');
+          break;
+        case 'cost':
+          comparison = (a.unit_cost || 0) - (b.unit_cost || 0);
+          break;
+        case 'date':
+          comparison = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
+          break;
+      }
+      
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+
+  // Get unique suppliers from products
+  const productSuppliers = Array.from(new Set(products.filter(p => p.supplier_name).map(p => p.supplier_name!)));
+  
+  // Stats
+  const productsWithCost = products.filter(p => p.unit_cost > 0).length;
+  const productsWithoutCost = products.filter(p => !p.unit_cost || p.unit_cost === 0).length;
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('he-IL', {
@@ -158,19 +313,193 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
           </span>
           עלויות מוצרים
         </h2>
-        <button
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-        >
-          <Plus className="w-4 h-4" />
-          הוסף מוצר
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowSuppliersModal(true)}
+            className="flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm"
+          >
+            <Building2 className="w-4 h-4" />
+            ניהול ספקים ({suppliers.length})
+          </button>
+          <button
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            הוסף מוצר
+          </button>
+        </div>
       </div>
+
+      {/* Suppliers Modal */}
+      {showSuppliersModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="bg-purple-600 text-white p-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <Building2 className="w-5 h-5" />
+                ניהול ספקים
+              </h3>
+              <button
+                onClick={() => setShowSuppliersModal(false)}
+                className="p-1 hover:bg-purple-500 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4 overflow-y-auto max-h-[60vh]">
+              {/* Add new supplier form */}
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <h4 className="font-medium text-purple-800 mb-3">הוסף ספק חדש</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <input
+                    type="text"
+                    value={newSupplier.name}
+                    onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })}
+                    placeholder="שם הספק *"
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                  <input
+                    type="text"
+                    value={newSupplier.contact_name}
+                    onChange={(e) => setNewSupplier({ ...newSupplier, contact_name: e.target.value })}
+                    placeholder="איש קשר"
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                  <input
+                    type="tel"
+                    value={newSupplier.phone}
+                    onChange={(e) => setNewSupplier({ ...newSupplier, phone: e.target.value })}
+                    placeholder="טלפון"
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                  <input
+                    type="email"
+                    value={newSupplier.email}
+                    onChange={(e) => setNewSupplier({ ...newSupplier, email: e.target.value })}
+                    placeholder="אימייל"
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+                <button
+                  onClick={handleAddSupplier}
+                  disabled={addingSupplier || !newSupplier.name}
+                  className="mt-3 flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors text-sm"
+                >
+                  {addingSupplier ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  הוסף ספק
+                </button>
+              </div>
+
+              {/* Suppliers list */}
+              <div className="space-y-2">
+                <h4 className="font-medium text-gray-700">ספקים קיימים ({suppliers.length})</h4>
+                {suppliers.length === 0 ? (
+                  <p className="text-gray-500 text-sm text-center py-4">אין ספקים עדיין</p>
+                ) : (
+                  <div className="space-y-2">
+                    {suppliers.map(supplier => (
+                      <div key={supplier.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                        {editingSupplier?.id === supplier.id ? (
+                          <div className="space-y-2">
+                            <div className="grid grid-cols-2 gap-2">
+                              <input
+                                type="text"
+                                value={editingSupplier.name}
+                                onChange={(e) => setEditingSupplier({ ...editingSupplier, name: e.target.value })}
+                                className="px-2 py-1 border rounded text-sm"
+                                placeholder="שם הספק"
+                              />
+                              <input
+                                type="text"
+                                value={editingSupplier.contact_name || ''}
+                                onChange={(e) => setEditingSupplier({ ...editingSupplier, contact_name: e.target.value })}
+                                className="px-2 py-1 border rounded text-sm"
+                                placeholder="איש קשר"
+                              />
+                              <input
+                                type="tel"
+                                value={editingSupplier.phone || ''}
+                                onChange={(e) => setEditingSupplier({ ...editingSupplier, phone: e.target.value })}
+                                className="px-2 py-1 border rounded text-sm"
+                                placeholder="טלפון"
+                              />
+                              <input
+                                type="email"
+                                value={editingSupplier.email || ''}
+                                onChange={(e) => setEditingSupplier({ ...editingSupplier, email: e.target.value })}
+                                className="px-2 py-1 border rounded text-sm"
+                                placeholder="אימייל"
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={handleUpdateSupplier}
+                                className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+                              >
+                                שמור
+                              </button>
+                              <button
+                                onClick={() => setEditingSupplier(null)}
+                                className="px-3 py-1 bg-gray-300 text-gray-700 rounded text-sm hover:bg-gray-400"
+                              >
+                                ביטול
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="font-medium">{supplier.name}</span>
+                              {supplier.contact_name && (
+                                <span className="text-gray-500 text-sm mr-2">({supplier.contact_name})</span>
+                              )}
+                              {supplier.phone && (
+                                <span className="text-gray-500 text-sm mr-2">📞 {supplier.phone}</span>
+                              )}
+                            </div>
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => setEditingSupplier(supplier)}
+                                className="p-1.5 text-blue-600 hover:bg-blue-100 rounded transition-colors"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteSupplier(supplier.id)}
+                                className="p-1.5 text-red-600 hover:bg-red-100 rounded transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="border-t p-4 bg-gray-50">
+              <button
+                onClick={() => setShowSuppliersModal(false)}
+                className="w-full px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
+              >
+                סגור
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add New Product Form */}
       {showAddForm && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <input
               type="text"
               value={newProduct.name}
@@ -178,6 +507,19 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
               placeholder="שם המוצר"
               className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+            <div className="relative">
+              <select
+                value={newProduct.supplier}
+                onChange={(e) => setNewProduct({ ...newProduct, supplier: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+              >
+                <option value="">בחר ספק (אופציונלי)</option>
+                {suppliers.map(s => (
+                  <option key={s.id} value={s.name}>{s.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            </div>
             <input
               type="number"
               value={newProduct.cost}
@@ -196,7 +538,7 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
               שמור
             </button>
             <button
-              onClick={() => { setShowAddForm(false); setNewProduct({ name: '', cost: '' }); }}
+              onClick={() => { setShowAddForm(false); setNewProduct({ name: '', cost: '', supplier: '' }); }}
               className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
             >
               ביטול
@@ -205,16 +547,113 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
         </div>
       )}
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="חפש מוצר..."
-          className="w-full pr-10 pl-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
+      {/* Stats Bar */}
+      <div className="flex flex-wrap gap-3 text-sm">
+        <div className="bg-gray-100 px-3 py-1.5 rounded-full text-gray-600">
+          סה״כ: {products.length} מוצרים
+        </div>
+        <div className="bg-green-100 px-3 py-1.5 rounded-full text-green-700">
+          עם עלות: {productsWithCost}
+        </div>
+        <div className="bg-orange-100 px-3 py-1.5 rounded-full text-orange-700">
+          ללא עלות: {productsWithoutCost}
+        </div>
+      </div>
+
+      {/* Search and Filters */}
+      <div className="space-y-3">
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="חפש לפי שם מוצר, SKU או ספק..."
+            className="w-full pr-10 pl-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+
+        {/* Filter Row */}
+        <div className="flex flex-wrap gap-3">
+          {/* Supplier Filter */}
+          <div className="relative">
+            <select
+              value={filterSupplier}
+              onChange={(e) => setFilterSupplier(e.target.value)}
+              className="pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white text-sm min-w-[140px]"
+            >
+              <option value="">כל הספקים</option>
+              {suppliers.map(supplier => (
+                <option key={supplier.id} value={supplier.name}>{supplier.name}</option>
+              ))}
+            </select>
+            <Building2 className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+          </div>
+
+          {/* Cost Status Filter */}
+          <div className="flex border border-gray-300 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setFilterCostStatus('all')}
+              className={`px-3 py-2 text-sm transition-colors ${
+                filterCostStatus === 'all' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              הכל
+            </button>
+            <button
+              onClick={() => setFilterCostStatus('with-cost')}
+              className={`px-3 py-2 text-sm border-r border-l transition-colors ${
+                filterCostStatus === 'with-cost' ? 'bg-green-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              עם עלות
+            </button>
+            <button
+              onClick={() => setFilterCostStatus('no-cost')}
+              className={`px-3 py-2 text-sm transition-colors ${
+                filterCostStatus === 'no-cost' ? 'bg-orange-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              ללא עלות
+            </button>
+          </div>
+
+          {/* Sort */}
+          <div className="flex items-center gap-2 mr-auto">
+            <span className="text-sm text-gray-500">מיון:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'name' | 'cost' | 'date')}
+              className="px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+            >
+              <option value="name">שם</option>
+              <option value="cost">עלות</option>
+              <option value="date">תאריך עדכון</option>
+            </select>
+            <button
+              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+              className="px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white hover:bg-gray-50"
+              title={sortOrder === 'asc' ? 'סדר עולה' : 'סדר יורד'}
+            >
+              {sortOrder === 'asc' ? '↑' : '↓'}
+            </button>
+          </div>
+
+          {/* Clear Filters */}
+          {(searchTerm || filterSupplier || filterCostStatus !== 'all') && (
+            <button
+              onClick={() => {
+                setSearchTerm('');
+                setFilterSupplier('');
+                setFilterCostStatus('all');
+              }}
+              className="px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            >
+              נקה סינון
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Products Table */}
@@ -231,6 +670,7 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
               <tr>
                 <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">מוצר</th>
                 <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">SKU</th>
+                <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">ספק</th>
                 <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">עלות ליחידה</th>
                 <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">עדכון אחרון</th>
                 <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">פעולות</th>
@@ -247,6 +687,31 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
                   </td>
                   <td className="px-4 py-3 text-center">
                     {editingId === product.id ? (
+                      <div className="relative">
+                        <select
+                          value={editSupplier}
+                          onChange={(e) => setEditSupplier(e.target.value)}
+                          className="w-32 px-2 py-1 border border-blue-300 rounded text-center focus:ring-2 focus:ring-blue-500 appearance-none bg-white text-sm"
+                        >
+                          <option value="">ללא ספק</option>
+                          {suppliers.map(s => (
+                            <option key={s.id} value={s.name}>{s.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <span className={`text-sm ${product.supplier_name ? 'text-blue-600 flex items-center justify-center gap-1' : 'text-gray-400'}`}>
+                        {product.supplier_name ? (
+                          <>
+                            <Building2 className="w-3 h-3" />
+                            {product.supplier_name}
+                          </>
+                        ) : '-'}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {editingId === product.id ? (
                       <input
                         type="number"
                         value={editValue}
@@ -255,7 +720,7 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
                         autoFocus
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') handleSave(product);
-                          if (e.key === 'Escape') setEditingId(null);
+                          if (e.key === 'Escape') { setEditingId(null); setEditSupplier(''); }
                         }}
                       />
                     ) : (
@@ -273,17 +738,25 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
                   <td className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-2">
                       {editingId === product.id ? (
-                        <button
-                          onClick={() => handleSave(product)}
-                          disabled={savingId === product.id}
-                          className="p-1.5 bg-green-100 text-green-600 rounded hover:bg-green-200 transition-colors"
-                        >
-                          {savingId === product.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Save className="w-4 h-4" />
-                          )}
-                        </button>
+                        <>
+                          <button
+                            onClick={() => handleSave(product)}
+                            disabled={savingId === product.id}
+                            className="p-1.5 bg-green-100 text-green-600 rounded hover:bg-green-200 transition-colors"
+                          >
+                            {savingId === product.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Save className="w-4 h-4" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => { setEditingId(null); setEditSupplier(''); }}
+                            className="p-1.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors text-xs"
+                          >
+                            ✕
+                          </button>
+                        </>
                       ) : (
                         <button
                           onClick={() => handleDelete(product.id)}
@@ -303,7 +776,7 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
 
       {/* Info */}
       <p className="text-sm text-gray-500">
-        💡 טיפ: כשתזין עלות למוצר בפופאפ ההזמנות, היא תישמר כאן אוטומטית
+        💡 טיפ: כשתזין עלות למוצר בפופאפ ההזמנות, היא תישמר כאן אוטומטית עם הספק שנבחר
       </p>
     </div>
   );

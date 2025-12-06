@@ -138,10 +138,11 @@ async function updateDailyData(
   
   const googleAdsCost = existingData?.googleAdsCost || 0;
   const facebookAdsCost = existingData?.facebookAdsCost || 0;
+  const tiktokAdsCost = existingData?.tiktokAdsCost || 0;
   
-  const totalExpenses = googleAdsCost + facebookAdsCost + newShippingCost + materialsCost + creditCardFees + vat;
+  const totalExpenses = googleAdsCost + facebookAdsCost + tiktokAdsCost + newShippingCost + materialsCost + creditCardFees + vat;
   const profit = newRevenue - totalExpenses;
-  const roi = totalExpenses > 0 ? (profit / totalExpenses) * 100 : 0;
+  const roi = newRevenue > 0 ? (profit / newRevenue) * 100 : 0;
 
   // Upsert to database
   const { error } = await supabase
@@ -156,6 +157,7 @@ async function updateDailyData(
       vat,
       googleAdsCost,
       facebookAdsCost,
+      tiktokAdsCost,
       totalExpenses,
       profit,
       roi,
@@ -225,16 +227,17 @@ async function recalculateDayFromWooCommerce(date: string, settings: any) {
     // Get existing manual entries
     const { data: existingData } = await supabase
       .from(TABLES.DAILY_DATA)
-      .select('googleAdsCost, facebookAdsCost')
+      .select('googleAdsCost, facebookAdsCost, tiktokAdsCost')
       .eq('date', date)
       .single();
 
     const googleAdsCost = existingData?.googleAdsCost || 0;
     const facebookAdsCost = existingData?.facebookAdsCost || 0;
+    const tiktokAdsCost = existingData?.tiktokAdsCost || 0;
 
-    const totalExpenses = googleAdsCost + facebookAdsCost + totalShipping + materialsCost + creditCardFees + vat;
+    const totalExpenses = googleAdsCost + facebookAdsCost + tiktokAdsCost + totalShipping + materialsCost + creditCardFees + vat;
     const profit = totalRevenue - totalExpenses;
-    const roi = totalExpenses > 0 ? (profit / totalExpenses) * 100 : 0;
+    const roi = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
 
     // Update database
     const { error } = await supabase
@@ -249,6 +252,7 @@ async function recalculateDayFromWooCommerce(date: string, settings: any) {
         vat,
         googleAdsCost,
         facebookAdsCost,
+        tiktokAdsCost,
         totalExpenses,
         profit,
         roi,

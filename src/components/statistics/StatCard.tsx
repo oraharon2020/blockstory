@@ -119,7 +119,7 @@ export default function StatCard({
           
           {/* Subtitle */}
           {subtitle && (
-            <p className="text-xs text-gray-500">{subtitle}</p>
+            <p className="text-xs text-gray-500 truncate max-w-[150px]" title={subtitle}>{subtitle}</p>
           )}
         </div>
         

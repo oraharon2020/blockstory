@@ -29,6 +29,7 @@ export interface StatisticsData {
   expensesBreakdown: {
     googleAds: number;
     facebookAds: number;
+    tiktokAds: number;
     shipping: number;
     materials: number;
     creditCardFees: number;

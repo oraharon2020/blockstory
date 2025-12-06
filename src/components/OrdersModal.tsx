@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, Package, Loader2, User, MapPin, CreditCard, Save, TrendingUp, AlertCircle } from 'lucide-react';
+import { X, Package, Loader2, User, MapPin, CreditCard, Save, TrendingUp, AlertCircle, Building2, ChevronDown, ChevronUp, Star, Check, ChevronsUpDown } from 'lucide-react';
 import { formatCurrency } from '@/lib/calculations';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface LineItem {
   id: number;
@@ -46,19 +47,32 @@ interface ProductCost {
   product_id: number | null;
   product_name: string;
   unit_cost: number;
+  supplier_name?: string;
+}
+
+interface Supplier {
+  id: string;
+  name: string;
 }
 
 interface OrderItemCost {
   order_id: number;
   line_item_id: number;
   item_cost: number;
+  shipping_cost?: number;
+  supplier_name?: string;
 }
 
 interface ItemCostState {
   cost: string;
+  shippingCost: string;
+  supplier: string;
+  supplierId: string;
+  variationKey: string;
   saved: boolean;
   saving: boolean;
   isDefault: boolean;
+  isVariationCost: boolean; // האם העלות מגיעה מוריאציה ספציפית
 }
 
 interface OrdersModalProps {
@@ -137,41 +151,143 @@ const getItemVariations = (item: LineItem): string[] => {
   return variations;
 };
 
+// Create a unique variation key from item variations
+const getVariationKey = (item: LineItem): string => {
+  const variations = getItemVariations(item);
+  if (variations.length === 0) return '';
+  // Sort for consistency and join
+  return variations.sort().join(' | ');
+};
+
+// Get variation attributes as object for saving
+const getVariationAttributes = (item: LineItem): Record<string, string> | null => {
+  if (!item.meta_data) return null;
+  
+  const attrs: Record<string, string> = {};
+  item.meta_data
+    .filter(meta => {
+      if (!meta.value || typeof meta.value !== 'string') return false;
+      if (meta.key.startsWith('_')) return false;
+      if (meta.key === 'order_item_id') return false;
+      if (meta.value.length > 100) return false;
+      const value = meta.value.toLowerCase();
+      if (value.includes('<') || value.includes('href=')) return false;
+      return true;
+    })
+    .forEach(meta => {
+      const key = meta.display_key || meta.key;
+      const value = meta.display_value || meta.value;
+      attrs[key] = value;
+    });
+  
+  return Object.keys(attrs).length > 0 ? attrs : null;
+};
+
 export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }: OrdersModalProps) {
-  const [productCosts, setProductCosts] = useState<Map<string, number>>(new Map());
+  const { currentBusiness } = useAuth();
+  const [productCosts, setProductCosts] = useState<Map<string, ProductCost>>(new Map());
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [itemCostStates, setItemCostStates] = useState<Map<string, ItemCostState>>(new Map());
   const [loadingCosts, setLoadingCosts] = useState(false);
+  const [manualShippingPerItem, setManualShippingPerItem] = useState(false);
+  const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
 
-  // Load product costs and order item costs
+  // Toggle single order expansion
+  const toggleOrder = (orderId: number) => {
+    setExpandedOrders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(orderId)) {
+        newSet.delete(orderId);
+      } else {
+        newSet.add(orderId);
+      }
+      return newSet;
+    });
+  };
+
+  // Expand all orders
+  const expandAll = () => {
+    setExpandedOrders(new Set(orders.map(o => o.id)));
+  };
+
+  // Collapse all orders
+  const collapseAll = () => {
+    setExpandedOrders(new Set());
+  };
+
+  // Load business settings to check if manual shipping is enabled
+  useEffect(() => {
+    const loadBusinessSettings = async () => {
+      if (!currentBusiness?.id) return;
+      try {
+        const res = await fetch(`/api/business-settings?businessId=${currentBusiness.id}`);
+        const json = await res.json();
+        if (json.data) {
+          setManualShippingPerItem(json.data.manualShippingPerItem ?? false);
+        }
+      } catch (error) {
+        console.error('Error loading business settings:', error);
+      }
+    };
+    loadBusinessSettings();
+  }, [currentBusiness?.id]);
+
+  // Load product costs, suppliers, and order item costs
   const loadCosts = useCallback(async () => {
     if (!orders.length) return;
     
     setLoadingCosts(true);
     try {
-      // Load default product costs
-      const productRes = await fetch('/api/product-costs');
-      const productJson = await productRes.json();
+      const params = new URLSearchParams();
+      if (currentBusiness?.id) params.set('businessId', currentBusiness.id);
       
-      const costMap = new Map<string, number>();
+      // Load default product costs, variation costs, and suppliers in parallel
+      const [productRes, suppliersRes, variationRes] = await Promise.all([
+        fetch(`/api/product-costs?${params.toString()}`),
+        fetch(`/api/suppliers?${params.toString()}`),
+        fetch(`/api/product-variation-costs?${params.toString()}`),
+      ]);
+      
+      const productJson = await productRes.json();
+      const suppliersJson = await suppliersRes.json();
+      const variationJson = await variationRes.json();
+      
+      setSuppliers(suppliersJson.suppliers || []);
+      
+      // Map for base product costs
+      const costMap = new Map<string, ProductCost>();
       if (productJson.data) {
         productJson.data.forEach((p: ProductCost) => {
-          costMap.set(p.product_name, p.unit_cost);
+          costMap.set(p.product_name, p);
           if (p.product_id) {
-            costMap.set(`id_${p.product_id}`, p.unit_cost);
+            costMap.set(`id_${p.product_id}`, p);
           }
         });
       }
       setProductCosts(costMap);
 
+      // Map for variation costs: key = "productId_variationKey"
+      const variationCostMap = new Map<string, any>();
+      if (variationJson.data) {
+        variationJson.data.forEach((v: any) => {
+          const vKey = `${v.product_id}_${v.variation_key || ''}`;
+          // If multiple suppliers, prefer the default one
+          const existing = variationCostMap.get(vKey);
+          if (!existing || v.is_default) {
+            variationCostMap.set(vKey, v);
+          }
+        });
+      }
+
       // Load saved order item costs
-      const orderItemMap = new Map<string, number>();
+      const orderItemMap = new Map<string, OrderItemCost>();
       for (const order of orders) {
         try {
-          const itemRes = await fetch(`/api/order-item-costs?orderId=${order.id}`);
+          const itemRes = await fetch(`/api/order-item-costs?orderId=${order.id}&${params.toString()}`);
           const itemJson = await itemRes.json();
           if (itemJson.data) {
             itemJson.data.forEach((item: OrderItemCost) => {
-              orderItemMap.set(`${item.order_id}_${item.line_item_id}`, item.item_cost);
+              orderItemMap.set(`${item.order_id}_${item.line_item_id}`, item);
             });
           }
         } catch (e) {
@@ -184,14 +300,49 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
       orders.forEach(order => {
         order.line_items.forEach(item => {
           const key = `${order.id}_${item.id}`;
-          const savedCost = orderItemMap.get(key);
-          const defaultCost = costMap.get(item.name) || costMap.get(`id_${item.product_id}`);
+          const savedItem = orderItemMap.get(key);
+          const variationKey = getVariationKey(item);
+          
+          // Priority: 1. Saved item cost, 2. Variation cost, 3. Base product cost
+          let cost = '';
+          let supplier = '';
+          let supplierId = '';
+          let isDefault = false;
+          let isVariationCost = false;
+          
+          if (savedItem !== undefined) {
+            cost = savedItem.item_cost.toString();
+            supplier = savedItem.supplier_name || '';
+          } else {
+            // Try variation cost first
+            const varCost = variationCostMap.get(`${item.product_id}_${variationKey}`);
+            if (varCost) {
+              cost = varCost.unit_cost.toString();
+              supplier = varCost.supplier_name || '';
+              supplierId = varCost.supplier_id || '';
+              isDefault = true;
+              isVariationCost = true;
+            } else {
+              // Fall back to base product cost
+              const defaultCost = costMap.get(item.name) || costMap.get(`id_${item.product_id}`);
+              if (defaultCost) {
+                cost = defaultCost.unit_cost.toString();
+                supplier = defaultCost.supplier_name || '';
+                isDefault = true;
+              }
+            }
+          }
           
           stateMap.set(key, {
-            cost: savedCost !== undefined ? savedCost.toString() : (defaultCost !== undefined ? defaultCost.toString() : ''),
-            saved: savedCost !== undefined,
+            cost,
+            shippingCost: savedItem?.shipping_cost?.toString() || '',
+            supplier,
+            supplierId,
+            variationKey,
+            saved: savedItem !== undefined,
             saving: false,
-            isDefault: savedCost === undefined && defaultCost !== undefined,
+            isDefault,
+            isVariationCost,
           });
         });
       });
@@ -202,7 +353,7 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
     } finally {
       setLoadingCosts(false);
     }
-  }, [orders]);
+  }, [orders, currentBusiness?.id]);
 
   useEffect(() => {
     if (isOpen && orders.length > 0) {
@@ -239,6 +390,79 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
     }
   };
 
+  const handleShippingCostChange = (orderId: number, itemId: number, value: string) => {
+    const key = `${orderId}_${itemId}`;
+    const current = itemCostStates.get(key);
+    if (current) {
+      setItemCostStates(new Map(itemCostStates.set(key, { 
+        ...current, 
+        shippingCost: value,
+        saved: false,
+      })));
+    }
+  };
+
+  // When supplier is selected, try to find if there's a saved cost for this product+variation+supplier combo
+  const handleSupplierChange = async (orderId: number, itemId: number, supplierName: string, supplierId: string, item: LineItem) => {
+    const key = `${orderId}_${itemId}`;
+    const current = itemCostStates.get(key);
+    if (!current) return;
+    
+    // Update supplier immediately
+    setItemCostStates(new Map(itemCostStates.set(key, { 
+      ...current, 
+      supplier: supplierName,
+      supplierId: supplierId,
+      saved: false,
+    })));
+    
+    // Try to find a saved cost for this product+variation+supplier from variation costs
+    if (currentBusiness?.id && supplierId) {
+      try {
+        const variationKey = getVariationKey(item);
+        const params = new URLSearchParams({
+          businessId: currentBusiness.id,
+          productId: item.product_id.toString(),
+          variationKey: variationKey,
+        });
+        
+        const res = await fetch(`/api/product-variation-costs?${params.toString()}`);
+        const json = await res.json();
+        
+        // Find cost for this specific supplier
+        const supplierCost = json.data?.find((v: any) => v.supplier_id === supplierId);
+        
+        if (supplierCost) {
+          setItemCostStates(new Map(itemCostStates.set(key, { 
+            ...current, 
+            supplier: supplierName,
+            supplierId: supplierId,
+            cost: supplierCost.unit_cost.toString(),
+            saved: false,
+            isDefault: true,
+            isVariationCost: true,
+          })));
+          return;
+        }
+      } catch (e) {
+        console.error('Error loading variation cost:', e);
+      }
+    }
+    
+    // Fallback to base product cost
+    const productCost = productCosts.get(item.name) || productCosts.get(`id_${item.product_id}`);
+    if (productCost) {
+      setItemCostStates(new Map(itemCostStates.set(key, { 
+        ...current, 
+        supplier: supplierName,
+        supplierId: supplierId,
+        cost: productCost.unit_cost.toString(),
+        saved: false,
+        isDefault: true,
+      })));
+    }
+  };
+
   const saveCost = async (order: Order, item: LineItem, saveAsDefault: boolean = false) => {
     const key = `${order.id}_${item.id}`;
     const state = itemCostStates.get(key);
@@ -248,8 +472,16 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
 
     // Extract the date from order.date_created (format: "2025-12-05T10:30:00")
     const orderDate = order.date_created.split('T')[0];
+    const variationKey = getVariationKey(item);
+    const variationAttributes = getVariationAttributes(item);
+    
+    // Find supplier ID
+    const selectedSupplier = state.supplierId 
+      ? suppliers.find(s => s.id === state.supplierId)
+      : suppliers.find(s => s.name === state.supplier);
 
     try {
+      // Save to order_item_costs
       const res = await fetch('/api/order-item-costs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -259,22 +491,54 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
           product_id: item.product_id,
           product_name: item.name,
           item_cost: parseFloat(state.cost) || 0,
+          shipping_cost: manualShippingPerItem ? (parseFloat(state.shippingCost) || 0) : null,
+          supplier_name: state.supplier || null,
+          supplier_id: selectedSupplier?.id || null,
+          variation_key: variationKey || null,
+          variation_attributes: variationAttributes,
           save_as_default: saveAsDefault,
           order_date: orderDate,
+          businessId: currentBusiness?.id,
         }),
       });
 
       if (res.ok) {
+        // If saved as default, also save to product_variation_costs
+        if (saveAsDefault && currentBusiness?.id) {
+          await fetch('/api/product-variation-costs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              businessId: currentBusiness.id,
+              productId: item.product_id,
+              productName: item.name,
+              variationKey: variationKey || '',
+              variationAttributes: variationAttributes,
+              supplierId: selectedSupplier?.id || null,
+              supplierName: state.supplier || null,
+              unitCost: parseFloat(state.cost) || 0,
+              isDefault: true,
+            }),
+          });
+        }
+
         setItemCostStates(new Map(itemCostStates.set(key, { 
           ...state, 
           saving: false, 
           saved: true,
           isDefault: false,
+          isVariationCost: false,
         })));
 
         // If saved as default, update local product costs map
         if (saveAsDefault) {
-          setProductCosts(new Map(productCosts.set(item.name, parseFloat(state.cost) || 0)));
+          const newProductCost: ProductCost = {
+            product_id: item.product_id,
+            product_name: item.name,
+            unit_cost: parseFloat(state.cost) || 0,
+            supplier_name: state.supplier,
+          };
+          setProductCosts(new Map(productCosts.set(item.name, newProductCost)));
         }
       }
     } catch (error) {
@@ -387,152 +651,279 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
               <p className="text-lg">אין הזמנות ליום זה</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {orders.map((order) => {
+            <div className="space-y-3">
+              {/* Expand/Collapse All Buttons */}
+              <div className="flex justify-end gap-2 mb-4">
+                <button
+                  onClick={expandAll}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  <ChevronsUpDown className="w-4 h-4" />
+                  פתח הכל
+                </button>
+                <button
+                  onClick={collapseAll}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  <ChevronUp className="w-4 h-4" />
+                  סגור הכל
+                </button>
+              </div>
+              {orders.map((order, index) => {
                 const { profit, hasMissingCosts } = calculateOrderProfit(order);
+                const isExpanded = expandedOrders.has(order.id);
+                const orderIndex = index + 1;
+                
+                // Alternate background colors for better visual separation
+                const bgColor = index % 2 === 0 ? 'bg-white' : 'bg-slate-50';
+                const borderColor = hasMissingCosts ? 'border-orange-300' : 
+                                   order.status === 'completed' ? 'border-green-300' : 'border-blue-300';
                 
                 return (
                   <div
                     key={order.id}
-                    className="border rounded-xl p-4 hover:shadow-md transition-shadow"
+                    className={`rounded-xl overflow-hidden border-2 ${borderColor} ${bgColor} transition-all duration-200`}
                   >
-                    {/* Order header */}
-                    <div className="flex items-center justify-between mb-3">
+                    {/* Order header - Clickable accordion trigger */}
+                    <div 
+                      onClick={() => toggleOrder(order.id)}
+                      className={`flex items-center justify-between p-4 cursor-pointer hover:bg-gray-100/50 transition-colors ${
+                        hasMissingCosts ? 'bg-orange-50/50' : ''
+                      }`}
+                    >
                       <div className="flex items-center gap-3">
-                        <span className="font-bold text-lg">#{order.id}</span>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          STATUS_LABELS[order.status]?.color || 'bg-gray-100 text-gray-700'
+                        {/* Order number badge */}
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                          hasMissingCosts ? 'bg-orange-200 text-orange-700' : 
+                          order.status === 'completed' ? 'bg-green-200 text-green-700' : 
+                          'bg-blue-200 text-blue-700'
                         }`}>
-                          {STATUS_LABELS[order.status]?.label || order.status}
-                        </span>
-                        <span className="text-gray-400 text-sm">
-                          {formatTime(order.date_created)}
-                        </span>
+                          {orderIndex}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-gray-900">#{order.id}</span>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                              STATUS_LABELS[order.status]?.color || 'bg-gray-100 text-gray-700'
+                            }`}>
+                              {STATUS_LABELS[order.status]?.label || order.status}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 text-sm text-gray-500 mt-0.5">
+                            <span>{order.billing.first_name} {order.billing.last_name}</span>
+                            <span>•</span>
+                            <span>{formatTime(order.date_created)}</span>
+                            <span>•</span>
+                            <span>{order.line_items.length} פריטים</span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-left">
-                        <span className="font-bold text-lg text-green-600 block">
-                          {formatCurrency(parseFloat(order.total))}
-                        </span>
-                        <span className={`text-sm ${hasMissingCosts ? 'text-yellow-600' : 'text-blue-600'}`}>
-                          רווח: {formatCurrency(profit)}
-                          {hasMissingCosts && ' *'}
-                        </span>
+                      
+                      <div className="flex items-center gap-4">
+                        <div className="text-left">
+                          <span className="font-bold text-lg text-green-600 block">
+                            {formatCurrency(parseFloat(order.total))}
+                          </span>
+                          <span className={`text-sm ${hasMissingCosts ? 'text-orange-600' : 'text-blue-600'}`}>
+                            רווח: {formatCurrency(profit)}
+                            {hasMissingCosts && ' ⚠️'}
+                          </span>
+                        </div>
+                        <div className={`p-2 rounded-full transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
+                          <ChevronDown className="w-5 h-5 text-gray-400" />
+                        </div>
                       </div>
                     </div>
 
-                    {/* Customer info */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm mb-3">
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <User className="w-4 h-4" />
-                        <span>{order.billing.first_name} {order.billing.last_name}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <MapPin className="w-4 h-4" />
-                        <span>{order.shipping.city || order.billing.city}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <CreditCard className="w-4 h-4" />
-                        <span>{order.payment_method_title}</span>
-                      </div>
-                    </div>
+                    {/* Expanded content */}
+                    {isExpanded && (
+                      <div className="border-t border-gray-200 p-4 bg-gray-50/50">
+                        {/* Customer info */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm mb-4 bg-white rounded-lg p-3">
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <User className="w-4 h-4 text-blue-500" />
+                            <span>{order.billing.first_name} {order.billing.last_name}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <MapPin className="w-4 h-4 text-green-500" />
+                            <span>{order.shipping.city || order.billing.city}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <CreditCard className="w-4 h-4 text-purple-500" />
+                            <span>{order.payment_method_title}</span>
+                          </div>
+                        </div>
 
-                    {/* Line items with cost inputs */}
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-500 mb-2">פריטים:</p>
-                      <div className="space-y-2">
-                        {order.line_items.map((item) => {
-                          const key = `${order.id}_${item.id}`;
-                          const state = itemCostStates.get(key);
-                          const itemProfit = state?.cost 
-                            ? parseFloat(item.total) - parseFloat(state.cost)
-                            : null;
+                        {/* Line items with cost inputs */}
+                        <div className="space-y-3">
+                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">פריטים בהזמנה:</p>
+                          {order.line_items.map((item) => {
+                            const key = `${order.id}_${item.id}`;
+                            const state = itemCostStates.get(key);
+                            const itemProfit = state?.cost 
+                              ? parseFloat(item.total) - parseFloat(state.cost)
+                              : null;
+                            const hasCost = state?.cost && parseFloat(state.cost) > 0;
 
-                          return (
-                            <div key={item.id} className="flex items-center justify-between gap-2 text-sm bg-white p-2 rounded-lg">
-                              <div className="flex-1">
-                                <span className="font-medium">{item.name}</span>
-                                <span className="text-gray-400 mr-2">x{item.quantity}</span>
-                                {/* Show variations */}
-                                {getItemVariations(item).length > 0 && (
-                                  <div className="flex flex-wrap gap-1 mt-1">
-                                    {getItemVariations(item).map((variation, idx) => (
-                                      <span 
-                                        key={idx} 
-                                        className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full"
-                                      >
-                                        {variation}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {/* Cost input */}
-                                <div className="flex items-center gap-1">
-                                  <span className="text-xs text-gray-400">עלות:</span>
-                                  <input
-                                    type="number"
-                                    value={state?.cost || ''}
-                                    onChange={(e) => handleCostChange(order.id, item.id, e.target.value)}
-                                    placeholder="₪"
-                                    className={`w-20 px-2 py-1 text-sm border rounded text-center ${
-                                      state?.isDefault ? 'border-blue-300 bg-blue-50' : 
-                                      state?.saved ? 'border-green-300 bg-green-50' : 'border-gray-300'
-                                    }`}
-                                  />
+                            return (
+                              <div key={item.id} className={`text-sm bg-white p-4 rounded-xl border-2 transition-all shadow-sm ${
+                                state?.saved ? 'border-green-300 bg-green-50/30' : 
+                                hasCost ? 'border-blue-300 bg-blue-50/30' : 'border-orange-300 bg-orange-50/30'
+                              }`}>
+                                {/* Product name and quantity */}
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex-1">
+                                    <span className="font-medium text-gray-900">{item.name}</span>
+                                    <span className="text-gray-400 mr-2">x{item.quantity}</span>
+                                    {!hasCost && (
+                                      <span className="text-xs text-orange-500 mr-2">⚠️ חסרה עלות</span>
+                                    )}
                                 </div>
-                                
-                                {/* Save button */}
-                                <button
-                                  onClick={() => saveCost(order, item, false)}
-                                  disabled={!state?.cost || state?.saving}
-                                  className={`p-1.5 rounded transition-colors ${
-                                    state?.saved 
-                                      ? 'bg-green-100 text-green-600' 
-                                      : 'bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-600'
-                                  } disabled:opacity-50`}
-                                  title="שמור עלות להזמנה זו"
-                                >
-                                  {state?.saving ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : (
-                                    <Save className="w-4 h-4" />
-                                  )}
-                                </button>
-
-                                {/* Save as default button */}
-                                {state?.cost && !state?.isDefault && (
-                                  <button
-                                    onClick={() => saveCost(order, item, true)}
-                                    disabled={state?.saving}
-                                    className="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 transition-colors"
-                                    title="שמור כברירת מחדל למוצר זה"
-                                  >
-                                    ברירת מחדל
-                                  </button>
-                                )}
-
-                                {/* Item total and profit */}
-                                <div className="text-left min-w-[80px]">
-                                  <span className="font-medium block">{formatCurrency(parseFloat(item.total))}</span>
+                                <div className="text-left">
+                                  <span className="font-medium text-gray-900">{formatCurrency(parseFloat(item.total))}</span>
                                   {itemProfit !== null && (
-                                    <span className={`text-xs ${itemProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    <span className={`text-xs block ${itemProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                       רווח: {formatCurrency(itemProfit)}
                                     </span>
                                   )}
                                 </div>
                               </div>
+                              
+                              {/* Variations */}
+                              {getItemVariations(item).length > 0 && (
+                                <div className="flex flex-wrap gap-1 mb-2">
+                                  {getItemVariations(item).map((variation, idx) => (
+                                    <span 
+                                      key={idx} 
+                                      className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full"
+                                    >
+                                      {variation}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              
+                              {/* Cost input row */}
+                              <div className="flex items-center gap-2 flex-wrap bg-gray-50 p-2 rounded-lg">
+                                {/* Supplier select */}
+                                {suppliers.length > 0 && (
+                                  <div className="flex items-center gap-1">
+                                    <Building2 className="w-4 h-4 text-gray-400" />
+                                    <select
+                                      value={state?.supplierId || state?.supplier || ''}
+                                      onChange={(e) => {
+                                        const selectedSupplier = suppliers.find(s => s.id === e.target.value || s.name === e.target.value);
+                                        handleSupplierChange(order.id, item.id, selectedSupplier?.name || '', selectedSupplier?.id || '', item);
+                                      }}
+                                      className="px-2 py-1.5 text-sm border border-gray-300 rounded bg-white min-w-[100px]"
+                                    >
+                                      <option value="">בחר ספק</option>
+                                      {suppliers.map(s => (
+                                        <option key={s.id} value={s.id}>{s.name}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
+                                
+                                {/* Cost input */}
+                                <div className="flex items-center gap-1">
+                                  <span className="text-sm text-gray-600">עלות:</span>
+                                  <input
+                                    type="number"
+                                    value={state?.cost || ''}
+                                    onChange={(e) => handleCostChange(order.id, item.id, e.target.value)}
+                                    placeholder="0"
+                                    className={`w-24 px-3 py-1.5 text-sm border-2 rounded text-center font-medium ${
+                                      state?.isDefault ? 'border-blue-300 bg-blue-50 text-blue-700' : 
+                                      state?.saved ? 'border-green-300 bg-green-50 text-green-700' : 
+                                      'border-gray-300 focus:border-blue-500'
+                                    }`}
+                                  />
+                                  <span className="text-gray-400">₪</span>
+                                </div>
+                                
+                                {/* Shipping cost input - only when manual shipping is enabled */}
+                                {manualShippingPerItem && (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-sm text-gray-600">משלוח:</span>
+                                    <input
+                                      type="number"
+                                      value={state?.shippingCost || ''}
+                                      onChange={(e) => handleShippingCostChange(order.id, item.id, e.target.value)}
+                                      placeholder="0"
+                                      className="w-20 px-2 py-1.5 text-sm border-2 border-orange-300 rounded text-center font-medium bg-orange-50 text-orange-700 focus:border-orange-500"
+                                    />
+                                    <span className="text-gray-400">₪</span>
+                                  </div>
+                                )}
+                                
+                                {/* Action buttons */}
+                                <div className="flex items-center gap-1 mr-auto">
+                                  {/* Save button */}
+                                  <button
+                                    onClick={() => saveCost(order, item, false)}
+                                    disabled={!state?.cost || state?.saving}
+                                    className={`flex items-center gap-1 px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                                      state?.saved 
+                                        ? 'bg-green-100 text-green-700' 
+                                        : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                    title="שמור עלות להזמנה זו"
+                                  >
+                                    {state?.saving ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : state?.saved ? (
+                                      <>
+                                        <Check className="w-4 h-4" />
+                                        נשמר
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Save className="w-4 h-4" />
+                                        שמור
+                                      </>
+                                    )}
+                                  </button>
+
+                                  {/* Save as default button - always show when there's a cost */}
+                                  {state?.cost && (
+                                    <button
+                                      onClick={() => saveCost(order, item, true)}
+                                      disabled={state?.saving}
+                                      className="flex items-center gap-1 px-3 py-1.5 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors text-sm font-medium"
+                                      title="שמור כברירת מחדל - יחול על כל ההזמנות העתידיות"
+                                    >
+                                      <Star className="w-4 h-4" />
+                                      שמור כברירת מחדל
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              {/* Status indicator */}
+                              {state?.isDefault && (
+                                <div className={`text-xs mt-1 flex items-center gap-1 ${state.isVariationCost ? 'text-purple-600' : 'text-blue-600'}`}>
+                                  <Star className="w-3 h-3" />
+                                  {state.isVariationCost 
+                                    ? `עלות לוריאציה זו${state.supplier ? ` מספק: ${state.supplier}` : ''} - לחץ "שמור" לאשר`
+                                    : 'עלות ברירת מחדל - לחץ "שמור" כדי לאשר להזמנה זו'
+                                  }
+                                </div>
+                              )}
                             </div>
                           );
                         })}
-                        {parseFloat(order.shipping_total) > 0 && (
-                          <div className="flex justify-between text-sm text-gray-500 pt-2 border-t">
-                            <span>משלוח</span>
-                            <span>{formatCurrency(parseFloat(order.shipping_total))}</span>
-                          </div>
-                        )}
+                          
+                          {/* Shipping total */}
+                          {parseFloat(order.shipping_total) > 0 && (
+                            <div className="flex justify-between text-sm text-gray-500 pt-3 mt-3 border-t border-gray-200 bg-white rounded-lg p-3">
+                              <span className="font-medium">עלות משלוח (מהאתר)</span>
+                              <span className="font-bold">{formatCurrency(parseFloat(order.shipping_total))}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 );
               })}

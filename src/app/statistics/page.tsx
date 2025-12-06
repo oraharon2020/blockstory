@@ -194,13 +194,13 @@ export default function StatisticsPage() {
           loading={loading}
         />
         <StatCard
-          title="ROI ממוצע"
+          title="% רווח ממוצע"
           value={data?.averageRoi || 0}
           trend={data?.trends.roi}
           icon={Target}
           color="orange"
           format="percent"
-          subtitle="החזר על השקעה בפרסום"
+          subtitle="רווח ÷ הכנסות"
           loading={loading}
         />
       </div>
@@ -252,6 +252,7 @@ export default function StatisticsPage() {
           data={data?.expensesBreakdown || {
             googleAds: 0,
             facebookAds: 0,
+            tiktokAds: 0,
             shipping: 0,
             materials: 0,
             creditCardFees: 0,

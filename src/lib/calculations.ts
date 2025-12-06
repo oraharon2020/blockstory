@@ -20,6 +20,7 @@ export function calculateTotalExpenses(data: Partial<DailyData>): number {
   return (
     (data.googleAdsCost || 0) +
     (data.facebookAdsCost || 0) +
+    (data.tiktokAdsCost || 0) +
     (data.shippingCost || 0) +
     (data.materialsCost || 0) +
     (data.creditCardFees || 0) +
@@ -31,15 +32,23 @@ export function calculateProfit(revenue: number, totalExpenses: number): number 
   return revenue - totalExpenses;
 }
 
-export function calculateROI(profit: number, totalExpenses: number): number {
-  if (totalExpenses === 0) return 0;
-  return (profit / totalExpenses) * 100;
+// Profit Margin - אחוז רווח מההכנסות
+export function calculateROI(profit: number, totalExpenses: number, revenue: number = 0): number {
+  if (revenue > 0) {
+    return (profit / revenue) * 100;
+  }
+  // אם אין הכנסות אבל יש הפסד - מציג -100%
+  if (profit < 0) {
+    return -100;
+  }
+  return 0;
 }
 
 export function calculateDailyMetrics(
   revenue: number,
   googleAdsCost: number = 0,
   facebookAdsCost: number = 0,
+  tiktokAdsCost: number = 0,
   shippingCost: number = 0,
   materialsCostOverride?: number,
   materialsRate: number = DEFAULT_MATERIALS_RATE
@@ -50,9 +59,9 @@ export function calculateDailyMetrics(
   const creditCardFees = calculateCreditCardFees(revenue);
   const vat = calculateVAT(revenue);
 
-  const totalExpenses = googleAdsCost + facebookAdsCost + shippingCost + materialsCost + creditCardFees + vat;
+  const totalExpenses = googleAdsCost + facebookAdsCost + tiktokAdsCost + shippingCost + materialsCost + creditCardFees + vat;
   const profit = calculateProfit(revenue, totalExpenses);
-  const roi = calculateROI(profit, totalExpenses);
+  const roi = calculateROI(profit, totalExpenses, revenue);
 
   return {
     date: new Date().toISOString().split('T')[0],
@@ -60,6 +69,7 @@ export function calculateDailyMetrics(
     ordersCount: 0,
     googleAdsCost,
     facebookAdsCost,
+    tiktokAdsCost,
     shippingCost,
     materialsCost,
     creditCardFees,

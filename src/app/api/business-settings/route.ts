@@ -75,6 +75,9 @@ export async function POST(request: NextRequest) {
       shipping_cost: settings.shippingCost,
       materials_rate: settings.materialsRate,
       valid_order_statuses: settings.validOrderStatuses || ['completed', 'processing'],
+      manual_shipping_per_item: settings.manualShippingPerItem ?? false,
+      charge_shipping_on_free_orders: settings.chargeShippingOnFreeOrders ?? true,
+      free_shipping_methods: settings.freeShippingMethods || ['local_pickup'],
       updated_at: new Date().toISOString(),
     };
 

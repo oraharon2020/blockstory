@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings, Save, Loader2, Eye, EyeOff, TestTube, Check, X, Store, Calculator, Package, HelpCircle, ListChecks } from 'lucide-react';
+import { Settings, Save, Loader2, Eye, EyeOff, TestTube, Check, X, Store, Calculator, Package, HelpCircle, ListChecks, Truck } from 'lucide-react';
 import ProductCostsManager from './ProductCostsManager';
 import OrderStatusSelector from './OrderStatusSelector';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,6 +15,9 @@ interface SettingsFormData {
   shippingCost: number;
   materialsRate: number;
   validOrderStatuses: string[];
+  manualShippingPerItem: boolean;
+  chargeShippingOnFreeOrders: boolean;
+  freeShippingMethods: string[];
 }
 
 type TabType = 'woocommerce' | 'business' | 'products';
@@ -31,6 +34,9 @@ export default function SettingsPage() {
     shippingCost: 0,
     materialsRate: 30,
     validOrderStatuses: ['completed', 'processing'],
+    manualShippingPerItem: false,
+    chargeShippingOnFreeOrders: true,
+    freeShippingMethods: ['local_pickup'],
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -65,6 +71,9 @@ export default function SettingsPage() {
           shippingCost: parseFloat(json.data.shippingCost) || 0,
           materialsRate: parseFloat(json.data.materialsRate) || 30,
           validOrderStatuses: json.data.validOrderStatuses || ['completed', 'processing'],
+          manualShippingPerItem: json.data.manualShippingPerItem ?? false,
+          chargeShippingOnFreeOrders: json.data.chargeShippingOnFreeOrders ?? true,
+          freeShippingMethods: json.data.freeShippingMethods || ['local_pickup'],
         });
       }
     } catch (error) {
@@ -417,6 +426,130 @@ export default function SettingsPage() {
                     <span className="text-gray-500 text-lg">₪</span>
                   </div>
                   <p className="text-xs text-gray-500 mt-2">0 = לפי מחיר ללקוח</p>
+                  
+                  {/* Charge on free shipping orders */}
+                  {settings.shippingCost > 0 && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">חייב גם על "משלוח חינם"</p>
+                          <p className="text-xs text-gray-500">חשב עלות משלוח גם כשהלקוח קיבל משלוח חינם</p>
+                        </div>
+                        <button
+                          onClick={() => setSettings({ ...settings, chargeShippingOnFreeOrders: !settings.chargeShippingOnFreeOrders })}
+                          className={`relative w-12 h-6 rounded-full transition-colors ${
+                            settings.chargeShippingOnFreeOrders ? 'bg-green-600' : 'bg-gray-300'
+                          }`}
+                        >
+                          <span
+                            className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                              settings.chargeShippingOnFreeOrders ? 'right-0.5' : 'left-0.5'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Manual Shipping per Item Toggle */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-5 border border-blue-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <Truck className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-800">מילוי עלות משלוח ידנית לכל מוצר</h4>
+                      <p className="text-sm text-gray-600">
+                        {settings.manualShippingPerItem 
+                          ? 'עלות משלוח תמולא ידנית לכל מוצר בפופאפ ההזמנות'
+                          : 'עלות משלוח נמשכת אוטומטית מהאתר (shipping_total)'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSettings({ ...settings, manualShippingPerItem: !settings.manualShippingPerItem })}
+                    className={`relative w-14 h-7 rounded-full transition-colors ${
+                      settings.manualShippingPerItem ? 'bg-blue-600' : 'bg-gray-300'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all shadow ${
+                        settings.manualShippingPerItem ? 'right-1' : 'left-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+                {settings.manualShippingPerItem && (
+                  <div className="mt-3 p-3 bg-white rounded-lg border border-blue-100">
+                    <p className="text-sm text-blue-700">
+                      💡 כשאפשרות זו מופעלת, בפופאפ ההזמנות יופיע שדה "עלות משלוח" ליד כל מוצר. 
+                      העלות תישמר יחד עם עלות המוצר.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Free Shipping Methods (no cost) */}
+              <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-5 border border-orange-200">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-orange-100 rounded-lg">
+                    <Package className="w-6 h-6 text-orange-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-800">שיטות משלוח ללא עלות (איסוף עצמי וכו')</h4>
+                    <p className="text-sm text-gray-600">הזמנות עם שיטות אלו לא יחושבו כהוצאת משלוח</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {settings.freeShippingMethods.map((method, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-white border border-orange-200 rounded-lg text-sm"
+                      >
+                        {method}
+                        <button
+                          onClick={() => {
+                            const newMethods = settings.freeShippingMethods.filter((_, i) => i !== index);
+                            setSettings({ ...settings, freeShippingMethods: newMethods });
+                          }}
+                          className="text-gray-400 hover:text-red-500 transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="הוסף שיטת משלוח (לדוגמה: local_pickup)"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const input = e.target as HTMLInputElement;
+                          const value = input.value.trim().toLowerCase();
+                          if (value && !settings.freeShippingMethods.includes(value)) {
+                            setSettings({
+                              ...settings,
+                              freeShippingMethods: [...settings.freeShippingMethods, value]
+                            });
+                            input.value = '';
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                  
+                  <p className="text-xs text-gray-500">
+                    💡 שיטות נפוצות: local_pickup, pickup_location, store_pickup
+                  </p>
                 </div>
               </div>
 

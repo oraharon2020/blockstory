@@ -19,6 +19,7 @@ import { formatCurrency } from '@/lib/calculations';
 interface ExpensesBreakdown {
   googleAds: number;
   facebookAds: number;
+  tiktokAds: number;
   shipping: number;
   materials: number;
   creditCardFees: number;
@@ -33,6 +34,7 @@ interface ExpensesBreakdownChartProps {
 const EXPENSE_LABELS: Record<keyof ExpensesBreakdown, { label: string; color: string }> = {
   googleAds: { label: 'Google Ads', color: '#4285F4' },
   facebookAds: { label: 'Facebook Ads', color: '#1877F2' },
+  tiktokAds: { label: 'TikTok Ads', color: '#000000' },
   shipping: { label: 'משלוחים', color: '#F59E0B' },
   materials: { label: 'חומרים', color: '#8B5CF6' },
   creditCardFees: { label: 'עמלות אשראי', color: '#EC4899' },
@@ -100,7 +102,7 @@ export default function ExpensesBreakdownChart({ data, loading }: ExpensesBreakd
           <BarChart 
             data={chartData} 
             layout="vertical"
-            margin={{ top: 10, right: 10, left: 80, bottom: 0 }}
+            margin={{ top: 10, right: 20, left: 20, bottom: 0 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" horizontal={true} vertical={false} />
             <XAxis 
@@ -112,9 +114,10 @@ export default function ExpensesBreakdownChart({ data, loading }: ExpensesBreakd
             <YAxis 
               type="category"
               dataKey="label"
-              tick={{ fill: '#374151', fontSize: 12 }}
+              tick={{ fill: '#374151', fontSize: 12, textAnchor: 'end' }}
               axisLine={{ stroke: '#E5E7EB' }}
-              width={70}
+              width={100}
+              orientation="right"
             />
             <Tooltip content={<CustomTooltip />} />
             <Bar dataKey="value" radius={[0, 4, 4, 0]}>

@@ -71,6 +71,7 @@ export interface ExpenseCategory {
 export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
   { id: 'google_ads', name: 'Google Ads', nameHe: 'הוצאות פרסום גוגל', color: '#4285F4' },
   { id: 'facebook_ads', name: 'Facebook Ads', nameHe: 'הוצאות פרסום פייסבוק', color: '#1877F2' },
+  { id: 'tiktok_ads', name: 'TikTok Ads', nameHe: 'הוצאות פרסום טיקטוק', color: '#000000' },
   { id: 'shipping', name: 'Shipping', nameHe: 'הוצאות משלוח', color: '#FF9800' },
   { id: 'materials', name: 'Materials', nameHe: 'חומרי גלם', color: '#4CAF50' },
   { id: 'credit_card', name: 'Credit Card Fees', nameHe: 'עמלת אשראי', color: '#9C27B0' },

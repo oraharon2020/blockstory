@@ -4,7 +4,7 @@ import { supabase, TABLES } from '@/lib/supabase';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { fromMonth, fromYear, toMonth, toYear } = body;
+    const { fromMonth, fromYear, toMonth, toYear, businessId } = body;
 
     // Calculate date ranges
     const fromDaysInMonth = new Date(fromYear, fromMonth + 1, 0).getDate();
@@ -14,11 +14,19 @@ export async function POST(request: NextRequest) {
     let copiedCount = 0;
 
     // Copy VAT expenses
-    const { data: vatExpenses, error: vatError } = await supabase
+    let vatQuery = supabase
       .from(TABLES.EXPENSES_VAT)
       .select('*')
       .gte('expense_date', fromStartDate)
       .lte('expense_date', fromEndDate);
+    
+    if (businessId) {
+      vatQuery = vatQuery.eq('business_id', businessId);
+    } else {
+      vatQuery = vatQuery.is('business_id', null);
+    }
+
+    const { data: vatExpenses, error: vatError } = await vatQuery;
 
     if (vatError) throw vatError;
 
@@ -41,6 +49,7 @@ export async function POST(request: NextRequest) {
             supplier_name: expense.supplier_name,
             is_recurring: expense.is_recurring,
             category: expense.category,
+            business_id: businessId || null,
           });
 
         if (!insertError) copiedCount++;
@@ -48,11 +57,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Copy non-VAT expenses
-    const { data: noVatExpenses, error: noVatError } = await supabase
+    let noVatQuery = supabase
       .from(TABLES.EXPENSES_NO_VAT)
       .select('*')
       .gte('expense_date', fromStartDate)
       .lte('expense_date', fromEndDate);
+    
+    if (businessId) {
+      noVatQuery = noVatQuery.eq('business_id', businessId);
+    } else {
+      noVatQuery = noVatQuery.is('business_id', null);
+    }
+
+    const { data: noVatExpenses, error: noVatError } = await noVatQuery;
 
     if (noVatError) throw noVatError;
 
@@ -74,6 +91,7 @@ export async function POST(request: NextRequest) {
             supplier_name: expense.supplier_name,
             is_recurring: expense.is_recurring,
             category: expense.category,
+            business_id: businessId || null,
           });
 
         if (!insertError) copiedCount++;

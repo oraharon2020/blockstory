@@ -100,32 +100,56 @@ export default function UserManager({ isOpen, onClose }: UserManagerProps) {
     setInviting(true);
     try {
       const businessIdToUse = newInvite.businessId || selectedBusinessId;
+      const emailToInvite = newInvite.email.trim().toLowerCase();
       
-      // First, check if user exists
-      const { data: existingUsers } = await supabase
-        .from('user_businesses')
+      // Check if this email is already associated with this business
+      const { data: existingInvite } = await supabase
+        .from('pending_invitations')
         .select('id')
-        .eq('business_id', businessIdToUse);
+        .eq('business_id', businessIdToUse)
+        .eq('email', emailToInvite)
+        .single();
 
-      // For now, we'll create an invitation record
-      // In production, you'd send an email invitation
-      
-      // Check if email is already invited
-      // This is simplified - in production you'd check against auth.users
-      
-      const { error } = await supabase
-        .from('user_businesses')
+      if (existingInvite) {
+        alert('משתמש זה כבר הוזמן לעסק זה');
+        return;
+      }
+
+      // Create pending invitation
+      const { error: inviteError } = await supabase
+        .from('pending_invitations')
         .insert({
           business_id: businessIdToUse,
-          user_id: user?.id, // Placeholder - in real app, we'd lookup or create user
+          email: emailToInvite,
           role: newInvite.role,
           invited_by: user?.id,
         });
 
-      if (error) throw error;
+      if (inviteError) throw inviteError;
 
+      // Send invitation email using Supabase Auth
       const businessName = businesses.find(b => b.id === businessIdToUse)?.name || 'העסק';
-      alert(`הזמנה נשלחה ל-${newInvite.email} לעסק ${businessName}`);
+      const siteUrl = window.location.origin;
+      
+      const { error: emailError } = await supabase.auth.signInWithOtp({
+        email: emailToInvite,
+        options: {
+          emailRedirectTo: `${siteUrl}/auth/callback`,
+          data: {
+            invited_to_business: businessIdToUse,
+            business_name: businessName,
+          }
+        }
+      });
+
+      if (emailError) {
+        console.error('Email error:', emailError);
+        // Still show success since invitation was created
+        alert(`הזמנה נוצרה ל-${newInvite.email}.\nלא הצלחנו לשלוח מייל אוטומטי - שלח את הלינק הבא למשתמש:\n${siteUrl}/login`);
+      } else {
+        alert(`מייל הזמנה נשלח ל-${newInvite.email}!\nהמשתמש יקבל גישה ל-${businessName} אחרי שיתחבר.`);
+      }
+      
       setNewInvite({ email: '', role: 'viewer', businessId: '' });
       setShowInviteForm(false);
       await loadUsers(selectedBusinessId);

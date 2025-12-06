@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { product_id, sku, product_name, unit_cost, businessId } = body;
+    const { product_id, sku, product_name, unit_cost, supplier_name, businessId } = body;
 
     if (!product_name) {
       return NextResponse.json({ error: 'Product name is required' }, { status: 400 });
@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
           product_name,
           sku: sku || null,
           unit_cost: unit_cost || 0,
+          supplier_name: supplier_name || null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', existing.id)
@@ -93,6 +94,7 @@ export async function POST(request: NextRequest) {
         sku: sku || null,
         product_name,
         unit_cost: unit_cost || 0,
+        supplier_name: supplier_name || null,
         updated_at: new Date().toISOString(),
       };
       

@@ -9,6 +9,7 @@ interface DailyCashflow {
   total_expenses: number;
   google_ads_cost: number;
   facebook_ads_cost: number;
+  tiktok_ads_cost: number;
   shipping_cost: number;
   materials_cost: number;
   credit_card_fees: number;
@@ -32,6 +33,7 @@ interface StatisticsResponse {
   expensesBreakdown: {
     googleAds: number;
     facebookAds: number;
+    tiktokAds: number;
     shipping: number;
     materials: number;
     creditCardFees: number;
@@ -172,6 +174,7 @@ function calculateStatistics(
   const expensesBreakdown = {
     googleAds: data.reduce((sum, d) => sum + (d.google_ads_cost || 0), 0),
     facebookAds: data.reduce((sum, d) => sum + (d.facebook_ads_cost || 0), 0),
+    tiktokAds: data.reduce((sum, d) => sum + (d.tiktok_ads_cost || 0), 0),
     shipping: data.reduce((sum, d) => sum + (d.shipping_cost || 0), 0),
     materials: data.reduce((sum, d) => sum + (d.materials_cost || 0), 0),
     creditCardFees: data.reduce((sum, d) => sum + (d.credit_card_fees || 0), 0),
@@ -183,16 +186,16 @@ function calculateStatistics(
   const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
   const averageDailyRevenue = daysWithData > 0 ? totalRevenue / daysWithData : 0;
   const averageDailyProfit = daysWithData > 0 ? totalProfit / daysWithData : 0;
-  const totalAds = expensesBreakdown.googleAds + expensesBreakdown.facebookAds;
-  const averageRoi = totalAds > 0 ? (totalRevenue / totalAds) * 100 : 0;
+  const totalAds = expensesBreakdown.googleAds + expensesBreakdown.facebookAds + expensesBreakdown.tiktokAds;
+  // % רווח מההכנסות (רווח / הכנסות)
+  const averageRoi = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : (totalProfit < 0 ? -100 : 0);
   const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
   
   // Previous period totals for trends
   const prevRevenue = previousData.reduce((sum, d) => sum + (d.revenue || 0), 0);
   const prevProfit = previousData.reduce((sum, d) => sum + (d.profit || 0), 0);
   const prevOrders = previousData.reduce((sum, d) => sum + (d.orders_count || 0), 0);
-  const prevAds = previousData.reduce((sum, d) => sum + (d.google_ads_cost || 0) + (d.facebook_ads_cost || 0), 0);
-  const prevRoi = prevAds > 0 ? (prevRevenue / prevAds) * 100 : 0;
+  const prevRoi = prevRevenue > 0 ? (prevProfit / prevRevenue) * 100 : 0;
   
   // Calculate trends (percentage change)
   const trends = {

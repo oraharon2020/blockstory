@@ -66,6 +66,7 @@ export default function CashflowTable({ startDate, endDate, onSync, isLoading }:
             ordersCount: 0,
             googleAdsCost: 0,
             facebookAdsCost: 0,
+            tiktokAdsCost: 0,
             shippingCost: 0,
             materialsCost: 0,
             creditCardFees: 0,
@@ -137,8 +138,10 @@ export default function CashflowTable({ startDate, endDate, onSync, isLoading }:
         (updatedRow.creditCardFees || 0) +
         (updatedRow.vat || 0);
       
-      const profit = (updatedRow.revenue || 0) - totalExpenses;
-      const roi = totalExpenses > 0 ? (profit / totalExpenses) * 100 : 0;
+      const revenue = updatedRow.revenue || 0;
+      const profit = revenue - totalExpenses;
+      // % רווח מההכנסות
+      const roi = revenue > 0 ? (profit / revenue) * 100 : (profit < 0 ? -100 : 0);
 
       const res = await fetch('/api/cashflow', {
         method: 'POST',
@@ -246,7 +249,8 @@ export default function CashflowTable({ startDate, endDate, onSync, isLoading }:
     }
   );
 
-  const avgROI = totals.totalExpenses > 0 ? (totals.profit / totals.totalExpenses) * 100 : 0;
+  // % רווח ממוצע מההכנסות
+  const avgROI = totals.revenue > 0 ? (totals.profit / totals.revenue) * 100 : (totals.profit < 0 ? -100 : 0);
 
   if (loading) {
     return (
@@ -331,10 +335,10 @@ export default function CashflowTable({ startDate, endDate, onSync, isLoading }:
             {formatCurrency(totals.profit)}
           </div>
         </div>
-        <div className="bg-white rounded-lg p-4 shadow-sm">
-          <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
+        <div className="bg-white rounded-lg p-4 shadow-sm" title="אחוז רווח מההכנסות (רווח ÷ הכנסות × 100)">
+          <div className="flex items-center gap-2 text-gray-500 text-sm mb-1 cursor-help">
             <TrendingUp className="w-4 h-4" />
-            <span>ROI ממוצע</span>
+            <span>% רווח ממוצע</span>
           </div>
           <div className={`text-2xl font-bold ${avgROI >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {formatPercent(avgROI)}
@@ -359,7 +363,7 @@ export default function CashflowTable({ startDate, endDate, onSync, isLoading }:
               <th className="px-4 py-3 text-right font-semibold text-gray-600">מע"מ</th>
               <th className="px-4 py-3 text-right font-semibold text-gray-600">סה"כ הוצאות</th>
               <th className="px-4 py-3 text-right font-semibold text-gray-600">רווח</th>
-              <th className="px-4 py-3 text-right font-semibold text-gray-600">ROI</th>
+              <th className="px-4 py-3 text-right font-semibold text-gray-600 cursor-help" title="אחוז רווח מההכנסות (רווח ÷ הכנסות × 100)">% רווח</th>
             </tr>
           </thead>
           <tbody>

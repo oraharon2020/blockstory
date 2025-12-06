@@ -21,16 +21,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get valid statuses from business settings if not provided
+    // Get settings from business settings
     let statuses = validOrderStatuses;
-    if (!statuses && businessId) {
+    let chargeShippingOnFreeOrders = true; // Default to true
+    let freeShippingMethods = ['local_pickup', 'pickup_location', 'pickup', 'store_pickup']; // Default methods
+    
+    if (businessId) {
       const { data: businessSettings } = await supabase
         .from('business_settings')
-        .select('valid_order_statuses')
+        .select('valid_order_statuses, charge_shipping_on_free_orders, free_shipping_methods')
         .eq('business_id', businessId)
         .single();
       
-      statuses = businessSettings?.valid_order_statuses;
+      if (businessSettings) {
+        statuses = statuses || businessSettings.valid_order_statuses;
+        chargeShippingOnFreeOrders = businessSettings.charge_shipping_on_free_orders ?? true;
+        freeShippingMethods = businessSettings.free_shipping_methods || freeShippingMethods;
+      }
     }
 
     // Create WooCommerce client
@@ -47,8 +54,40 @@ export async function POST(request: NextRequest) {
       });
     }
     
-    // Pass fixed shipping cost to calculate stats
-    const stats = calculateDailyStats(orders, shippingCost);
+    // Pass fixed shipping cost to calculate stats (with free shipping consideration)
+    const stats = calculateDailyStats(orders, shippingCost, chargeShippingOnFreeOrders, freeShippingMethods);
+
+    // Check if manual shipping per item is enabled and get manual shipping costs
+    let manualShippingCost = 0;
+    if (businessId) {
+      // Check business settings for manual_shipping_per_item
+      const { data: businessSettings } = await supabase
+        .from('business_settings')
+        .select('manual_shipping_per_item')
+        .eq('business_id', businessId)
+        .single();
+      
+      if (businessSettings?.manual_shipping_per_item) {
+        // Get all order IDs from today's orders
+        const orderIds = orders.map((o: any) => o.id);
+        
+        if (orderIds.length > 0) {
+          // Sum all manual shipping costs for these orders
+          const { data: itemCosts } = await supabase
+            .from(TABLES.ORDER_ITEM_COSTS)
+            .select('shipping_cost')
+            .in('order_id', orderIds)
+            .eq('business_id', businessId);
+          
+          if (itemCosts) {
+            manualShippingCost = itemCosts.reduce((sum, item) => sum + (parseFloat(item.shipping_cost) || 0), 0);
+          }
+        }
+      }
+    }
+    
+    // Use manual shipping cost if available, otherwise use calculated shipping cost
+    const finalShippingCost = manualShippingCost > 0 ? manualShippingCost : stats.shippingCost;
 
     // Calculate all metrics
     const revenue = stats.revenue;
@@ -59,7 +98,7 @@ export async function POST(request: NextRequest) {
     // Get existing data for manual entries (ads costs) - filter by business_id if provided
     let existingQuery = supabase
       .from(TABLES.DAILY_DATA)
-      .select('google_ads_cost, facebook_ads_cost')
+      .select('google_ads_cost, facebook_ads_cost, tiktok_ads_cost')
       .eq('date', date);
     
     if (businessId) {
@@ -72,10 +111,11 @@ export async function POST(request: NextRequest) {
 
     const googleAdsCost = existingData?.google_ads_cost || 0;
     const facebookAdsCost = existingData?.facebook_ads_cost || 0;
+    const tiktokAdsCost = existingData?.tiktok_ads_cost || 0;
 
-    const totalExpenses = googleAdsCost + facebookAdsCost + stats.shippingCost + materialsCost + creditCardFees + vat;
+    const totalExpenses = googleAdsCost + facebookAdsCost + tiktokAdsCost + finalShippingCost + materialsCost + creditCardFees + vat;
     const profit = calculateProfit(revenue, totalExpenses);
-    const roi = calculateROI(profit, totalExpenses);
+    const roi = calculateROI(profit, totalExpenses, revenue);
 
     const dailyData: any = {
       date,
@@ -83,7 +123,8 @@ export async function POST(request: NextRequest) {
       orders_count: stats.ordersCount,
       google_ads_cost: googleAdsCost,
       facebook_ads_cost: facebookAdsCost,
-      shipping_cost: stats.shippingCost,
+      tiktok_ads_cost: tiktokAdsCost,
+      shipping_cost: finalShippingCost,
       materials_cost: materialsCost,
       credit_card_fees: creditCardFees,
       vat,

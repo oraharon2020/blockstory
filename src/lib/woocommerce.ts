@@ -57,16 +57,50 @@ export async function fetchOrdersByDate(
   }
 }
 
-export function calculateDailyStats(orders: any[], fixedShippingCost: number = 0) {
+export function calculateDailyStats(
+  orders: any[], 
+  fixedShippingCost: number = 0, 
+  chargeShippingOnFreeOrders: boolean = true,
+  freeShippingMethods: string[] = ['local_pickup', 'pickup_location', 'pickup', 'store_pickup']
+) {
   const revenue = orders.reduce((sum, order) => sum + parseFloat(order.total || '0'), 0);
   
-  // Count orders with shipping (not pickup/free)
-  const ordersWithShipping = orders.filter(order => parseFloat(order.shipping_total || '0') > 0).length;
+  // Helper to check if order is pickup (no actual shipping cost)
+  const isPickupOrder = (order: any) => {
+    if (!order.shipping_lines || order.shipping_lines.length === 0) return true;
+    return order.shipping_lines.every((line: any) => 
+      freeShippingMethods.includes(line.method_id?.toLowerCase())
+    );
+  };
+  
+  // Count orders that need shipping cost (excluding pickup orders)
+  // If chargeShippingOnFreeOrders is true, count all orders that have shipping lines (even if $0) but NOT pickup
+  // Otherwise, only count orders with shipping_total > 0
+  const ordersWithShipping = chargeShippingOnFreeOrders
+    ? orders.filter(order => {
+        // Skip pickup orders - they don't have actual shipping cost
+        if (isPickupOrder(order)) return false;
+        // Check if order has any shipping line items (even free shipping)
+        const hasShippingLines = order.shipping_lines && order.shipping_lines.length > 0;
+        // Or has a shipping method set
+        const hasShippingMethod = order.shipping_lines?.some((line: any) => line.method_id);
+        return hasShippingLines || hasShippingMethod;
+      }).length
+    : orders.filter(order => {
+        // Skip pickup orders
+        if (isPickupOrder(order)) return false;
+        return parseFloat(order.shipping_total || '0') > 0;
+      }).length;
   
   // If fixed shipping cost is set, use it per order. Otherwise use customer-paid shipping.
+  // Pickup orders are excluded from both calculations
   const shippingCost = fixedShippingCost > 0 
     ? ordersWithShipping * fixedShippingCost
-    : orders.reduce((sum, order) => sum + parseFloat(order.shipping_total || '0'), 0);
+    : orders.reduce((sum, order) => {
+        // Don't add shipping cost for pickup orders
+        if (isPickupOrder(order)) return sum;
+        return sum + parseFloat(order.shipping_total || '0');
+      }, 0);
   
   const ordersCount = orders.length;
 

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Trash2, Loader2, Receipt, Globe, Check, X, Copy, Users } from 'lucide-react';
 import { formatCurrency } from '@/lib/calculations';
 import EmployeesManager from './EmployeesManager';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Expense {
   id: number;
@@ -24,6 +25,7 @@ interface ExpensesManagerProps {
 }
 
 export default function ExpensesManager({ month, year, onUpdate, onClose }: ExpensesManagerProps) {
+  const { currentBusiness } = useAuth();
   const [vatExpenses, setVatExpenses] = useState<Expense[]>([]);
   const [noVatExpenses, setNoVatExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,7 +55,9 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
 
   const loadSettings = async () => {
     try {
-      const res = await fetch('/api/settings');
+      const params = new URLSearchParams();
+      if (currentBusiness?.id) params.set('businessId', currentBusiness.id);
+      const res = await fetch(`/api/settings?${params.toString()}`);
       const json = await res.json();
       if (json.data) {
         const settings = json.data.reduce((acc: any, s: any) => {
@@ -72,7 +76,9 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
   const loadExpenses = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/expenses?startDate=${startDate}&endDate=${endDate}`);
+      const params = new URLSearchParams({ startDate, endDate });
+      if (currentBusiness?.id) params.set('businessId', currentBusiness.id);
+      const res = await fetch(`/api/expenses?${params.toString()}`);
       const json = await res.json();
       setVatExpenses(json.vatExpenses || []);
       setNoVatExpenses(json.noVatExpenses || []);
@@ -106,6 +112,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
           ...newExpense,
           amount: amount,
           vat_amount: vatAmount,
+          businessId: currentBusiness?.id,
         }),
       });
 
@@ -133,7 +140,9 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
     if (!confirm('האם למחוק את ההוצאה?')) return;
 
     try {
-      const res = await fetch(`/api/expenses?id=${id}&type=${type}`, {
+      const params = new URLSearchParams({ id: String(id), type });
+      if (currentBusiness?.id) params.set('businessId', currentBusiness.id);
+      const res = await fetch(`/api/expenses?${params.toString()}`, {
         method: 'DELETE',
       });
 
@@ -170,6 +179,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
           fromYear: prevYear,
           toMonth: month,
           toYear: year,
+          businessId: currentBusiness?.id,
         }),
       });
 
