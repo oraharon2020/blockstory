@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { 
   X, Plus, Trash2, Loader2, Users, Mail, 
-  Check, AlertCircle, Crown, Shield, Eye, Store
+  Check, AlertCircle, Crown, Shield, Eye, Store, Clock
 } from 'lucide-react';
 
 interface UserManagerProps {
@@ -23,10 +23,19 @@ interface BusinessUser {
   accepted_at?: string;
 }
 
+interface PendingInvitation {
+  id: string;
+  email: string;
+  role: string;
+  created_at: string;
+  expires_at: string;
+}
+
 export default function UserManager({ isOpen, onClose }: UserManagerProps) {
   const { user, currentBusiness, businesses } = useAuth();
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>('');
   const [users, setUsers] = useState<BusinessUser[]>([]);
+  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviting, setInviting] = useState(false);
@@ -40,12 +49,14 @@ export default function UserManager({ isOpen, onClose }: UserManagerProps) {
     if (isOpen && currentBusiness) {
       setSelectedBusinessId(currentBusiness.id);
       loadUsers(currentBusiness.id);
+      loadPendingInvitations(currentBusiness.id);
     }
   }, [isOpen, currentBusiness]);
 
   useEffect(() => {
     if (selectedBusinessId) {
       loadUsers(selectedBusinessId);
+      loadPendingInvitations(selectedBusinessId);
     }
   }, [selectedBusinessId]);
 
@@ -91,6 +102,72 @@ export default function UserManager({ isOpen, onClose }: UserManagerProps) {
       console.error('Error loading users:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPendingInvitations = async (businessId: string) => {
+    if (!businessId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('pending_invitations')
+        .select('*')
+        .eq('business_id', businessId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading pending invitations:', error);
+        return;
+      }
+
+      setPendingInvitations(data || []);
+    } catch (error) {
+      console.error('Error loading pending invitations:', error);
+    }
+  };
+
+  const handleDeleteInvitation = async (invitationId: string) => {
+    if (!confirm('האם למחוק את ההזמנה?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('pending_invitations')
+        .delete()
+        .eq('id', invitationId);
+
+      if (error) throw error;
+      
+      await loadPendingInvitations(selectedBusinessId);
+    } catch (error) {
+      console.error('Error deleting invitation:', error);
+      alert('שגיאה במחיקת ההזמנה');
+    }
+  };
+
+  const handleResendInvitation = async (invitation: PendingInvitation) => {
+    try {
+      const businessName = businesses.find(b => b.id === selectedBusinessId)?.name || 'העסק';
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://blockstory.onrender.com';
+      
+      const { error } = await supabase.auth.signInWithOtp({
+        email: invitation.email,
+        options: {
+          emailRedirectTo: `${siteUrl}/auth/callback`,
+          data: {
+            invited_to_business: selectedBusinessId,
+            business_name: businessName,
+          }
+        }
+      });
+
+      if (error) {
+        alert(`שגיאה בשליחת המייל: ${error.message}`);
+      } else {
+        alert(`מייל הזמנה נשלח שוב ל-${invitation.email}`);
+      }
+    } catch (error) {
+      console.error('Error resending invitation:', error);
+      alert('שגיאה בשליחת ההזמנה');
     }
   };
 
@@ -154,6 +231,7 @@ export default function UserManager({ isOpen, onClose }: UserManagerProps) {
       setNewInvite({ email: '', role: 'viewer', businessId: '' });
       setShowInviteForm(false);
       await loadUsers(selectedBusinessId);
+      await loadPendingInvitations(selectedBusinessId);
 
     } catch (error) {
       console.error('Error inviting user:', error);
@@ -363,6 +441,59 @@ export default function UserManager({ isOpen, onClose }: UserManagerProps) {
                       ביטול
                     </button>
                   </div>
+                </div>
+              )}
+
+              {/* Pending Invitations */}
+              {pendingInvitations.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium text-gray-500 flex items-center gap-2">
+                    <Clock className="w-4 h-4" />
+                    הזמנות ממתינות ({pendingInvitations.length})
+                  </h3>
+                  
+                  {pendingInvitations.map((inv) => (
+                    <div
+                      key={inv.id}
+                      className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-xl"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
+                          <Mail className="w-4 h-4 text-yellow-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{inv.email}</p>
+                          <p className="text-xs text-gray-500">
+                            נשלח: {new Date(inv.created_at).toLocaleDateString('he-IL')}
+                            {' • '}
+                            {inv.role === 'admin' ? 'מנהל' : 'צופה'}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">
+                          ממתין
+                        </span>
+                        
+                        <button
+                          onClick={() => handleResendInvitation(inv)}
+                          className="p-1.5 text-blue-500 hover:bg-blue-50 rounded"
+                          title="שלח שוב"
+                        >
+                          <Mail className="w-4 h-4" />
+                        </button>
+                        
+                        <button
+                          onClick={() => handleDeleteInvitation(inv.id)}
+                          className="p-1.5 text-red-500 hover:bg-red-50 rounded"
+                          title="מחק הזמנה"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
 
