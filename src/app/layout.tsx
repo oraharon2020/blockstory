@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import { Heebo } from 'next/font/google';
 import './globals.css';
-import { AuthProvider } from '@/contexts/AuthContext';
-import AppShell from '@/components/AppShell';
+import Providers from '@/components/Providers';
 
 const heebo = Heebo({ 
   subsets: ['hebrew', 'latin'],
@@ -22,9 +21,7 @@ export default function RootLayout({
   return (
     <html lang="he" dir="rtl">
       <body className={`${heebo.variable} font-sans bg-gray-100 min-h-screen`}>
-        <AuthProvider>
-          <AppShell>{children}</AppShell>
-        </AuthProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
