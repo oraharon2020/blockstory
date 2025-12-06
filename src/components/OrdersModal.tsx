@@ -65,6 +65,7 @@ interface OrderItemCost {
 
 interface ItemCostState {
   cost: string;
+  quantity: string;
   shippingCost: string;
   supplier: string;
   supplierId: string;
@@ -335,6 +336,7 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
           
           stateMap.set(key, {
             cost,
+            quantity: '1',
             shippingCost: savedItem?.shipping_cost?.toString() || '',
             supplier,
             supplierId,
@@ -385,6 +387,18 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
       setItemCostStates(new Map(itemCostStates.set(key, { 
         ...current, 
         cost: value,
+        saved: false,
+      })));
+    }
+  };
+
+  const handleQuantityChange = (orderId: number, itemId: number, value: string) => {
+    const key = `${orderId}_${itemId}`;
+    const current = itemCostStates.get(key);
+    if (current) {
+      setItemCostStates(new Map(itemCostStates.set(key, { 
+        ...current, 
+        quantity: value,
         saved: false,
       })));
     }
@@ -480,6 +494,11 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
       ? suppliers.find(s => s.id === state.supplierId)
       : suppliers.find(s => s.name === state.supplier);
 
+    // Calculate total cost (unit cost * quantity)
+    const unitCost = parseFloat(state.cost) || 0;
+    const quantity = parseFloat(state.quantity) || 1;
+    const totalItemCost = unitCost * quantity;
+
     try {
       // Save to order_item_costs
       const res = await fetch('/api/order-item-costs', {
@@ -490,7 +509,7 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
           line_item_id: item.id,
           product_id: item.product_id,
           product_name: item.name,
-          item_cost: parseFloat(state.cost) || 0,
+          item_cost: totalItemCost,
           shipping_cost: manualShippingPerItem ? (parseFloat(state.shippingCost) || 0) : null,
           supplier_name: state.supplier || null,
           supplier_id: selectedSupplier?.id || null,
@@ -503,7 +522,7 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
       });
 
       if (res.ok) {
-        // If saved as default, also save to product_variation_costs
+        // If saved as default, also save to product_variation_costs (save unit cost, not total)
         if (saveAsDefault && currentBusiness?.id) {
           await fetch('/api/product-variation-costs', {
             method: 'POST',
@@ -516,7 +535,7 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
               variationAttributes: variationAttributes,
               supplierId: selectedSupplier?.id || null,
               supplierName: state.supplier || null,
-              unitCost: parseFloat(state.cost) || 0,
+              unitCost: unitCost, // Save unit cost as default, not total
               isDefault: true,
             }),
           });
@@ -530,12 +549,12 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
           isVariationCost: false,
         })));
 
-        // If saved as default, update local product costs map
+        // If saved as default, update local product costs map (unit cost)
         if (saveAsDefault) {
           const newProductCost: ProductCost = {
             product_id: item.product_id,
             product_name: item.name,
-            unit_cost: parseFloat(state.cost) || 0,
+            unit_cost: unitCost,
             supplier_name: state.supplier,
           };
           setProductCosts(new Map(productCosts.set(item.name, newProductCost)));
@@ -575,7 +594,10 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
       const key = `${order.id}_${item.id}`;
       const state = itemCostStates.get(key);
       if (state && state.cost) {
-        totalCost += parseFloat(state.cost) || 0;
+        // Calculate total cost: unit cost * quantity
+        const unitCost = parseFloat(state.cost) || 0;
+        const quantity = parseFloat(state.quantity) || 1;
+        totalCost += unitCost * quantity;
       } else {
         hasMissingCosts = true;
       }
@@ -760,8 +782,11 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
                           {order.line_items.map((item) => {
                             const key = `${order.id}_${item.id}`;
                             const state = itemCostStates.get(key);
+                            const totalItemCost = state?.cost 
+                              ? (parseFloat(state.cost) || 0) * (parseFloat(state.quantity) || 1)
+                              : 0;
                             const itemProfit = state?.cost 
-                              ? parseFloat(item.total) - parseFloat(state.cost)
+                              ? parseFloat(item.total) - totalItemCost
                               : null;
                             const hasCost = state?.cost && parseFloat(state.cost) > 0;
 
@@ -833,7 +858,7 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
                                     value={state?.cost || ''}
                                     onChange={(e) => handleCostChange(order.id, item.id, e.target.value)}
                                     placeholder="0"
-                                    className={`w-24 px-3 py-1.5 text-sm border-2 rounded text-center font-medium ${
+                                    className={`w-20 px-2 py-1.5 text-sm border-2 rounded text-center font-medium ${
                                       state?.isDefault ? 'border-blue-300 bg-blue-50 text-blue-700' : 
                                       state?.saved ? 'border-green-300 bg-green-50 text-green-700' : 
                                       'border-gray-300 focus:border-blue-500'
@@ -841,6 +866,28 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
                                   />
                                   <span className="text-gray-400">₪</span>
                                 </div>
+
+                                {/* Quantity input */}
+                                <div className="flex items-center gap-1">
+                                  <span className="text-sm text-gray-600">×</span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={state?.quantity || '1'}
+                                    onChange={(e) => handleQuantityChange(order.id, item.id, e.target.value)}
+                                    className="w-14 px-2 py-1.5 text-sm border-2 border-gray-300 rounded text-center font-medium focus:border-blue-500"
+                                  />
+                                </div>
+
+                                {/* Total cost display */}
+                                {state?.cost && parseFloat(state.quantity || '1') > 1 && (
+                                  <div className="flex items-center gap-1 text-sm text-gray-600">
+                                    <span>=</span>
+                                    <span className="font-medium text-gray-800">
+                                      {formatCurrency((parseFloat(state.cost) || 0) * (parseFloat(state.quantity) || 1))}
+                                    </span>
+                                  </div>
+                                )}
                                 
                                 {/* Shipping cost input - only when manual shipping is enabled */}
                                 {manualShippingPerItem && (
