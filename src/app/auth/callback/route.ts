@@ -41,17 +41,17 @@ export async function GET(request: NextRequest) {
     }
 
     if (data.user) {
+      // For new signups, redirect to set password page
+      const isNewUser = type === 'signup' || type === 'invite';
+      
       // Check if user has any businesses (the trigger should have added them)
       const { data: userBusinesses } = await supabase
         .from('user_businesses')
         .select('business_id')
         .eq('user_id', data.user.id);
 
-      if (userBusinesses && userBusinesses.length > 0) {
-        // User has businesses, redirect to dashboard
-        return NextResponse.redirect(siteUrl);
-      } else {
-        // No businesses yet - maybe trigger didn't run, try to process manually
+      // Process pending invitations if needed
+      if (!userBusinesses || userBusinesses.length === 0) {
         const { data: pendingInvites } = await supabase
           .from('pending_invitations')
           .select('*')
@@ -77,9 +77,16 @@ export async function GET(request: NextRequest) {
               .eq('id', invite.id);
           }
         }
-
-        return NextResponse.redirect(siteUrl);
       }
+
+      // If new user, redirect to set password with email pre-filled
+      if (isNewUser) {
+        const email = encodeURIComponent(data.user.email || '');
+        return NextResponse.redirect(`${siteUrl}/auth/set-password?email=${email}`);
+      }
+
+      // Existing user - redirect to dashboard
+      return NextResponse.redirect(siteUrl);
     }
   }
 
