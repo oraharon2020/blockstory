@@ -86,15 +86,51 @@ export async function POST(request: NextRequest) {
       dailyData.business_id = businessId;
     }
 
-    // Upsert to Supabase - use composite key if businessId provided
+    // Upsert to Supabase - check if record exists first
     console.log(`💾 Saving to Supabase: ${date} - Revenue: ${revenue}`);
     
-    const conflictTarget = businessId ? 'date,business_id' : 'date';
-    const { data, error } = await supabase
+    // Check if record exists
+    let existingRecordQuery = supabase
       .from(TABLES.DAILY_DATA)
-      .upsert(dailyData, { onConflict: conflictTarget })
-      .select()
-      .single();
+      .select('id')
+      .eq('date', date);
+    
+    if (businessId) {
+      existingRecordQuery = existingRecordQuery.eq('business_id', businessId);
+    } else {
+      existingRecordQuery = existingRecordQuery.is('business_id', null);
+    }
+    
+    const { data: existingRecord } = await existingRecordQuery.single();
+    
+    let data, error;
+    
+    if (existingRecord) {
+      // Update existing record
+      let updateQuery = supabase
+        .from(TABLES.DAILY_DATA)
+        .update(dailyData)
+        .eq('date', date);
+      
+      if (businessId) {
+        updateQuery = updateQuery.eq('business_id', businessId);
+      } else {
+        updateQuery = updateQuery.is('business_id', null);
+      }
+      
+      const result = await updateQuery.select().single();
+      data = result.data;
+      error = result.error;
+    } else {
+      // Insert new record
+      const result = await supabase
+        .from(TABLES.DAILY_DATA)
+        .insert(dailyData)
+        .select()
+        .single();
+      data = result.data;
+      error = result.error;
+    }
 
     if (error) {
       console.error(`❌ Supabase error for ${date}:`, error);
