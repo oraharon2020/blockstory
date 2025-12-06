@@ -10,6 +10,13 @@ interface LineItem {
   name: string;
   quantity: number;
   total: string;
+  meta_data?: Array<{
+    id: number;
+    key: string;
+    value: string;
+    display_key?: string;
+    display_value?: string;
+  }>;
 }
 
 interface Order {
@@ -70,6 +77,27 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   'cancelled': { label: 'בוטלה', color: 'bg-red-100 text-red-700' },
   'refunded': { label: 'הוחזרה', color: 'bg-purple-100 text-purple-700' },
   'failed': { label: 'נכשלה', color: 'bg-red-100 text-red-700' },
+};
+
+// Get variations from meta_data (filter out internal WooCommerce keys)
+const getItemVariations = (item: LineItem): string[] => {
+  if (!item.meta_data) return [];
+  
+  // Filter out internal keys that start with _ or are system keys
+  const variations = item.meta_data
+    .filter(meta => 
+      !meta.key.startsWith('_') && 
+      meta.value && 
+      typeof meta.value === 'string' &&
+      meta.key !== 'order_item_id'
+    )
+    .map(meta => {
+      const key = meta.display_key || meta.key;
+      const value = meta.display_value || meta.value;
+      return `${key}: ${value}`;
+    });
+  
+  return variations;
 };
 
 export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }: OrdersModalProps) {
@@ -387,6 +415,19 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
                               <div className="flex-1">
                                 <span className="font-medium">{item.name}</span>
                                 <span className="text-gray-400 mr-2">x{item.quantity}</span>
+                                {/* Show variations */}
+                                {getItemVariations(item).length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {getItemVariations(item).map((variation, idx) => (
+                                      <span 
+                                        key={idx} 
+                                        className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full"
+                                      >
+                                        {variation}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                               <div className="flex items-center gap-2">
                                 {/* Cost input */}
