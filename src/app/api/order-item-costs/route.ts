@@ -4,14 +4,19 @@ import { supabase, TABLES } from '@/lib/supabase';
 // Helper function to update daily materials cost from order item costs
 async function updateDailyMaterialsCost(orderDate: string, businessId: string) {
   try {
-    // Get all item costs for orders on this date
+    // Get all item costs for orders on this date (including quantity)
     const { data: itemCosts } = await supabase
       .from(TABLES.ORDER_ITEM_COSTS)
-      .select('item_cost')
+      .select('item_cost, quantity')
       .eq('order_date', orderDate)
       .eq('business_id', businessId);
     
-    const totalMaterialsCost = itemCosts?.reduce((sum, item) => sum + (parseFloat(item.item_cost) || 0), 0) || 0;
+    // Calculate total: item_cost * quantity for each item
+    const totalMaterialsCost = itemCosts?.reduce((sum, item) => {
+      const cost = parseFloat(item.item_cost) || 0;
+      const qty = item.quantity || 1;
+      return sum + (cost * qty);
+    }, 0) || 0;
     
     // Get existing daily data
     const { data: existingDaily } = await supabase
@@ -166,7 +171,8 @@ export async function POST(request: NextRequest) {
       line_item_id, 
       product_id, 
       product_name, 
-      item_cost, 
+      item_cost,
+      quantity,
       supplier_name,
       supplier_id,
       variation_key,
@@ -196,6 +202,7 @@ export async function POST(request: NextRequest) {
         .from(TABLES.ORDER_ITEM_COSTS)
         .update({
           item_cost: item_cost || 0,
+          quantity: quantity || 1,
           supplier_name: supplier_name || null,
           supplier_id: supplier_id || null,
           variation_key: variation_key || null,
@@ -241,6 +248,7 @@ export async function POST(request: NextRequest) {
         product_id: product_id || null,
         product_name: product_name || '',
         item_cost: item_cost || 0,
+        quantity: quantity || 1,
         supplier_name: supplier_name || null,
         supplier_id: supplier_id || null,
         variation_key: variation_key || null,

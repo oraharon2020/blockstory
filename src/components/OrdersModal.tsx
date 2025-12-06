@@ -59,6 +59,7 @@ interface OrderItemCost {
   order_id: number;
   line_item_id: number;
   item_cost: number;
+  quantity?: number;
   shipping_cost?: number;
   supplier_name?: string;
 }
@@ -336,7 +337,7 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
           
           stateMap.set(key, {
             cost,
-            quantity: '1',
+            quantity: savedItem?.quantity?.toString() || '1',
             shippingCost: savedItem?.shipping_cost?.toString() || '',
             supplier,
             supplierId,
@@ -500,7 +501,7 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
     const totalItemCost = unitCost * quantity;
 
     try {
-      // Save to order_item_costs
+      // Save to order_item_costs (save unit cost and quantity separately)
       const res = await fetch('/api/order-item-costs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -509,7 +510,8 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
           line_item_id: item.id,
           product_id: item.product_id,
           product_name: item.name,
-          item_cost: totalItemCost,
+          item_cost: unitCost,
+          quantity: quantity,
           shipping_cost: manualShippingPerItem ? (parseFloat(state.shippingCost) || 0) : null,
           supplier_name: state.supplier || null,
           supplier_id: selectedSupplier?.id || null,
