@@ -8,6 +8,9 @@ export async function GET(request: NextRequest) {
   const type = requestUrl.searchParams.get('type');
   const isRecovery = requestUrl.searchParams.get('type') === 'recovery';
 
+  // Use site URL for redirects (important for production behind proxy)
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://blockstory.onrender.com';
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
   
@@ -17,10 +20,10 @@ export async function GET(request: NextRequest) {
   if (type === 'recovery' || isRecovery) {
     // Redirect to password reset page with the token
     if (token_hash) {
-      return NextResponse.redirect(new URL(`/auth/reset-password?token_hash=${token_hash}`, requestUrl.origin));
+      return NextResponse.redirect(`${siteUrl}/auth/reset-password?token_hash=${token_hash}`);
     }
     if (code) {
-      return NextResponse.redirect(new URL(`/auth/reset-password?code=${code}`, requestUrl.origin));
+      return NextResponse.redirect(`${siteUrl}/auth/reset-password?code=${code}`);
     }
   }
 
@@ -34,7 +37,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Error verifying OTP:', error);
-      return NextResponse.redirect(new URL('/?error=invalid_link', requestUrl.origin));
+      return NextResponse.redirect(`${siteUrl}/?error=invalid_link`);
     }
 
     if (data.user) {
@@ -46,7 +49,7 @@ export async function GET(request: NextRequest) {
 
       if (userBusinesses && userBusinesses.length > 0) {
         // User has businesses, redirect to dashboard
-        return NextResponse.redirect(new URL('/', requestUrl.origin));
+        return NextResponse.redirect(siteUrl);
       } else {
         // No businesses yet - maybe trigger didn't run, try to process manually
         const { data: pendingInvites } = await supabase
@@ -75,7 +78,7 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        return NextResponse.redirect(new URL('/', requestUrl.origin));
+        return NextResponse.redirect(siteUrl);
       }
     }
   }
@@ -85,10 +88,10 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
       console.error('Error exchanging code:', error);
-      return NextResponse.redirect(new URL('/?error=auth_failed', requestUrl.origin));
+      return NextResponse.redirect(`${siteUrl}/?error=auth_failed`);
     }
   }
 
   // Redirect to home page
-  return NextResponse.redirect(new URL('/', requestUrl.origin));
+  return NextResponse.redirect(siteUrl);
 }
