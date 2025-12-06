@@ -230,7 +230,7 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
     if (!confirm('האם למחוק את הספק?')) return;
     
     try {
-      const res = await fetch(`/api/suppliers?id=${id}`, {
+      const res = await fetch(`/api/suppliers?supplierId=${id}&businessId=${businessId}`, {
         method: 'DELETE',
       });
 
