@@ -6,11 +6,23 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get('code');
   const token_hash = requestUrl.searchParams.get('token_hash');
   const type = requestUrl.searchParams.get('type');
+  const isRecovery = requestUrl.searchParams.get('type') === 'recovery';
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
   
   const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+  // Handle password recovery
+  if (type === 'recovery' || isRecovery) {
+    // Redirect to password reset page with the token
+    if (token_hash) {
+      return NextResponse.redirect(new URL(`/auth/reset-password?token_hash=${token_hash}`, requestUrl.origin));
+    }
+    if (code) {
+      return NextResponse.redirect(new URL(`/auth/reset-password?code=${code}`, requestUrl.origin));
+    }
+  }
 
   // Handle magic link (OTP) verification
   if (token_hash && type === 'magiclink') {
@@ -21,7 +33,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Error verifying OTP:', error);
-      return NextResponse.redirect(new URL('/login?error=invalid_link', requestUrl.origin));
+      return NextResponse.redirect(new URL('/?error=invalid_link', requestUrl.origin));
     }
 
     if (data.user) {
@@ -39,7 +51,7 @@ export async function GET(request: NextRequest) {
         const { data: pendingInvites } = await supabase
           .from('pending_invitations')
           .select('*')
-          .eq('email', data.user.email?.toLowerCase());
+          .ilike('email', data.user.email || '');
 
         if (pendingInvites && pendingInvites.length > 0) {
           // Process pending invitations manually
@@ -72,7 +84,7 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
       console.error('Error exchanging code:', error);
-      return NextResponse.redirect(new URL('/login?error=auth_failed', requestUrl.origin));
+      return NextResponse.redirect(new URL('/?error=auth_failed', requestUrl.origin));
     }
   }
 
