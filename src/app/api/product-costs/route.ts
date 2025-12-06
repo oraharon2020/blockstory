@@ -8,8 +8,14 @@ export async function GET(request: NextRequest) {
     const productId = searchParams.get('productId');
     const sku = searchParams.get('sku');
     const productName = searchParams.get('productName');
+    const businessId = searchParams.get('businessId');
 
     let query = supabase.from(TABLES.PRODUCT_COSTS).select('*');
+
+    // Filter by business_id
+    if (businessId) {
+      query = query.eq('business_id', businessId);
+    }
 
     if (productId) {
       query = query.eq('product_id', productId);
@@ -37,14 +43,18 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { product_id, sku, product_name, unit_cost } = body;
+    const { product_id, sku, product_name, unit_cost, businessId } = body;
 
     if (!product_name) {
       return NextResponse.json({ error: 'Product name is required' }, { status: 400 });
     }
 
-    // Check if product already exists
+    // Check if product already exists (for this business)
     let query = supabase.from(TABLES.PRODUCT_COSTS).select('id');
+    
+    if (businessId) {
+      query = query.eq('business_id', businessId);
+    }
     
     if (product_id) {
       query = query.eq('product_id', product_id);
@@ -78,15 +88,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ data, updated: true });
     } else {
       // Insert new
+      const insertData: any = {
+        product_id: product_id || null,
+        sku: sku || null,
+        product_name,
+        unit_cost: unit_cost || 0,
+        updated_at: new Date().toISOString(),
+      };
+      
+      if (businessId) {
+        insertData.business_id = businessId;
+      }
+      
       const { data, error } = await supabase
         .from(TABLES.PRODUCT_COSTS)
-        .insert({
-          product_id: product_id || null,
-          sku: sku || null,
-          product_name,
-          unit_cost: unit_cost || 0,
-          updated_at: new Date().toISOString(),
-        })
+        .insert(insertData)
         .select()
         .single();
 

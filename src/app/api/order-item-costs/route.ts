@@ -7,12 +7,17 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const orderId = searchParams.get('orderId');
     const lineItemId = searchParams.get('lineItemId');
+    const businessId = searchParams.get('businessId');
 
     if (!orderId) {
       return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
     }
 
     let query = supabase.from(TABLES.ORDER_ITEM_COSTS).select('*').eq('order_id', orderId);
+
+    if (businessId) {
+      query = query.eq('business_id', businessId);
+    }
 
     if (lineItemId) {
       query = query.eq('line_item_id', lineItemId);
@@ -36,19 +41,24 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { order_id, line_item_id, product_id, product_name, item_cost, save_as_default, order_date } = body;
+    const { order_id, line_item_id, product_id, product_name, item_cost, save_as_default, order_date, businessId } = body;
 
     if (!order_id || !line_item_id) {
       return NextResponse.json({ error: 'Order ID and Line Item ID are required' }, { status: 400 });
     }
 
     // Check if cost already exists for this order item
-    const { data: existing } = await supabase
+    let existingQuery = supabase
       .from(TABLES.ORDER_ITEM_COSTS)
       .select('id')
       .eq('order_id', order_id)
-      .eq('line_item_id', line_item_id)
-      .maybeSingle();
+      .eq('line_item_id', line_item_id);
+    
+    if (businessId) {
+      existingQuery = existingQuery.eq('business_id', businessId);
+    }
+    
+    const { data: existing } = await existingQuery.maybeSingle();
 
     if (existing) {
       // Update existing
@@ -70,23 +80,29 @@ export async function POST(request: NextRequest) {
 
       // If save_as_default, also update product_costs table
       if (save_as_default && product_name) {
-        await saveProductCost(product_id, product_name, item_cost);
+        await saveProductCost(product_id, product_name, item_cost, businessId);
       }
 
       return NextResponse.json({ data, updated: true });
     } else {
       // Insert new
+      const insertData: any = {
+        order_id,
+        line_item_id,
+        product_id: product_id || null,
+        product_name: product_name || '',
+        item_cost: item_cost || 0,
+        order_date: order_date || null,
+        updated_at: new Date().toISOString(),
+      };
+      
+      if (businessId) {
+        insertData.business_id = businessId;
+      }
+      
       const { data, error } = await supabase
         .from(TABLES.ORDER_ITEM_COSTS)
-        .insert({
-          order_id,
-          line_item_id,
-          product_id: product_id || null,
-          product_name: product_name || '',
-          item_cost: item_cost || 0,
-          order_date: order_date || null,
-          updated_at: new Date().toISOString(),
-        })
+        .insert(insertData)
         .select()
         .single();
 
@@ -97,7 +113,7 @@ export async function POST(request: NextRequest) {
 
       // If save_as_default, also update product_costs table
       if (save_as_default && product_name) {
-        await saveProductCost(product_id, product_name, item_cost);
+        await saveProductCost(product_id, product_name, item_cost, businessId);
       }
 
       return NextResponse.json({ data, created: true });
@@ -109,10 +125,14 @@ export async function POST(request: NextRequest) {
 }
 
 // Helper function to save product cost as default
-async function saveProductCost(product_id: number | null, product_name: string, unit_cost: number) {
+async function saveProductCost(product_id: number | null, product_name: string, unit_cost: number, businessId?: string) {
   try {
     // Check if product already exists
     let query = supabase.from(TABLES.PRODUCT_COSTS).select('id');
+    
+    if (businessId) {
+      query = query.eq('business_id', businessId);
+    }
     
     if (product_id) {
       query = query.eq('product_id', product_id);
@@ -131,14 +151,20 @@ async function saveProductCost(product_id: number | null, product_name: string, 
         })
         .eq('id', existing.id);
     } else {
+      const insertData: any = {
+        product_id: product_id || null,
+        product_name,
+        unit_cost,
+        updated_at: new Date().toISOString(),
+      };
+      
+      if (businessId) {
+        insertData.business_id = businessId;
+      }
+      
       await supabase
         .from(TABLES.PRODUCT_COSTS)
-        .insert({
-          product_id: product_id || null,
-          product_name,
-          unit_cost,
-          updated_at: new Date().toISOString(),
-        });
+        .insert(insertData);
     }
   } catch (error) {
     console.error('Error saving product cost:', error);
