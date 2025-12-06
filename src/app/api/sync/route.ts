@@ -87,38 +87,44 @@ export async function POST(request: NextRequest) {
     }
 
     // Upsert to Supabase - check if record exists first
-    console.log(`💾 Saving to Supabase: ${date} - Revenue: ${revenue}`);
+    console.log(`💾 Saving to Supabase: ${date} - Revenue: ${revenue} - BusinessId: ${businessId || 'none'}`);
     
-    // Check if record exists
-    let existingRecordQuery = supabase
-      .from(TABLES.DAILY_DATA)
-      .select('id')
-      .eq('date', date);
+    // First, check if there's an existing record with business_id
+    let existingRecord = null;
     
     if (businessId) {
-      existingRecordQuery = existingRecordQuery.eq('business_id', businessId);
-    } else {
-      existingRecordQuery = existingRecordQuery.is('business_id', null);
+      const { data: withBusinessId } = await supabase
+        .from(TABLES.DAILY_DATA)
+        .select('id')
+        .eq('date', date)
+        .eq('business_id', businessId)
+        .single();
+      
+      existingRecord = withBusinessId;
     }
     
-    const { data: existingRecord } = await existingRecordQuery.single();
+    // If no record with business_id, check for record without business_id (legacy)
+    if (!existingRecord) {
+      const { data: withoutBusinessId } = await supabase
+        .from(TABLES.DAILY_DATA)
+        .select('id')
+        .eq('date', date)
+        .is('business_id', null)
+        .single();
+      
+      existingRecord = withoutBusinessId;
+    }
     
     let data, error;
     
     if (existingRecord) {
-      // Update existing record
-      let updateQuery = supabase
+      // Update existing record by ID
+      const result = await supabase
         .from(TABLES.DAILY_DATA)
         .update(dailyData)
-        .eq('date', date);
-      
-      if (businessId) {
-        updateQuery = updateQuery.eq('business_id', businessId);
-      } else {
-        updateQuery = updateQuery.is('business_id', null);
-      }
-      
-      const result = await updateQuery.select().single();
+        .eq('id', existingRecord.id)
+        .select()
+        .single();
       data = result.data;
       error = result.error;
     } else {
