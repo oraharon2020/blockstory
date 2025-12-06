@@ -129,7 +129,8 @@ export default function UserManager({ isOpen, onClose }: UserManagerProps) {
 
       // Send invitation email using Supabase Auth
       const businessName = businesses.find(b => b.id === businessIdToUse)?.name || 'העסק';
-      const siteUrl = window.location.origin;
+      // Always use production URL for email redirects
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://blockstory.onrender.com';
       
       const { error: emailError } = await supabase.auth.signInWithOtp({
         email: emailToInvite,
