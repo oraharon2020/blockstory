@@ -9,14 +9,18 @@ import {
   Menu,
   X
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, ReactNode } from 'react';
 
 const navigation = [
   { name: 'דשבורד', href: '/', icon: LayoutDashboard },
   { name: 'הגדרות', href: '/settings', icon: Settings },
 ];
 
-export default function Sidebar() {
+interface SidebarProps {
+  children?: ReactNode;
+}
+
+export default function Sidebar({ children }: SidebarProps) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -82,7 +86,14 @@ export default function Sidebar() {
           </nav>
 
           {/* Footer */}
-          <div className="p-4 border-t">
+          <div className="p-4 border-t space-y-3">
+            {/* Business Selector */}
+            {children && (
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-3 text-white">
+                {children}
+              </div>
+            )}
+            
             <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-1">מחובר ל-WooCommerce</p>
               <div className="flex items-center gap-2">
