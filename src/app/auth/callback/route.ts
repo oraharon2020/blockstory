@@ -1,0 +1,81 @@
+import { createClient } from '@supabase/supabase-js';
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function GET(request: NextRequest) {
+  const requestUrl = new URL(request.url);
+  const code = requestUrl.searchParams.get('code');
+  const token_hash = requestUrl.searchParams.get('token_hash');
+  const type = requestUrl.searchParams.get('type');
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  
+  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+  // Handle magic link (OTP) verification
+  if (token_hash && type === 'magiclink') {
+    const { data, error } = await supabase.auth.verifyOtp({
+      token_hash,
+      type: 'magiclink',
+    });
+
+    if (error) {
+      console.error('Error verifying OTP:', error);
+      return NextResponse.redirect(new URL('/login?error=invalid_link', requestUrl.origin));
+    }
+
+    if (data.user) {
+      // Check if user has any businesses (the trigger should have added them)
+      const { data: userBusinesses } = await supabase
+        .from('user_businesses')
+        .select('business_id')
+        .eq('user_id', data.user.id);
+
+      if (userBusinesses && userBusinesses.length > 0) {
+        // User has businesses, redirect to dashboard
+        return NextResponse.redirect(new URL('/', requestUrl.origin));
+      } else {
+        // No businesses yet - maybe trigger didn't run, try to process manually
+        const { data: pendingInvites } = await supabase
+          .from('pending_invitations')
+          .select('*')
+          .eq('email', data.user.email?.toLowerCase());
+
+        if (pendingInvites && pendingInvites.length > 0) {
+          // Process pending invitations manually
+          for (const invite of pendingInvites) {
+            await supabase
+              .from('user_businesses')
+              .insert({
+                user_id: data.user.id,
+                business_id: invite.business_id,
+                role: invite.role,
+                invited_by: invite.invited_by,
+                invited_at: invite.created_at,
+              });
+
+            // Delete the processed invitation
+            await supabase
+              .from('pending_invitations')
+              .delete()
+              .eq('id', invite.id);
+          }
+        }
+
+        return NextResponse.redirect(new URL('/', requestUrl.origin));
+      }
+    }
+  }
+
+  // Handle OAuth code exchange
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) {
+      console.error('Error exchanging code:', error);
+      return NextResponse.redirect(new URL('/login?error=auth_failed', requestUrl.origin));
+    }
+  }
+
+  // Redirect to home page
+  return NextResponse.redirect(new URL('/', requestUrl.origin));
+}
