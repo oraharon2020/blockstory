@@ -57,17 +57,20 @@ export default function BusinessManager({ isOpen, onClose }: BusinessManagerProp
         // Load settings for each business
         const { data: settings } = await supabase
           .from('business_settings')
-          .select('key, value')
-          .eq('business_id', business.id);
-
-        const settingsObj = (settings || []).reduce((acc: any, s: any) => {
-          acc[s.key] = s.value;
-          return acc;
-        }, {});
+          .select('*')
+          .eq('business_id', business.id)
+          .single();
 
         businessesWithSettings.push({
           ...business,
-          settings: settingsObj,
+          settings: settings ? {
+            wooUrl: settings.woo_url || '',
+            consumerKey: settings.consumer_key || '',
+            consumerSecret: settings.consumer_secret || '',
+            vatRate: String(settings.vat_rate || 17),
+            shippingCostPerOrder: String(settings.shipping_cost || 0),
+            creditCardFeePercent: String(settings.credit_card_rate || 1.5),
+          } : undefined,
         });
       }
 
@@ -108,22 +111,23 @@ export default function BusinessManager({ isOpen, onClose }: BusinessManagerProp
 
       if (relationError) throw relationError;
 
-      // Save WooCommerce settings
-      const settingsToSave = [
-        { business_id: business.id, key: 'wooUrl', value: newBusiness.wooUrl },
-        { business_id: business.id, key: 'consumerKey', value: newBusiness.consumerKey },
-        { business_id: business.id, key: 'consumerSecret', value: newBusiness.consumerSecret },
-        { business_id: business.id, key: 'vatRate', value: '17' },
-        { business_id: business.id, key: 'shippingCostPerOrder', value: '0' },
-        { business_id: business.id, key: 'creditCardFeePercent', value: '2' },
-      ].filter(s => s.value);
+      // Save settings to business_settings table
+      const { error: settingsError } = await supabase
+        .from('business_settings')
+        .insert({
+          business_id: business.id,
+          woo_url: newBusiness.wooUrl || null,
+          consumer_key: newBusiness.consumerKey || null,
+          consumer_secret: newBusiness.consumerSecret || null,
+          vat_rate: 17,
+          shipping_cost: 0,
+          credit_card_rate: 1.5,
+          materials_rate: 30,
+        });
 
-      if (settingsToSave.length > 0) {
-        await supabase.from('business_settings').insert(settingsToSave);
+      if (settingsError) {
+        console.error('Settings error:', settingsError);
       }
-
-      // Create default columns
-      await supabase.rpc('create_default_columns', { p_business_id: business.id });
 
       // Refresh
       await refreshBusinesses();
@@ -145,17 +149,21 @@ export default function BusinessManager({ isOpen, onClose }: BusinessManagerProp
     setSaving(true);
     try {
       const settings = business.settings || {};
-      const updates = Object.entries(settings).map(([key, value]) => ({
-        business_id: business.id,
-        key,
-        value: value || '',
-      }));
+      
+      const { error } = await supabase
+        .from('business_settings')
+        .upsert({
+          business_id: business.id,
+          woo_url: settings.wooUrl || null,
+          consumer_key: settings.consumerKey || null,
+          consumer_secret: settings.consumerSecret || null,
+          vat_rate: parseFloat(settings.vatRate || '17'),
+          shipping_cost: parseFloat(settings.shippingCostPerOrder || '0'),
+          credit_card_rate: parseFloat(settings.creditCardFeePercent || '1.5'),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'business_id' });
 
-      for (const update of updates) {
-        await supabase
-          .from('business_settings')
-          .upsert(update, { onConflict: 'business_id,key' });
-      }
+      if (error) throw error;
 
       await loadBusinessesWithSettings();
       setSelectedBusiness(null);
