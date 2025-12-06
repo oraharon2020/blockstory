@@ -33,22 +33,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentBusiness, setCurrentBusinessState] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Load businesses for user
+  const SUPABASE_URL = 'https://gvpobzhluzmsdcgrytmj.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2cG9iemhsdXptc2RjZ3J5dG1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MjY2ODEsImV4cCI6MjA4MDUwMjY4MX0.-Pj9GeSPXUl_b4XdW5lfTIjJTynI1VdfEP8-ZiNHu4M';
+
+  // Load businesses for user using direct fetch
   const loadBusinesses = async (userId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('user_businesses')
-        .select(`
-          role,
-          business:businesses (
-            id,
-            name,
-            logo_url
-          )
-        `)
-        .eq('user_id', userId);
-
-      if (error) throw error;
+      console.log('📂 Loading businesses for user:', userId);
+      
+      // Get user_businesses with business details
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/user_businesses?user_id=eq.${userId}&select=role,business:businesses(id,name,logo_url)`,
+        {
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+          }
+        }
+      );
+      
+      const data = await response.json();
+      console.log('📂 User businesses data:', data);
 
       const userBusinesses: Business[] = (data || [])
         .filter((item: any) => item.business)
@@ -59,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role: item.role,
         }));
 
+      console.log('📂 Parsed businesses:', userBusinesses);
       setBusinesses(userBusinesses);
 
       // Load saved business from localStorage or use first one

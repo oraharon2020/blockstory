@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { 
   X, Plus, Trash2, Loader2, Users, Mail, 
-  Check, AlertCircle, Crown, Shield, Eye 
+  Check, AlertCircle, Crown, Shield, Eye, Store
 } from 'lucide-react';
 
 interface UserManagerProps {
@@ -24,7 +24,8 @@ interface BusinessUser {
 }
 
 export default function UserManager({ isOpen, onClose }: UserManagerProps) {
-  const { user, currentBusiness } = useAuth();
+  const { user, currentBusiness, businesses } = useAuth();
+  const [selectedBusinessId, setSelectedBusinessId] = useState<string>('');
   const [users, setUsers] = useState<BusinessUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInviteForm, setShowInviteForm] = useState(false);
@@ -32,16 +33,24 @@ export default function UserManager({ isOpen, onClose }: UserManagerProps) {
   const [newInvite, setNewInvite] = useState({
     email: '',
     role: 'viewer' as 'admin' | 'viewer',
+    businessId: '',
   });
 
   useEffect(() => {
     if (isOpen && currentBusiness) {
-      loadUsers();
+      setSelectedBusinessId(currentBusiness.id);
+      loadUsers(currentBusiness.id);
     }
   }, [isOpen, currentBusiness]);
 
-  const loadUsers = async () => {
-    if (!currentBusiness) return;
+  useEffect(() => {
+    if (selectedBusinessId) {
+      loadUsers(selectedBusinessId);
+    }
+  }, [selectedBusinessId]);
+
+  const loadUsers = async (businessId: string) => {
+    if (!businessId) return;
     
     setLoading(true);
     try {
@@ -55,7 +64,7 @@ export default function UserManager({ isOpen, onClose }: UserManagerProps) {
           invited_at,
           accepted_at
         `)
-        .eq('business_id', currentBusiness.id);
+        .eq('business_id', businessId);
 
       if (error) throw error;
 
@@ -90,11 +99,13 @@ export default function UserManager({ isOpen, onClose }: UserManagerProps) {
 
     setInviting(true);
     try {
+      const businessIdToUse = newInvite.businessId || selectedBusinessId;
+      
       // First, check if user exists
       const { data: existingUsers } = await supabase
         .from('user_businesses')
         .select('id')
-        .eq('business_id', currentBusiness.id);
+        .eq('business_id', businessIdToUse);
 
       // For now, we'll create an invitation record
       // In production, you'd send an email invitation
@@ -105,7 +116,7 @@ export default function UserManager({ isOpen, onClose }: UserManagerProps) {
       const { error } = await supabase
         .from('user_businesses')
         .insert({
-          business_id: currentBusiness.id,
+          business_id: businessIdToUse,
           user_id: user?.id, // Placeholder - in real app, we'd lookup or create user
           role: newInvite.role,
           invited_by: user?.id,
@@ -113,10 +124,11 @@ export default function UserManager({ isOpen, onClose }: UserManagerProps) {
 
       if (error) throw error;
 
-      alert(`הזמנה נשלחה ל-${newInvite.email}`);
-      setNewInvite({ email: '', role: 'viewer' });
+      const businessName = businesses.find(b => b.id === businessIdToUse)?.name || 'העסק';
+      alert(`הזמנה נשלחה ל-${newInvite.email} לעסק ${businessName}`);
+      setNewInvite({ email: '', role: 'viewer', businessId: '' });
       setShowInviteForm(false);
-      await loadUsers();
+      await loadUsers(selectedBusinessId);
 
     } catch (error) {
       console.error('Error inviting user:', error);
@@ -127,7 +139,7 @@ export default function UserManager({ isOpen, onClose }: UserManagerProps) {
   };
 
   const handleUpdateRole = async (userId: string, newRole: 'admin' | 'viewer') => {
-    if (!currentBusiness) return;
+    if (!selectedBusinessId) return;
 
     try {
       const { error } = await supabase
@@ -136,7 +148,7 @@ export default function UserManager({ isOpen, onClose }: UserManagerProps) {
         .eq('id', userId);
 
       if (error) throw error;
-      await loadUsers();
+      await loadUsers(selectedBusinessId);
     } catch (error) {
       console.error('Error updating role:', error);
       alert('שגיאה בעדכון הרשאות');
@@ -153,7 +165,7 @@ export default function UserManager({ isOpen, onClose }: UserManagerProps) {
         .eq('id', id);
 
       if (error) throw error;
-      await loadUsers();
+      await loadUsers(selectedBusinessId);
     } catch (error) {
       console.error('Error removing user:', error);
       alert('שגיאה בהסרת משתמש');
@@ -203,6 +215,25 @@ export default function UserManager({ isOpen, onClose }: UserManagerProps) {
           </div>
         </div>
 
+        {/* Business Selector */}
+        {businesses.length > 1 && (
+          <div className="px-6 pt-4 pb-2 border-b">
+            <label className="block text-sm font-medium text-gray-700 mb-2">הצג משתמשים של עסק:</label>
+            <div className="relative">
+              <Store className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <select
+                value={selectedBusinessId}
+                onChange={(e) => setSelectedBusinessId(e.target.value)}
+                className="w-full pr-10 pl-4 py-2 border rounded-lg appearance-none bg-white"
+              >
+                {businesses.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
@@ -238,6 +269,23 @@ export default function UserManager({ isOpen, onClose }: UserManagerProps) {
                         className="w-full pr-10 pl-4 py-2 border rounded-lg"
                         placeholder="user@example.com"
                       />
+                    </div>
+                  </div>
+
+                  {/* Business Selection for Invite */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">שייך לעסק</label>
+                    <div className="relative">
+                      <Store className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <select
+                        value={newInvite.businessId || selectedBusinessId}
+                        onChange={(e) => setNewInvite({ ...newInvite, businessId: e.target.value })}
+                        className="w-full pr-10 pl-4 py-2 border rounded-lg appearance-none bg-white"
+                      >
+                        {businesses.map((b) => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 

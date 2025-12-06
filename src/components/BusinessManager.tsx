@@ -86,60 +86,109 @@ export default function BusinessManager({ isOpen, onClose }: BusinessManagerProp
     if (!newBusiness.name.trim()) return;
 
     setSaving(true);
+    console.log('🚀 Starting business creation...');
+    console.log('🔑 User ID:', user?.id);
+    console.log('📦 Business name:', newBusiness.name);
+    
     try {
-      // Create business
-      const { data: business, error: businessError } = await supabase
-        .from('businesses')
-        .insert({
-          name: newBusiness.name,
-          created_by: user?.id,
-        })
-        .select()
-        .single();
+      // Test with simple fetch first
+      console.log('🔌 Testing with direct fetch...');
+      const testResponse = await fetch(
+        'https://gvpobzhluzmsdcgrytmj.supabase.co/rest/v1/businesses?select=count',
+        {
+          headers: {
+            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2cG9iemhsdXptc2RjZ3J5dG1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MjY2ODEsImV4cCI6MjA4MDUwMjY4MX0.-Pj9GeSPXUl_b4XdW5lfTIjJTynI1VdfEP8-ZiNHu4M',
+            'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2cG9iemhsdXptc2RjZ3J5dG1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MjY2ODEsImV4cCI6MjA4MDUwMjY4MX0.-Pj9GeSPXUl_b4XdW5lfTIjJTynI1VdfEP8-ZiNHu4M`,
+          }
+        }
+      );
+      console.log('🔌 Fetch response:', testResponse.status, await testResponse.json());
 
-      if (businessError) throw businessError;
-
-      // Create owner relationship
-      const { error: relationError } = await supabase
-        .from('user_businesses')
-        .insert({
-          user_id: user?.id,
-          business_id: business.id,
-          role: 'owner',
-          accepted_at: new Date().toISOString(),
-        });
-
-      if (relationError) throw relationError;
-
-      // Save settings to business_settings table
-      const { error: settingsError } = await supabase
-        .from('business_settings')
-        .insert({
-          business_id: business.id,
-          woo_url: newBusiness.wooUrl || null,
-          consumer_key: newBusiness.consumerKey || null,
-          consumer_secret: newBusiness.consumerSecret || null,
-          vat_rate: 17,
-          shipping_cost: 0,
-          credit_card_rate: 1.5,
-          materials_rate: 30,
-        });
-
-      if (settingsError) {
-        console.error('Settings error:', settingsError);
+      // Create business with direct fetch
+      console.log('📝 Creating business with fetch...');
+      const createResponse = await fetch(
+        'https://gvpobzhluzmsdcgrytmj.supabase.co/rest/v1/businesses',
+        {
+          method: 'POST',
+          headers: {
+            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2cG9iemhsdXptc2RjZ3J5dG1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MjY2ODEsImV4cCI6MjA4MDUwMjY4MX0.-Pj9GeSPXUl_b4XdW5lfTIjJTynI1VdfEP8-ZiNHu4M',
+            'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2cG9iemhsdXptc2RjZ3J5dG1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MjY2ODEsImV4cCI6MjA4MDUwMjY4MX0.-Pj9GeSPXUl_b4XdW5lfTIjJTynI1VdfEP8-ZiNHu4M`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation',
+          },
+          body: JSON.stringify({
+            name: newBusiness.name,
+            created_by: user?.id,
+          }),
+        }
+      );
+      
+      const business = await createResponse.json();
+      console.log('📝 Create response:', createResponse.status, business);
+      
+      if (!createResponse.ok) {
+        throw new Error(business.message || 'Failed to create business');
       }
 
-      // Refresh
-      await refreshBusinesses();
-      await loadBusinessesWithSettings();
+      const businessId = business[0]?.id || business.id;
+
+      // Create owner relationship
+      console.log('👤 Creating user-business relationship...');
+      const relationResponse = await fetch(
+        'https://gvpobzhluzmsdcgrytmj.supabase.co/rest/v1/user_businesses',
+        {
+          method: 'POST',
+          headers: {
+            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2cG9iemhsdXptc2RjZ3J5dG1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MjY2ODEsImV4cCI6MjA4MDUwMjY4MX0.-Pj9GeSPXUl_b4XdW5lfTIjJTynI1VdfEP8-ZiNHu4M',
+            'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2cG9iemhsdXptc2RjZ3J5dG1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MjY2ODEsImV4cCI6MjA4MDUwMjY4MX0.-Pj9GeSPXUl_b4XdW5lfTIjJTynI1VdfEP8-ZiNHu4M`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user_id: user?.id,
+            business_id: businessId,
+            role: 'owner',
+            accepted_at: new Date().toISOString(),
+          }),
+        }
+      );
+      console.log('👤 Relation response:', relationResponse.status);
+
+      // Save WooCommerce settings
+      console.log('⚙️ Saving settings...');
+      const settingsResponse = await fetch(
+        'https://gvpobzhluzmsdcgrytmj.supabase.co/rest/v1/business_settings',
+        {
+          method: 'POST',
+          headers: {
+            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2cG9iemhsdXptc2RjZ3J5dG1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MjY2ODEsImV4cCI6MjA4MDUwMjY4MX0.-Pj9GeSPXUl_b4XdW5lfTIjJTynI1VdfEP8-ZiNHu4M',
+            'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2cG9iemhsdXptc2RjZ3J5dG1qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5MjY2ODEsImV4cCI6MjA4MDUwMjY4MX0.-Pj9GeSPXUl_b4XdW5lfTIjJTynI1VdfEP8-ZiNHu4M`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            business_id: businessId,
+            woo_url: newBusiness.wooUrl || null,
+            consumer_key: newBusiness.consumerKey || null,
+            consumer_secret: newBusiness.consumerSecret || null,
+            vat_rate: 17,
+            shipping_cost: 0,
+            credit_card_rate: 1.5,
+            materials_rate: 30,
+          }),
+        }
+      );
+      console.log('⚙️ Settings response:', settingsResponse.status);
 
       // Reset form
       setNewBusiness({ name: '', wooUrl: '', consumerKey: '', consumerSecret: '' });
       setShowAddForm(false);
+      console.log('✅ Done! Reloading page...');
+      
+      // Reload page to refresh businesses
+      window.location.reload();
 
-    } catch (error) {
-      console.error('Error creating business:', error);
-      alert('שגיאה ביצירת עסק');
+    } catch (error: any) {
+      console.error('❌ Error:', error);
+      alert('שגיאה ביצירת עסק: ' + error.message);
     } finally {
       setSaving(false);
     }

@@ -64,17 +64,26 @@ export default function AppShell({ children }: AppShellProps) {
     );
   }
 
-  // Main app with sidebar
+  // Main app with top header
   return (
-    <div className="flex min-h-screen">
-      <Sidebar>
-        <BusinessSelector
-          onManageBusinesses={() => setShowBusinessManager(true)}
-          onManageUsers={() => setShowUserManager(true)}
-        />
-      </Sidebar>
+    <div className="min-h-screen bg-gray-100" dir="rtl">
+      {/* Top Header */}
+      <header className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <h1 className="text-lg font-bold">CRM תזרים</h1>
+            <BusinessSelector
+              onManageBusinesses={() => setShowBusinessManager(true)}
+              onManageUsers={() => setShowUserManager(true)}
+            />
+          </div>
+          <div className="text-sm text-white/80">
+            {user?.email}
+          </div>
+        </div>
+      </header>
       
-      <main className="flex-1 p-4 lg:p-8 lg:mr-0">
+      <main className="max-w-7xl mx-auto p-4 lg:p-8">
         {currentBusiness ? (
           children
         ) : (

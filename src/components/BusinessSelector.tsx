@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { ChevronDown, Store, Plus, Check, Settings, LogOut, Users } from 'lucide-react';
+import { ChevronDown, Store, Plus, Check, Settings, LogOut, Users, Crown, Shield, Eye } from 'lucide-react';
 
 interface BusinessSelectorProps {
   onManageBusinesses?: () => void;
@@ -34,11 +34,11 @@ export default function BusinessSelector({ onManageBusinesses, onManageUsers }: 
   const getRoleBadge = (role: string) => {
     switch (role) {
       case 'owner':
-        return <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">בעלים</span>;
+        return <Crown className="w-4 h-4 text-yellow-400" />;
       case 'admin':
-        return <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">מנהל</span>;
+        return <Shield className="w-4 h-4 text-blue-400" />;
       case 'viewer':
-        return <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">צופה</span>;
+        return <Eye className="w-4 h-4 text-gray-400" />;
       default:
         return null;
     }
@@ -59,8 +59,10 @@ export default function BusinessSelector({ onManageBusinesses, onManageUsers }: 
           <Store className="w-4 h-4" />
         </div>
         <div className="text-right hidden sm:block">
-          <p className="font-medium text-sm leading-tight">{currentBusiness.name}</p>
-          <p className="text-xs text-white/70">{getRoleBadge(currentBusiness.role)}</p>
+          <p className="font-medium text-sm leading-tight flex items-center gap-1.5">
+            {currentBusiness.name}
+            {getRoleBadge(currentBusiness.role)}
+          </p>
         </div>
         <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
