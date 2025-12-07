@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     // Get WooCommerce credentials from business_settings
     const { data: settings, error: settingsError } = await supabase
       .from('business_settings')
-      .select('woo_url, consumer_key, consumer_secret, materials_rate, fixed_shipping_cost, valid_order_statuses, charge_shipping_on_free_orders, free_shipping_methods')
+      .select('woo_url, consumer_key, consumer_secret, materials_rate, shipping_cost, valid_order_statuses, charge_shipping_on_free_orders, free_shipping_methods')
       .eq('business_id', businessId)
       .single();
 
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
       consumerKey: settings.consumer_key,
       consumerSecret: settings.consumer_secret,
       materialsRate: settings.materials_rate || 0.3,
-      shippingCost: settings.fixed_shipping_cost || 0,
+      shippingCost: settings.shipping_cost || 0,
       businessId,
       validOrderStatuses: settings.valid_order_statuses,
       chargeShippingOnFreeOrders: settings.charge_shipping_on_free_orders ?? true,
