@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, Package, Loader2, User, MapPin, CreditCard, Save, TrendingUp, AlertCircle, Building2, ChevronDown, ChevronUp, Star, Check, ChevronsUpDown } from 'lucide-react';
+import { X, Package, Loader2, User, MapPin, CreditCard, Save, TrendingUp, AlertCircle, Building2, ChevronDown, ChevronUp, Star, Check, ChevronsUpDown, Plus } from 'lucide-react';
 import { formatCurrency } from '@/lib/calculations';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -203,6 +203,11 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
   const [loadingCosts, setLoadingCosts] = useState(false);
   const [manualShippingPerItem, setManualShippingPerItem] = useState(false);
   const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
+  
+  // Add supplier state
+  const [showAddSupplier, setShowAddSupplier] = useState(false);
+  const [newSupplierName, setNewSupplierName] = useState('');
+  const [addingSupplier, setAddingSupplier] = useState(false);
 
   // Toggle single order expansion
   const toggleOrder = (orderId: number) => {
@@ -225,6 +230,35 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
   // Collapse all orders
   const collapseAll = () => {
     setExpandedOrders(new Set());
+  };
+
+  // Add new supplier
+  const handleAddSupplier = async () => {
+    if (!newSupplierName.trim() || !currentBusiness?.id) return;
+    
+    setAddingSupplier(true);
+    try {
+      const res = await fetch('/api/suppliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newSupplierName.trim(),
+          businessId: currentBusiness.id,
+        }),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        // Add new supplier to list
+        setSuppliers(prev => [...prev, { id: data.supplier.id, name: data.supplier.name }]);
+        setNewSupplierName('');
+        setShowAddSupplier(false);
+      }
+    } catch (error) {
+      console.error('Error adding supplier:', error);
+    } finally {
+      setAddingSupplier(false);
+    }
   };
 
   // Load business settings to check if manual shipping is enabled
@@ -848,10 +882,10 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
                               
                               {/* Cost input row */}
                               <div className="flex items-center gap-2 flex-wrap bg-gray-50 p-2 rounded-lg">
-                                {/* Supplier select */}
-                                {suppliers.length > 0 && (
-                                  <div className="flex items-center gap-1">
-                                    <Building2 className="w-4 h-4 text-gray-400" />
+                                {/* Supplier select with add button */}
+                                <div className="flex items-center gap-1">
+                                  <Building2 className="w-4 h-4 text-gray-400" />
+                                  {suppliers.length > 0 ? (
                                     <select
                                       value={state?.supplierId || state?.supplier || ''}
                                       onChange={(e) => {
@@ -865,8 +899,18 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
                                         <option key={s.id} value={s.id}>{s.name}</option>
                                       ))}
                                     </select>
-                                  </div>
-                                )}
+                                  ) : (
+                                    <span className="text-sm text-gray-400">אין ספקים</span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowAddSupplier(true)}
+                                    className="p-1 text-blue-600 hover:bg-blue-100 rounded transition-colors"
+                                    title="הוסף ספק חדש"
+                                  >
+                                    <Plus className="w-4 h-4" />
+                                  </button>
+                                </div>
                                 
                                 {/* Cost input */}
                                 <div className="flex items-center gap-1">
@@ -1014,6 +1058,64 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
           </div>
         </div>
       </div>
+
+      {/* Add Supplier Mini Modal */}
+      {showAddSupplier && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setShowAddSupplier(false)} />
+          <div className="relative bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm" dir="rtl">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-blue-600" />
+              הוסף ספק חדש
+            </h3>
+            <input
+              type="text"
+              value={newSupplierName}
+              onChange={(e) => setNewSupplierName(e.target.value)}
+              placeholder="שם הספק"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none mb-4"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newSupplierName.trim()) {
+                  handleAddSupplier();
+                } else if (e.key === 'Escape') {
+                  setShowAddSupplier(false);
+                }
+              }}
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddSupplier(false);
+                  setNewSupplierName('');
+                }}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                ביטול
+              </button>
+              <button
+                type="button"
+                onClick={handleAddSupplier}
+                disabled={!newSupplierName.trim() || addingSupplier}
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {addingSupplier ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    מוסיף...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4" />
+                    הוסף
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
