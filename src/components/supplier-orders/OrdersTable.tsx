@@ -95,21 +95,19 @@ export default function OrdersTable({
 
   if (loading) {
     return (
-      <div className="bg-white rounded-2xl shadow-sm border p-12 flex flex-col items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-4" />
-        <p className="text-gray-500">טוען הזמנות...</p>
+      <div className="bg-white rounded border p-6 flex flex-col items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-blue-600 mb-2" />
+        <p className="text-gray-500 text-xs">טוען הזמנות...</p>
       </div>
     );
   }
 
   if (orders.length === 0) {
     return (
-      <div className="bg-white rounded-2xl shadow-sm border p-12 flex flex-col items-center justify-center">
-        <Package className="w-16 h-16 text-gray-200 mb-4" />
-        <h3 className="text-lg font-medium text-gray-600 mb-2">אין הזמנות להצגה</h3>
-        <p className="text-gray-400 text-center">
-          לא נמצאו הזמנות עבור הספק והסינון שנבחרו
-        </p>
+      <div className="bg-white rounded border p-6 flex flex-col items-center justify-center">
+        <Package className="w-10 h-10 text-gray-200 mb-2" />
+        <h3 className="text-sm font-medium text-gray-600 mb-1">אין הזמנות</h3>
+        <p className="text-xs text-gray-400 text-center">לא נמצאו הזמנות לסינון הנבחר</p>
       </div>
     );
   }
@@ -124,22 +122,22 @@ export default function OrdersTable({
   }, {} as Record<number, SupplierOrder[]>);
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+    <div className="bg-white rounded border overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full text-xs">
           <thead className="bg-gray-50 border-b">
             <tr>
-              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-600">מוכן</th>
-              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-600">מס׳ הזמנה</th>
-              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-600">תאריך</th>
-              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-600">מוצר</th>
-              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-600">וריאציה</th>
-              <th className="px-4 py-3 text-center text-sm font-semibold text-gray-600">כמות</th>
-              <th className="px-4 py-3 text-center text-sm font-semibold text-gray-600">מחיר קבוע</th>
-              <th className="px-4 py-3 text-center text-sm font-semibold text-gray-600">מחיר מתוקן</th>
-              <th className="px-4 py-3 text-center text-sm font-semibold text-gray-600">סה״כ</th>
-              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-600">הערות</th>
-              <th className="px-4 py-3 text-center text-sm font-semibold text-gray-600">פעולות</th>
+              <th className="px-2 py-1.5 text-right font-medium text-gray-600 w-8"></th>
+              <th className="px-2 py-1.5 text-right font-medium text-gray-600">מס׳</th>
+              <th className="px-2 py-1.5 text-right font-medium text-gray-600">תאריך</th>
+              <th className="px-2 py-1.5 text-right font-medium text-gray-600">מוצר</th>
+              <th className="px-2 py-1.5 text-right font-medium text-gray-600">וריאציה</th>
+              <th className="px-2 py-1.5 text-center font-medium text-gray-600">כמות</th>
+              <th className="px-2 py-1.5 text-center font-medium text-gray-600">עלות</th>
+              <th className="px-2 py-1.5 text-center font-medium text-gray-600">מתוקן</th>
+              <th className="px-2 py-1.5 text-center font-medium text-gray-600">סה״כ</th>
+              <th className="px-2 py-1.5 text-right font-medium text-gray-600">הערות</th>
+              <th className="px-2 py-1.5 text-center font-medium text-gray-600 w-14"></th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -162,34 +160,34 @@ export default function OrdersTable({
                     }`}
                   >
                     {/* Ready Status */}
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-1.5">
                       <button
                         onClick={() => handleToggleReady(order)}
                         disabled={isToggling}
-                        className={`p-2 rounded-lg transition-all ${
+                        className={`p-1 rounded transition-all ${
                           order.is_ready 
                             ? 'bg-green-100 text-green-600 hover:bg-green-200' 
                             : 'bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600'
                         }`}
                       >
                         {isToggling ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         ) : order.is_ready ? (
-                          <CheckCircle2 className="w-5 h-5" />
+                          <CheckCircle2 className="w-3.5 h-3.5" />
                         ) : (
-                          <Circle className="w-5 h-5" />
+                          <Circle className="w-3.5 h-3.5" />
                         )}
                       </button>
                     </td>
 
                     {/* Order ID */}
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-1.5">
                       {isFirstInOrder ? (
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-blue-600">#{order.order_id}</span>
+                        <div className="flex items-center gap-1">
+                          <span className="font-semibold text-blue-600">#{order.order_id}</span>
                           {orderItemCount > 1 && (
-                            <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">
-                              {orderItemCount} פריטים
+                            <span className="text-[10px] bg-blue-100 text-blue-600 px-1 py-0.5 rounded">
+                              {orderItemCount}
                             </span>
                           )}
                         </div>
@@ -199,19 +197,19 @@ export default function OrdersTable({
                     </td>
 
                     {/* Date */}
-                    <td className="px-4 py-3 text-sm text-gray-600">
+                    <td className="px-2 py-1.5 text-gray-600">
                       {formatDate(order.order_date)}
                     </td>
 
                     {/* Product Name */}
-                    <td className="px-4 py-3">
-                      <span className="font-medium text-gray-800">{order.product_name}</span>
+                    <td className="px-2 py-1.5">
+                      <span className="font-medium text-gray-800 truncate max-w-[150px] block">{order.product_name}</span>
                     </td>
 
                     {/* Variation */}
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-1.5">
                       {order.variation_key ? (
-                        <span className="text-sm bg-purple-100 text-purple-700 px-2 py-1 rounded">
+                        <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
                           {order.variation_key}
                         </span>
                       ) : (
@@ -220,23 +218,23 @@ export default function OrdersTable({
                     </td>
 
                     {/* Quantity */}
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-2 py-1.5 text-center">
                       <span className="font-medium">{order.quantity || 1}</span>
                     </td>
 
                     {/* Base Cost */}
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-2 py-1.5 text-center">
                       <span className="text-gray-500">{formatCurrency(order.unit_cost)}</span>
                     </td>
 
                     {/* Adjusted Cost */}
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-2 py-1.5 text-center">
                       {isEditing ? (
                         <input
                           type="number"
                           value={editValues.cost}
                           onChange={(e) => setEditValues({ ...editValues, cost: e.target.value })}
-                          className="w-24 px-2 py-1 border-2 border-blue-300 rounded text-center focus:ring-2 focus:ring-blue-500"
+                          className="w-16 px-1.5 py-1 text-xs border border-blue-300 rounded text-center focus:ring-1 focus:ring-blue-500"
                           autoFocus
                         />
                       ) : order.adjusted_cost !== null && order.adjusted_cost !== undefined ? (
@@ -249,24 +247,24 @@ export default function OrdersTable({
                     </td>
 
                     {/* Total */}
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-2 py-1.5 text-center">
                       <span className="font-bold text-green-600">{formatCurrency(totalCost)}</span>
                     </td>
 
                     {/* Notes */}
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-1.5">
                       {isEditing ? (
                         <input
                           type="text"
                           value={editValues.notes}
                           onChange={(e) => setEditValues({ ...editValues, notes: e.target.value })}
                           placeholder="הערות..."
-                          className="w-full px-2 py-1 border-2 border-blue-300 rounded focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-1.5 py-1 text-xs border border-blue-300 rounded focus:ring-1 focus:ring-blue-500"
                         />
                       ) : order.notes ? (
-                        <div className="flex items-center gap-1 text-sm text-gray-600">
-                          <MessageSquare className="w-3 h-3" />
-                          <span className="max-w-[150px] truncate">{order.notes}</span>
+                        <div className="flex items-center gap-0.5 text-gray-600">
+                          <MessageSquare className="w-2.5 h-2.5" />
+                          <span className="max-w-[100px] truncate">{order.notes}</span>
                         </div>
                       ) : (
                         <span className="text-gray-400">-</span>
@@ -274,34 +272,34 @@ export default function OrdersTable({
                     </td>
 
                     {/* Actions */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-center gap-1">
+                    <td className="px-2 py-1.5">
+                      <div className="flex items-center justify-center gap-0.5">
                         {isEditing ? (
                           <>
                             <button
                               onClick={() => handleSave(order)}
                               disabled={isSaving}
-                              className="p-1.5 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
+                              className="p-1 bg-green-100 text-green-600 rounded hover:bg-green-200 transition-colors"
                             >
                               {isSaving ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <Loader2 className="w-3 h-3 animate-spin" />
                               ) : (
-                                <Save className="w-4 h-4" />
+                                <Save className="w-3 h-3" />
                               )}
                             </button>
                             <button
                               onClick={handleCancelEdit}
-                              className="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                              className="p-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
                             >
-                              <X className="w-4 h-4" />
+                              <X className="w-3 h-3" />
                             </button>
                           </>
                         ) : (
                           <button
                             onClick={() => handleStartEdit(order)}
-                            className="p-1.5 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                            className="p-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 transition-colors"
                           >
-                            <Edit2 className="w-4 h-4" />
+                            <Edit2 className="w-3 h-3" />
                           </button>
                         )}
                       </div>

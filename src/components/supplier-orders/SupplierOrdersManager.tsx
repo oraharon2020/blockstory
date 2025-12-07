@@ -292,61 +292,61 @@ export default function SupplierOrdersManager({ businessId }: SupplierOrdersMana
     (selectedSupplier ? { id: '', name: selectedSupplier } as Supplier : null);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Status Filter - Primary */}
-      <div className="bg-white rounded-2xl shadow-sm border p-6">
-        <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-          <Filter className="w-5 h-5 text-orange-500" />
-          סינון לפי סטטוס הזמנה
+      <div className="bg-white rounded-lg shadow-sm border p-3">
+        <h2 className="text-sm font-medium text-gray-800 mb-2 flex items-center gap-1.5">
+          <Filter className="w-4 h-4 text-orange-500" />
+          סינון לפי סטטוס
         </h2>
         
         {loadingStatuses ? (
-          <div className="flex items-center gap-2 py-3">
-            <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-            <span className="text-gray-500">טוען סטטוסים מהחנות...</span>
+          <div className="flex items-center gap-2 py-2">
+            <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+            <span className="text-gray-500 text-xs">טוען סטטוסים...</span>
           </div>
         ) : (
           <div className="relative">
             <button
               onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-              className="w-full md:w-96 flex items-center justify-between px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors"
+              className="w-full md:w-80 flex items-center justify-between px-3 py-2 bg-gray-50 border border-gray-200 rounded text-xs hover:bg-gray-100 transition-colors"
             >
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 {selectedStatuses.length === 0 ? (
                   <span className="text-gray-500">בחר סטטוסים...</span>
                 ) : (
                   selectedStatuses.map(status => {
                     const statusInfo = orderStatuses.find(s => s.slug === status);
                     return (
-                      <span key={status} className={`px-2 py-1 rounded-lg text-sm ${getStatusColor(status)}`}>
+                      <span key={status} className={`px-1.5 py-0.5 rounded text-xs ${getStatusColor(status)}`}>
                         {statusInfo?.name || status}
                       </span>
                     );
                   })
                 )}
               </div>
-              <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${showStatusDropdown ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showStatusDropdown ? 'rotate-180' : ''}`} />
             </button>
             
             {showStatusDropdown && (
-              <div className="absolute z-20 mt-2 w-full md:w-96 bg-white border rounded-xl shadow-lg max-h-96 overflow-hidden flex flex-col">
+              <div className="absolute z-20 mt-1 w-full md:w-80 bg-white border rounded shadow-lg max-h-72 overflow-hidden flex flex-col">
                 {/* Search box for statuses */}
-                <div className="p-2 border-b sticky top-0 bg-white">
+                <div className="p-1.5 border-b sticky top-0 bg-white">
                   <div className="relative">
-                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
                     <input
                       type="text"
                       placeholder="חיפוש סטטוס..."
                       value={statusSearchTerm}
                       onChange={(e) => setStatusSearchTerm(e.target.value)}
-                      className="w-full pr-9 pl-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                      className="w-full pr-7 pl-2 py-1.5 border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent text-xs"
                       onClick={(e) => e.stopPropagation()}
                     />
                   </div>
                 </div>
                 
                 {/* Status list */}
-                <div className="overflow-y-auto flex-1 p-2">
+                <div className="overflow-y-auto flex-1 p-1.5">
                   {orderStatuses
                     .filter(status => {
                       if (!statusSearchTerm) return true;
@@ -358,15 +358,15 @@ export default function SupplierOrdersManager({ businessId }: SupplierOrdersMana
                     .map(status => (
                     <label
                       key={status.slug}
-                      className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 rounded-lg cursor-pointer"
+                      className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer text-xs"
                     >
                       <input
                         type="checkbox"
                         checked={selectedStatuses.includes(status.slug)}
                         onChange={() => toggleStatus(status.slug)}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        className="w-3 h-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                       />
-                      <span className={`px-2 py-1 rounded-lg text-sm ${getStatusColor(status.slug)}`}>
+                      <span className={`px-1.5 py-0.5 rounded text-xs ${getStatusColor(status.slug)}`}>
                         {status.name}
                       </span>
                       {status.total !== undefined && (
@@ -381,25 +381,25 @@ export default function SupplierOrdersManager({ businessId }: SupplierOrdersMana
                            status.slug.toLowerCase().includes(term) ||
                            (status.name_en && status.name_en.toLowerCase().includes(term));
                   }).length === 0 && (
-                    <div className="text-center py-4 text-gray-500 text-sm">
-                      לא נמצאו סטטוסים תואמים
+                    <div className="text-center py-3 text-gray-500 text-xs">
+                      לא נמצאו סטטוסים
                     </div>
                   )}
                 </div>
                 
                 {/* Actions */}
-                <div className="border-t p-2 flex gap-2 sticky bottom-0 bg-white">
+                <div className="border-t p-1.5 flex gap-1.5 sticky bottom-0 bg-white">
                   <button
                     onClick={() => setSelectedStatuses(orderStatuses.map(s => s.slug))}
-                    className="flex-1 px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded-lg"
+                    className="flex-1 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded"
                   >
                     בחר הכל
                   </button>
                   <button
                     onClick={() => setSelectedStatuses([])}
-                    className="flex-1 px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+                    className="flex-1 px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded"
                   >
-                    נקה הכל
+                    נקה
                   </button>
                 </div>
               </div>
@@ -408,45 +408,44 @@ export default function SupplierOrdersManager({ businessId }: SupplierOrdersMana
         )}
       </div>
 
-      {/* Order IDs Filter - Independent of status selection */}
-      <div className="bg-white rounded-2xl shadow-sm border p-4">
-        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
-          <div className="flex items-center gap-2 min-w-fit">
-            <Hash className="w-5 h-5 text-purple-500" />
-            <span className="font-medium text-gray-700">חיפוש לפי מספרי הזמנות:</span>
+      {/* Order IDs Filter */}
+      <div className="bg-white rounded-lg shadow-sm border p-2">
+        <div className="flex flex-col md:flex-row gap-2 items-start md:items-center">
+          <div className="flex items-center gap-1.5 min-w-fit">
+            <Hash className="w-4 h-4 text-purple-500" />
+            <span className="text-xs font-medium text-gray-700">מספרי הזמנות:</span>
           </div>
           <div className="flex-1 w-full">
             <textarea
-              placeholder="הזן מספרי הזמנות מופרדים בפסיק, רווח או שורה חדשה... (לדוגמה: 53866, 53865, 53864)"
+              placeholder="53866, 53865, 53864..."
               value={orderIdsFilter}
               onChange={(e) => {
                 setOrderIdsFilter(e.target.value);
-                // Clear status selection when using order IDs
                 if (e.target.value.trim()) {
                   setSelectedStatuses([]);
                 }
               }}
-              className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
-              rows={2}
+              className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-purple-500 focus:border-transparent resize-none"
+              rows={1}
             />
           </div>
           {orderIdsFilter && (
             <button
               onClick={() => setOrderIdsFilter('')}
-              className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl border border-gray-200"
+              className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded border border-gray-200"
             >
               נקה
             </button>
           )}
         </div>
         {orderIdsFilter && (
-          <div className="mt-2 text-sm text-purple-600 font-medium">
+          <div className="mt-1 text-xs text-purple-600 font-medium">
             {(() => {
               const ids = orderIdsFilter
                 .split(/[\s,\n]+/)
                 .map(id => id.trim())
                 .filter(id => id.length > 0 && !isNaN(parseInt(id, 10)));
-              return `מחפש ${ids.length} הזמנות...`;
+              return `מחפש ${ids.length} הזמנות`;
             })()}
           </div>
         )}
@@ -455,17 +454,17 @@ export default function SupplierOrdersManager({ businessId }: SupplierOrdersMana
       {(selectedStatuses.length > 0 || orderIdsFilter.trim()) && (
         <>
           {/* Secondary Filters */}
-          <div className="bg-white rounded-2xl shadow-sm border p-4">
-            <div className="flex flex-wrap gap-4 items-center">
+          <div className="bg-white rounded-lg shadow-sm border p-2">
+            <div className="flex flex-wrap gap-2 items-center">
               {/* Search */}
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <div className="relative flex-1 min-w-[150px]">
+                <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="חיפוש לפי מספר הזמנה, מוצר או ספק..."
+                  placeholder="חיפוש מוצר, הזמנה, ספק..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pr-10 pl-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pr-7 pl-2 py-1.5 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               
@@ -474,18 +473,18 @@ export default function SupplierOrdersManager({ businessId }: SupplierOrdersMana
                 <div className="relative">
                   <button
                     onClick={() => setShowSupplierDropdown(!showSupplierDropdown)}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100"
+                    className="flex items-center gap-1.5 px-2 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded hover:bg-gray-100"
                   >
-                    <Building2 className="w-4 h-4 text-gray-500" />
+                    <Building2 className="w-3 h-3 text-gray-500" />
                     <span>{selectedSupplier || 'כל הספקים'}</span>
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
+                    <ChevronDown className="w-3 h-3 text-gray-400" />
                   </button>
                   
                   {showSupplierDropdown && (
-                    <div className="absolute z-20 mt-2 w-48 bg-white border rounded-xl shadow-lg p-2">
+                    <div className="absolute z-20 mt-1 w-40 bg-white border rounded shadow-lg p-1">
                       <button
                         onClick={() => { setSelectedSupplier(''); setShowSupplierDropdown(false); }}
-                        className={`w-full text-right px-3 py-2 rounded-lg hover:bg-gray-50 ${!selectedSupplier ? 'bg-blue-50 text-blue-700' : ''}`}
+                        className={`w-full text-right px-2 py-1.5 text-xs rounded hover:bg-gray-50 ${!selectedSupplier ? 'bg-blue-50 text-blue-700' : ''}`}
                       >
                         כל הספקים
                       </button>
@@ -493,7 +492,7 @@ export default function SupplierOrdersManager({ businessId }: SupplierOrdersMana
                         <button
                           key={supplier}
                           onClick={() => { setSelectedSupplier(supplier); setShowSupplierDropdown(false); }}
-                          className={`w-full text-right px-3 py-2 rounded-lg hover:bg-gray-50 ${selectedSupplier === supplier ? 'bg-blue-50 text-blue-700' : ''}`}
+                          className={`w-full text-right px-2 py-1.5 text-xs rounded hover:bg-gray-50 ${selectedSupplier === supplier ? 'bg-blue-50 text-blue-700' : ''}`}
                         >
                           {supplier}
                         </button>
@@ -504,22 +503,22 @@ export default function SupplierOrdersManager({ businessId }: SupplierOrdersMana
               )}
               
               {/* Ready Filter */}
-              <div className="flex gap-2">
+              <div className="flex gap-1">
                 <button
                   onClick={() => { setShowReadyOnly(false); setShowNotReadyOnly(false); }}
-                  className={`px-3 py-2 rounded-xl text-sm transition-colors ${!showReadyOnly && !showNotReadyOnly ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                  className={`px-2 py-1 rounded text-xs transition-colors ${!showReadyOnly && !showNotReadyOnly ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                 >
                   הכל
                 </button>
                 <button
                   onClick={() => { setShowReadyOnly(true); setShowNotReadyOnly(false); }}
-                  className={`px-3 py-2 rounded-xl text-sm transition-colors ${showReadyOnly ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                  className={`px-2 py-1 rounded text-xs transition-colors ${showReadyOnly ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                 >
                   ✓ מוכנים
                 </button>
                 <button
                   onClick={() => { setShowReadyOnly(false); setShowNotReadyOnly(true); }}
-                  className={`px-3 py-2 rounded-xl text-sm transition-colors ${showNotReadyOnly ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                  className={`px-2 py-1 rounded text-xs transition-colors ${showNotReadyOnly ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                 >
                   ממתינים
                 </button>
@@ -528,31 +527,27 @@ export default function SupplierOrdersManager({ businessId }: SupplierOrdersMana
           </div>
 
           {/* Stats Bar */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white rounded-xl p-4 border shadow-sm">
-              <div className="text-sm text-gray-500">הזמנות</div>
-              <div className="text-2xl font-bold text-gray-800">{stats.totalOrders}</div>
+          <div className="flex flex-wrap gap-2">
+            <div className="bg-white rounded px-3 py-1.5 border shadow-sm flex items-center gap-2">
+              <span className="text-xs text-gray-500">הזמנות:</span>
+              <span className="text-sm font-bold text-gray-800">{stats.totalOrders}</span>
             </div>
-            <div className="bg-white rounded-xl p-4 border shadow-sm">
-              <div className="text-sm text-gray-500">פריטים</div>
-              <div className="text-2xl font-bold text-gray-800">{stats.totalItems}</div>
+            <div className="bg-white rounded px-3 py-1.5 border shadow-sm flex items-center gap-2">
+              <span className="text-xs text-gray-500">פריטים:</span>
+              <span className="text-sm font-bold text-gray-800">{stats.totalItems}</span>
             </div>
-            <div className="bg-white rounded-xl p-4 border shadow-sm">
-              <div className="text-sm text-gray-500">מוכנים</div>
-              <div className="text-2xl font-bold text-green-600">
-                {stats.readyItems} / {stats.totalItems}
-              </div>
+            <div className="bg-white rounded px-3 py-1.5 border shadow-sm flex items-center gap-2">
+              <span className="text-xs text-gray-500">מוכנים:</span>
+              <span className="text-sm font-bold text-green-600">{stats.readyItems}/{stats.totalItems}</span>
             </div>
-            <div className="bg-white rounded-xl p-4 border shadow-sm">
-              <div className="text-sm text-gray-500">סה״כ עלות</div>
-              <div className="text-2xl font-bold text-blue-600">
-                ₪{stats.totalCost.toLocaleString('he-IL', { minimumFractionDigits: 2 })}
-              </div>
+            <div className="bg-white rounded px-3 py-1.5 border shadow-sm flex items-center gap-2">
+              <span className="text-xs text-gray-500">סה״כ:</span>
+              <span className="text-sm font-bold text-blue-600">₪{stats.totalCost.toLocaleString('he-IL', { minimumFractionDigits: 2 })}</span>
             </div>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2">
             <PDFReportGenerator
               orders={filteredOrders}
               selectedStatuses={new Set(selectedStatuses)}
@@ -561,17 +556,17 @@ export default function SupplierOrdersManager({ businessId }: SupplierOrdersMana
             <button
               onClick={handleMarkAllReady}
               disabled={filteredOrders.filter(o => !o.is_ready).length === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-1.5 px-2 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 transition-colors"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              סמן הכל כמוכן
+              <CheckCircle2 className="w-3 h-3" />
+              סמן הכל מוכן
             </button>
             <button
               onClick={loadOrders}
               disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              className="flex items-center gap-1.5 px-2 py-1.5 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
               רענן
             </button>
           </div>
@@ -589,11 +584,11 @@ export default function SupplierOrdersManager({ businessId }: SupplierOrdersMana
       )}
 
       {/* Empty State */}
-      {selectedStatuses.length === 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border p-12 text-center">
-          <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-600 mb-2">בחר סטטוס הזמנה</h3>
-          <p className="text-gray-500">בחר לפחות סטטוס אחד כדי לראות את ההזמנות</p>
+      {selectedStatuses.length === 0 && !orderIdsFilter.trim() && (
+        <div className="bg-white rounded-lg shadow-sm border p-6 text-center">
+          <Package className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+          <h3 className="text-sm font-medium text-gray-600 mb-1">בחר סטטוס הזמנה</h3>
+          <p className="text-xs text-gray-500">בחר סטטוס או הזן מספרי הזמנות</p>
         </div>
       )}
     </div>
