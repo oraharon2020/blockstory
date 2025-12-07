@@ -120,6 +120,9 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
   
   // VAT rate from business settings
   const [vatRate, setVatRate] = useState(18); // Default 18%
+  
+  // Credit fee mode from business settings
+  const [creditFeeMode, setCreditFeeMode] = useState<'percentage' | 'manual'>('percentage');
 
   // Load visible columns from localStorage
   useEffect(() => {
@@ -199,8 +202,12 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
       const settingsJson = await settingsRes.json();
       
       // Get VAT rate from business settings
-      const businessVatRate = parseFloat(settingsJson.vatRate) || 18;
+      const businessVatRate = parseFloat(settingsJson.data?.vatRate) || 18;
       setVatRate(businessVatRate);
+      
+      // Get credit fee mode from business settings
+      const businessCreditFeeMode = settingsJson.data?.creditFeeMode || 'percentage';
+      setCreditFeeMode(businessCreditFeeMode);
       
       // Get employee daily cost
       const dailyEmpCost = employeesJson.dailyCost || 0;
@@ -855,7 +862,14 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
                       </span>
                     </td>
                   )}
-                  {isColumnVisible('creditCardFees') && <td className="px-1.5 py-2 text-gray-700">{formatCurrency(row.creditCardFees)}</td>}
+                  {isColumnVisible('creditCardFees') && (
+                    <td className="px-1.5 py-2 text-gray-700">
+                      {creditFeeMode === 'manual' 
+                        ? renderEditableCell(row, 'creditCardFees', row.creditCardFees)
+                        : formatCurrency(row.creditCardFees)
+                      }
+                    </td>
+                  )}
                   {isColumnVisible('employeeCost') && (
                     <td className="px-1.5 py-2 bg-indigo-50/70">
                       <span className={row.employeeCost > 0 ? 'text-indigo-700 font-medium' : 'text-gray-400'}>

@@ -26,6 +26,7 @@ interface BusinessWithSettings {
     vatRate?: string;
     shippingCostPerOrder?: string;
     creditCardFeePercent?: string;
+    creditFeeMode?: 'percentage' | 'manual';
     validOrderStatuses?: string[];
   };
 }
@@ -72,6 +73,7 @@ export default function BusinessManager({ isOpen, onClose }: BusinessManagerProp
             vatRate: String(settings.vat_rate || 18),
             shippingCostPerOrder: String(settings.shipping_cost || 0),
             creditCardFeePercent: String(settings.credit_card_rate || 1.5),
+            creditFeeMode: settings.credit_fee_mode || 'percentage',
             validOrderStatuses: settings.valid_order_statuses || ['completed', 'processing'],
           } : undefined,
         });
@@ -212,6 +214,7 @@ export default function BusinessManager({ isOpen, onClose }: BusinessManagerProp
           vat_rate: parseFloat(settings.vatRate || '18'),
           shipping_cost: parseFloat(settings.shippingCostPerOrder || '0'),
           credit_card_rate: parseFloat(settings.creditCardFeePercent || '1.5'),
+          credit_fee_mode: settings.creditFeeMode || 'percentage',
           valid_order_statuses: settings.validOrderStatuses || ['completed', 'processing'],
           updated_at: new Date().toISOString(),
         }, { onConflict: 'business_id' });
@@ -503,17 +506,33 @@ export default function BusinessManager({ isOpen, onClose }: BusinessManagerProp
                           />
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-500 mb-1">עמלת אשראי %</label>
-                          <input
-                            type="number"
-                            value={selectedBusiness.settings?.creditCardFeePercent || '2'}
+                          <label className="block text-xs text-gray-500 mb-1">מצב עמלת אשראי</label>
+                          <select
+                            value={selectedBusiness.settings?.creditFeeMode || 'percentage'}
                             onChange={(e) => setSelectedBusiness({
                               ...selectedBusiness,
-                              settings: { ...selectedBusiness.settings, creditCardFeePercent: e.target.value }
+                              settings: { ...selectedBusiness.settings, creditFeeMode: e.target.value as 'percentage' | 'manual' }
                             })}
                             className="w-full px-3 py-2 border rounded-lg"
-                          />
+                          >
+                            <option value="percentage">אחוז מההכנסה</option>
+                            <option value="manual">מילוי ידני</option>
+                          </select>
                         </div>
+                        {selectedBusiness.settings?.creditFeeMode !== 'manual' && (
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">עמלת אשראי %</label>
+                            <input
+                              type="number"
+                              value={selectedBusiness.settings?.creditCardFeePercent || '2'}
+                              onChange={(e) => setSelectedBusiness({
+                                ...selectedBusiness,
+                                settings: { ...selectedBusiness.settings, creditCardFeePercent: e.target.value }
+                              })}
+                              className="w-full px-3 py-2 border rounded-lg"
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
