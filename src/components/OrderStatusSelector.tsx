@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Check, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
+import { Check, Loader2, RefreshCw, AlertCircle, AlertTriangle } from 'lucide-react';
 
 interface OrderStatus {
   slug: string;
@@ -20,6 +20,7 @@ export default function OrderStatusSelector({ businessId, selectedStatuses, onCh
   const [statuses, setStatuses] = useState<OrderStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState<string>('');
+  const [warning, setWarning] = useState<string>('');
 
   useEffect(() => {
     loadStatuses();
@@ -27,11 +28,15 @@ export default function OrderStatusSelector({ businessId, selectedStatuses, onCh
 
   const loadStatuses = async () => {
     setLoading(true);
+    setWarning('');
     try {
       const res = await fetch(`/api/woo-statuses?businessId=${businessId}`);
       const json = await res.json();
       setStatuses(json.statuses || []);
       setSource(json.source || 'default');
+      if (json.warning) {
+        setWarning(json.warning);
+      }
     } catch (error) {
       console.error('Error loading statuses:', error);
     } finally {
@@ -80,6 +85,11 @@ export default function OrderStatusSelector({ businessId, selectedStatuses, onCh
               מסונכרן מהחנות
             </span>
           )}
+          {source === 'default' && !warning && (
+            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+              סטטוסים ברירת מחדל
+            </span>
+          )}
         </div>
         <button
           onClick={loadStatuses}
@@ -89,6 +99,13 @@ export default function OrderStatusSelector({ businessId, selectedStatuses, onCh
           <span>רענן</span>
         </button>
       </div>
+
+      {warning && (
+        <div className="flex items-center gap-2 text-orange-600 text-sm bg-orange-50 p-2 rounded-lg">
+          <AlertTriangle className="w-4 h-4" />
+          <span>לא ניתן לטעון סטטוסים מהחנות - מציג ברירת מחדל</span>
+        </div>
+      )}
 
       {selectedStatuses.length === 0 && (
         <div className="flex items-center gap-2 text-amber-600 text-sm bg-amber-50 p-2 rounded-lg">

@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
 
     // Try to fetch from WooCommerce if we have business settings
     let wooStatuses: any[] = [];
+    let errorMessage = '';
     
     if (businessId) {
       const { data: businessSettings } = await supabase
@@ -38,16 +39,23 @@ export async function GET(request: NextRequest) {
             version: 'wc/v3',
           });
 
-          // Fetch order statuses from WooCommerce
+          // Fetch order statuses from WooCommerce reports
           const response = await api.get('reports/orders/totals');
-          wooStatuses = response.data.map((s: any) => ({
-            slug: s.slug,
-            name: s.name,
-            total: s.total,
-          }));
-        } catch (error) {
-          console.log('Could not fetch WooCommerce statuses, using defaults');
+          console.log('WooCommerce statuses response:', response.data);
+          
+          if (response.data && Array.isArray(response.data)) {
+            wooStatuses = response.data.map((s: any) => ({
+              slug: s.slug,
+              name: s.name,
+              total: s.total,
+            }));
+          }
+        } catch (wooError: any) {
+          console.error('WooCommerce status fetch error:', wooError.message);
+          errorMessage = wooError.message;
         }
+      } else {
+        console.log('No WooCommerce credentials found for business:', businessId);
       }
     }
 
@@ -56,7 +64,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ 
       statuses,
-      source: wooStatuses.length > 0 ? 'woocommerce' : 'default'
+      source: wooStatuses.length > 0 ? 'woocommerce' : 'default',
+      ...(errorMessage && { warning: errorMessage })
     });
 
   } catch (error: any) {
