@@ -41,20 +41,21 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { 
-      businessId, 
-      productId, 
-      productName,
-      variationId,
-      variationKey, 
-      variationAttributes,
-      supplierId,
-      supplierName,
-      unitCost,
-      sku,
-      isDefault,
-      notes
-    } = body;
+    
+    // Support both camelCase and snake_case field names
+    const businessId = body.businessId || body.business_id;
+    const productId = body.productId || body.product_id;
+    const productName = body.productName || body.product_name;
+    const variationId = body.variationId || body.variation_id;
+    const variationKey = body.variationKey || body.variation_key;
+    const variationAttributes = body.variationAttributes || body.variation_attributes;
+    const supplierId = body.supplierId || body.supplier_id;
+    const supplierName = body.supplierName || body.supplier_name;
+    const unitCost = body.unitCost ?? body.unit_cost;
+    const sku = body.sku;
+    const isDefault = body.isDefault || body.is_default;
+    const notes = body.notes;
+    const updateId = body.id; // For updating existing record
 
     if (!businessId || !productId || !productName) {
       return NextResponse.json({ 
@@ -65,21 +66,35 @@ export async function POST(request: NextRequest) {
     // Use empty string for base product (no variation)
     const varKey = variationKey || '';
 
-    // Check if entry exists
-    let existingQuery = supabase
-      .from('product_variation_costs')
-      .select('id')
-      .eq('business_id', businessId)
-      .eq('product_id', productId)
-      .eq('variation_key', varKey);
-
-    if (supplierId) {
-      existingQuery = existingQuery.eq('supplier_id', supplierId);
+    // Check if entry exists - either by ID or by unique key
+    let existing = null;
+    
+    if (updateId) {
+      // If ID is provided, use it directly
+      const { data } = await supabase
+        .from('product_variation_costs')
+        .select('id')
+        .eq('id', updateId)
+        .maybeSingle();
+      existing = data;
     } else {
-      existingQuery = existingQuery.is('supplier_id', null);
-    }
+      // Otherwise, search by business_id + product_id + variation_key + supplier
+      let existingQuery = supabase
+        .from('product_variation_costs')
+        .select('id')
+        .eq('business_id', businessId)
+        .eq('product_id', productId)
+        .eq('variation_key', varKey);
 
-    const { data: existing } = await existingQuery.maybeSingle();
+      if (supplierId) {
+        existingQuery = existingQuery.eq('supplier_id', supplierId);
+      } else {
+        existingQuery = existingQuery.is('supplier_id', null);
+      }
+
+      const { data } = await existingQuery.maybeSingle();
+      existing = data;
+    }
 
     // If setting as default, unset other defaults for this product+variation
     if (isDefault) {
