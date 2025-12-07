@@ -30,9 +30,13 @@ export interface SupplierOrder {
   notes?: string | null;
   business_id: string;
   updated_at: string;
-  // Joined fields from WooCommerce (optional)
-  order_status?: string;
+  // Joined fields from WooCommerce
+  order_number: string;
+  order_status: string;
+  total: string;
   customer_name?: string;
+  customer_first_name: string;
+  customer_last_name: string;
 }
 
 export interface FilterOptions {

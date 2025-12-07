@@ -3,6 +3,7 @@
 import React from 'react';
 import { FileText } from 'lucide-react';
 import { Document, Page, Text, View, StyleSheet, pdf, Font } from '@react-pdf/renderer';
+import { SupplierOrder } from './types';
 
 // Register Hebrew font
 Font.register({
@@ -10,33 +11,12 @@ Font.register({
   src: '/fonts/Heebo-VariableFont_wght.ttf',
 });
 
-interface OrderItem {
-  id: number;
-  product_name: string;
-  name?: string;
-  quantity: number;
-  unit_cost: number | null;
-  cost?: number | null;
-  adjusted_cost?: number | null;
-  is_ready?: boolean;
-  notes?: string;
-  supplier_name: string | null;
-  order_id: number;
-  order_number: string;
-  order_date: string;
-  order_status: string;
-  total: string;
-  customer_first_name: string;
-  customer_last_name: string;
-  customer_name?: string;
-}
-
 interface GroupedOrders {
-  [supplier: string]: OrderItem[];
+  [supplier: string]: SupplierOrder[];
 }
 
 interface PDFReportGeneratorProps {
-  orders: OrderItem[];
+  orders: SupplierOrder[];
   selectedStatuses: Set<string> | string[];
 }
 
