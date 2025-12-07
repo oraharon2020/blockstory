@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { Package, Save, Loader2, Trash2, Search, Plus, Check, Building2, ChevronDown, Star, X, Edit2, Layers } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Package, Save, Loader2, Trash2, Search, Plus, Check, Building2, ChevronDown, ChevronRight, X, Edit2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/calculations';
 
 interface ProductCost {
@@ -34,6 +34,10 @@ interface Supplier {
   email?: string;
 }
 
+interface ProductWithVariations extends ProductCost {
+  variations: VariationCost[];
+}
+
 interface ProductCostsManagerProps {
   businessId?: string;
 }
@@ -43,15 +47,16 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
   const [variations, setVariations] = useState<VariationCost[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'products' | 'variations'>('products');
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingVariationId, setEditingVariationId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState<string>('');
   const [editSupplier, setEditSupplier] = useState<string>('');
   const [savingId, setSavingId] = useState<number | null>(null);
   const [newProduct, setNewProduct] = useState({ name: '', cost: '', supplier: '' });
   const [addingNew, setAddingNew] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [expandedProducts, setExpandedProducts] = useState<Set<number>>(new Set());
   
   // Supplier management
   const [showSuppliersModal, setShowSuppliersModal] = useState(false);
@@ -110,10 +115,53 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
     }
   };
 
+  // Create products with their variations grouped together
+  const productsWithVariations = useMemo(() => {
+    const productMap = new Map<string, ProductWithVariations>();
+    
+    // First, add all products
+    products.forEach(product => {
+      const key = product.product_name.toLowerCase();
+      productMap.set(key, { ...product, variations: [] });
+    });
+    
+    // Then, add variations to their matching products or create new entries
+    variations.forEach(variation => {
+      const key = variation.product_name.toLowerCase();
+      const existingProduct = productMap.get(key);
+      
+      if (existingProduct) {
+        existingProduct.variations.push(variation);
+      } else {
+        // Create a product entry for variations that don't have a base product
+        productMap.set(key, {
+          id: -variation.id, // Negative ID to indicate it's a variation-only product
+          product_id: variation.product_id,
+          sku: null,
+          product_name: variation.product_name,
+          unit_cost: 0,
+          supplier_name: undefined,
+          updated_at: variation.updated_at,
+          variations: [variation]
+        });
+      }
+    });
+    
+    return Array.from(productMap.values());
+  }, [products, variations]);
+
   const handleEdit = (product: ProductCost) => {
     setEditingId(product.id);
+    setEditingVariationId(null);
     setEditValue(product.unit_cost.toString());
     setEditSupplier(product.supplier_name || '');
+  };
+
+  const handleEditVariation = (variation: VariationCost) => {
+    setEditingVariationId(variation.id);
+    setEditingId(null);
+    setEditValue(variation.unit_cost.toString());
+    setEditSupplier(variation.supplier_name || '');
   };
 
   const handleSave = async (product: ProductCost) => {
@@ -153,6 +201,45 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
     }
   };
 
+  const handleSaveVariation = async (variation: VariationCost) => {
+    setSavingId(variation.id);
+    try {
+      const res = await fetch('/api/product-variation-costs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessId,
+          id: variation.id,
+          product_id: variation.product_id,
+          product_name: variation.product_name,
+          variation_key: variation.variation_key,
+          variation_attributes: variation.variation_attributes,
+          unit_cost: parseFloat(editValue) || 0,
+          supplier_name: editSupplier || null,
+        }),
+      });
+
+      if (res.ok) {
+        setVariations(variations.map(v => 
+          v.id === variation.id 
+            ? { 
+                ...v, 
+                unit_cost: parseFloat(editValue) || 0, 
+                supplier_name: editSupplier || undefined,
+                updated_at: new Date().toISOString() 
+              }
+            : v
+        ));
+        setEditingVariationId(null);
+        setEditSupplier('');
+      }
+    } catch (error) {
+      console.error('Error saving variation cost:', error);
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   const handleDelete = async (id: number) => {
     if (!confirm('האם למחוק את המוצר?')) return;
 
@@ -166,6 +253,22 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
       }
     } catch (error) {
       console.error('Error deleting product:', error);
+    }
+  };
+
+  const handleDeleteVariation = async (id: number) => {
+    if (!confirm('האם למחוק את הוריאציה?')) return;
+
+    try {
+      const res = await fetch(`/api/product-variation-costs?id=${id}`, {
+        method: 'DELETE',
+      });
+
+      if (res.ok) {
+        setVariations(variations.filter(v => v.id !== id));
+      }
+    } catch (error) {
+      console.error('Error deleting variation:', error);
     }
   };
 
@@ -269,23 +372,40 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
     }
   };
 
+  const toggleExpand = (productId: number) => {
+    const newExpanded = new Set(expandedProducts);
+    if (newExpanded.has(productId)) {
+      newExpanded.delete(productId);
+    } else {
+      newExpanded.add(productId);
+    }
+    setExpandedProducts(newExpanded);
+  };
+
   // Filtered and sorted products
-  const filteredProducts = products
+  const filteredProducts = productsWithVariations
     .filter(p => {
-      // Text search
+      // Text search - search in product name, SKU, supplier, and variations
       const matchesSearch = 
         p.product_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (p.supplier_name && p.supplier_name.toLowerCase().includes(searchTerm.toLowerCase()));
+        (p.supplier_name && p.supplier_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        p.variations.some(v => 
+          v.variation_key.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (v.supplier_name && v.supplier_name.toLowerCase().includes(searchTerm.toLowerCase()))
+        );
       
       // Supplier filter
-      const matchesSupplier = !filterSupplier || p.supplier_name === filterSupplier;
+      const matchesSupplier = !filterSupplier || 
+        p.supplier_name === filterSupplier ||
+        p.variations.some(v => v.supplier_name === filterSupplier);
       
       // Cost status filter
+      const hasCost = p.unit_cost > 0 || p.variations.some(v => v.unit_cost > 0);
       const matchesCostStatus = 
         filterCostStatus === 'all' ||
-        (filterCostStatus === 'with-cost' && p.unit_cost > 0) ||
-        (filterCostStatus === 'no-cost' && (!p.unit_cost || p.unit_cost === 0));
+        (filterCostStatus === 'with-cost' && hasCost) ||
+        (filterCostStatus === 'no-cost' && !hasCost);
       
       return matchesSearch && matchesSupplier && matchesCostStatus;
     })
@@ -306,11 +426,10 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
       
       return sortOrder === 'asc' ? comparison : -comparison;
     });
-
-  // Get unique suppliers from products
-  const productSuppliers = Array.from(new Set(products.filter(p => p.supplier_name).map(p => p.supplier_name!)));
   
   // Stats
+  const totalProducts = productsWithVariations.length;
+  const totalVariations = variations.length;
   const productsWithCost = products.filter(p => p.unit_cost > 0).length;
   const productsWithoutCost = products.filter(p => !p.unit_cost || p.unit_cost === 0).length;
 
@@ -358,35 +477,6 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b">
-        <button
-          onClick={() => setActiveTab('products')}
-          className={`px-4 py-2 font-medium transition-colors ${
-            activeTab === 'products'
-              ? 'text-blue-600 border-b-2 border-blue-600'
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <Package className="w-4 h-4" />
-            מוצרים ({products.length})
-          </span>
-        </button>
-        <button
-          onClick={() => setActiveTab('variations')}
-          className={`px-4 py-2 font-medium transition-colors ${
-            activeTab === 'variations'
-              ? 'text-green-600 border-b-2 border-green-600'
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <Layers className="w-4 h-4" />
-            וריאציות ({variations.length})
-          </span>
-        </button>
-      </div>
       {/* Suppliers Modal */}
       {showSuppliersModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -603,13 +693,13 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
         </div>
       )}
 
-      {/* Products Tab Content */}
-      {activeTab === 'products' && (
-        <>
-          {/* Stats Bar */}
-          <div className="flex flex-wrap gap-3 text-sm">
+      {/* Stats Bar */}
+      <div className="flex flex-wrap gap-3 text-sm">
         <div className="bg-gray-100 px-3 py-1.5 rounded-full text-gray-600">
-          סה״כ: {products.length} מוצרים
+          סה״כ: {totalProducts} מוצרים
+        </div>
+        <div className="bg-purple-100 px-3 py-1.5 rounded-full text-purple-700">
+          {totalVariations} וריאציות
         </div>
         <div className="bg-green-100 px-3 py-1.5 rounded-full text-green-700">
           עם עלות: {productsWithCost}
@@ -628,7 +718,7 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="חפש לפי שם מוצר, SKU או ספק..."
+            placeholder="חפש לפי שם מוצר, וריאציה, SKU או ספק..."
             className="w-full pr-10 pl-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
@@ -719,7 +809,7 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
       {filteredProducts.length === 0 ? (
         <div className="text-center py-8 text-gray-500">
           <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-          <p>{products.length === 0 ? 'אין מוצרים עדיין' : 'לא נמצאו מוצרים'}</p>
+          <p>{productsWithVariations.length === 0 ? 'אין מוצרים עדיין' : 'לא נמצאו מוצרים'}</p>
           <p className="text-sm mt-1">עלויות מוצרים יתווספו אוטומטית כשתזין אותן בהזמנות</p>
         </div>
       ) : (
@@ -727,6 +817,7 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-4 py-3 text-right text-sm font-medium text-gray-600 w-8"></th>
                 <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">מוצר</th>
                 <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">SKU</th>
                 <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">ספק</th>
@@ -737,96 +828,219 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
             </thead>
             <tbody className="divide-y">
               {filteredProducts.map((product) => (
-                <tr key={product.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <span className="font-medium text-gray-800">{product.product_name}</span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className="text-gray-500 text-sm">{product.sku || '-'}</span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    {editingId === product.id ? (
-                      <div className="relative">
-                        <select
-                          value={editSupplier}
-                          onChange={(e) => setEditSupplier(e.target.value)}
-                          className="w-32 px-2 py-1 border border-blue-300 rounded text-center focus:ring-2 focus:ring-blue-500 appearance-none bg-white text-sm"
-                        >
-                          <option value="">ללא ספק</option>
-                          {suppliers.map(s => (
-                            <option key={s.id} value={s.name}>{s.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    ) : (
-                      <span className={`text-sm ${product.supplier_name ? 'text-blue-600 flex items-center justify-center gap-1' : 'text-gray-400'}`}>
-                        {product.supplier_name ? (
-                          <>
-                            <Building2 className="w-3 h-3" />
-                            {product.supplier_name}
-                          </>
-                        ) : '-'}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    {editingId === product.id ? (
-                      <input
-                        type="number"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        className="w-24 px-2 py-1 border border-blue-300 rounded text-center focus:ring-2 focus:ring-blue-500"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSave(product);
-                          if (e.key === 'Escape') { setEditingId(null); setEditSupplier(''); }
-                        }}
-                      />
-                    ) : (
-                      <span 
-                        className="font-medium text-green-600 cursor-pointer hover:bg-green-50 px-2 py-1 rounded"
-                        onClick={() => handleEdit(product)}
-                      >
-                        {formatCurrency(product.unit_cost)}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className="text-gray-500 text-sm">{formatDate(product.updated_at)}</span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      {editingId === product.id ? (
-                        <>
-                          <button
-                            onClick={() => handleSave(product)}
-                            disabled={savingId === product.id}
-                            className="p-1.5 bg-green-100 text-green-600 rounded hover:bg-green-200 transition-colors"
-                          >
-                            {savingId === product.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Save className="w-4 h-4" />
-                            )}
-                          </button>
-                          <button
-                            onClick={() => { setEditingId(null); setEditSupplier(''); }}
-                            className="p-1.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors text-xs"
-                          >
-                            ✕
-                          </button>
-                        </>
-                      ) : (
+                <>
+                  {/* Product Row */}
+                  <tr key={product.id} className="hover:bg-gray-50">
+                    {/* Expand Button */}
+                    <td className="px-4 py-3">
+                      {product.variations.length > 0 && (
                         <button
-                          onClick={() => handleDelete(product.id)}
-                          className="p-1.5 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
+                          onClick={() => toggleExpand(product.id)}
+                          className="p-1 hover:bg-gray-200 rounded transition-colors"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          {expandedProducts.has(product.id) ? (
+                            <ChevronDown className="w-4 h-4 text-gray-500" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4 text-gray-500" />
+                          )}
                         </button>
                       )}
-                    </div>
-                  </td>
-                </tr>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-800">{product.product_name}</span>
+                        {product.variations.length > 0 && (
+                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                            {product.variations.length} וריאציות
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className="text-gray-500 text-sm">{product.sku || '-'}</span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {editingId === product.id ? (
+                        <div className="relative">
+                          <select
+                            value={editSupplier}
+                            onChange={(e) => setEditSupplier(e.target.value)}
+                            className="w-32 px-2 py-1 border border-blue-300 rounded text-center focus:ring-2 focus:ring-blue-500 appearance-none bg-white text-sm"
+                          >
+                            <option value="">ללא ספק</option>
+                            {suppliers.map(s => (
+                              <option key={s.id} value={s.name}>{s.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <span className={`text-sm ${product.supplier_name ? 'text-blue-600 flex items-center justify-center gap-1' : 'text-gray-400'}`}>
+                          {product.supplier_name ? (
+                            <>
+                              <Building2 className="w-3 h-3" />
+                              {product.supplier_name}
+                            </>
+                          ) : '-'}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {product.id < 0 ? (
+                        // This is a variation-only product, no base cost
+                        <span className="text-gray-400 text-sm">-</span>
+                      ) : editingId === product.id ? (
+                        <input
+                          type="number"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          className="w-24 px-2 py-1 border border-blue-300 rounded text-center focus:ring-2 focus:ring-blue-500"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSave(product);
+                            if (e.key === 'Escape') { setEditingId(null); setEditSupplier(''); }
+                          }}
+                        />
+                      ) : (
+                        <span 
+                          className="font-medium text-green-600 cursor-pointer hover:bg-green-50 px-2 py-1 rounded"
+                          onClick={() => handleEdit(product)}
+                        >
+                          {formatCurrency(product.unit_cost)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className="text-gray-500 text-sm">{formatDate(product.updated_at)}</span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        {editingId === product.id ? (
+                          <>
+                            <button
+                              onClick={() => handleSave(product)}
+                              disabled={savingId === product.id}
+                              className="p-1.5 bg-green-100 text-green-600 rounded hover:bg-green-200 transition-colors"
+                            >
+                              {savingId === product.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Save className="w-4 h-4" />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => { setEditingId(null); setEditSupplier(''); }}
+                              className="p-1.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors text-xs"
+                            >
+                              ✕
+                            </button>
+                          </>
+                        ) : product.id > 0 ? (
+                          <button
+                            onClick={() => handleDelete(product.id)}
+                            className="p-1.5 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                  
+                  {/* Variation Rows */}
+                  {expandedProducts.has(product.id) && product.variations.map((variation) => (
+                    <tr key={`var-${variation.id}`} className="bg-purple-50/30 hover:bg-purple-50/50">
+                      <td className="px-4 py-2"></td>
+                      <td className="px-4 py-2 pr-8">
+                        <div className="flex items-center gap-2">
+                          <span className="w-4 h-4 border-r-2 border-b-2 border-gray-300 rounded-br-lg"></span>
+                          <span className="text-sm bg-purple-100 text-purple-700 px-2 py-1 rounded">
+                            {variation.variation_key || 'בסיסי'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <span className="text-gray-400 text-sm">-</span>
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        {editingVariationId === variation.id ? (
+                          <div className="relative">
+                            <select
+                              value={editSupplier}
+                              onChange={(e) => setEditSupplier(e.target.value)}
+                              className="w-32 px-2 py-1 border border-purple-300 rounded text-center focus:ring-2 focus:ring-purple-500 appearance-none bg-white text-sm"
+                            >
+                              <option value="">ללא ספק</option>
+                              {suppliers.map(s => (
+                                <option key={s.id} value={s.name}>{s.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        ) : (
+                          <span className={`text-sm ${variation.supplier_name ? 'text-purple-600' : 'text-gray-400'}`}>
+                            {variation.supplier_name || '-'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        {editingVariationId === variation.id ? (
+                          <input
+                            type="number"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            className="w-24 px-2 py-1 border border-purple-300 rounded text-center focus:ring-2 focus:ring-purple-500"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveVariation(variation);
+                              if (e.key === 'Escape') { setEditingVariationId(null); setEditSupplier(''); }
+                            }}
+                          />
+                        ) : (
+                          <span 
+                            className="font-medium text-purple-600 cursor-pointer hover:bg-purple-100 px-2 py-1 rounded"
+                            onClick={() => handleEditVariation(variation)}
+                          >
+                            {formatCurrency(variation.unit_cost)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <span className="text-gray-500 text-xs">{formatDate(variation.updated_at)}</span>
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          {editingVariationId === variation.id ? (
+                            <>
+                              <button
+                                onClick={() => handleSaveVariation(variation)}
+                                disabled={savingId === variation.id}
+                                className="p-1 bg-green-100 text-green-600 rounded hover:bg-green-200 transition-colors"
+                              >
+                                {savingId === variation.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <Save className="w-3 h-3" />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => { setEditingVariationId(null); setEditSupplier(''); }}
+                                className="p-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors text-xs"
+                              >
+                                ✕
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => handleDeleteVariation(variation.id)}
+                              className="p-1 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </>
               ))}
             </tbody>
           </table>
@@ -835,97 +1049,8 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
 
       {/* Info */}
       <p className="text-sm text-gray-500">
-        💡 טיפ: כשתזין עלות למוצר בפופאפ ההזמנות, היא תישמר כאן אוטומטית עם הספק שנבחר
+        💡 טיפ: כשתזין עלות למוצר בפופאפ ההזמנות, היא תישמר כאן אוטומטית. לחץ על החץ ליד המוצר לראות את הוריאציות שלו.
       </p>
-        </>
-      )}
-
-      {/* Variations Tab Content */}
-      {activeTab === 'variations' && (
-        <div className="space-y-4">
-          {variations.length === 0 ? (
-            <div className="text-center py-12 bg-gray-50 rounded-lg">
-              <Layers className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-600">אין וריאציות שמורות</h3>
-              <p className="text-gray-500 mt-2">
-                כשתשמור עלות למוצר עם וריאציה (גודל, צבע וכו') ותלחץ "שמור כברירת מחדל",<br/>
-                הוריאציה תופיע כאן אוטומטית
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="text-sm text-gray-600 bg-green-50 p-3 rounded-lg">
-                💡 אלו מחירים שנשמרו עבור וריאציות ספציפיות של מוצרים (כמו גודל או צבע שונה)
-              </div>
-              <div className="overflow-x-auto border border-gray-200 rounded-lg">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="px-4 py-3 text-right font-semibold text-gray-600">מוצר</th>
-                      <th className="px-4 py-3 text-right font-semibold text-gray-600">וריאציה</th>
-                      <th className="px-4 py-3 text-right font-semibold text-gray-600">ספק</th>
-                      <th className="px-4 py-3 text-center font-semibold text-gray-600">עלות</th>
-                      <th className="px-4 py-3 text-center font-semibold text-gray-600">עדכון</th>
-                      <th className="px-4 py-3 text-center font-semibold text-gray-600">פעולות</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {variations.map((variation, index) => (
-                      <tr key={variation.id} className={`border-b hover:bg-gray-50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
-                        <td className="px-4 py-3">
-                          <span className="font-medium text-gray-900">{variation.product_name}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-green-600 text-xs bg-green-50 px-2 py-1 rounded">
-                            {variation.variation_key || 'בסיסי'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          {variation.supplier_name ? (
-                            <span className="text-purple-600 text-xs bg-purple-50 px-2 py-1 rounded">
-                              {variation.supplier_name}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className="font-medium text-green-600">
-                            {formatCurrency(variation.unit_cost)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className="text-gray-500 text-xs">
-                            {new Date(variation.updated_at).toLocaleDateString('he-IL')}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <button
-                            onClick={async () => {
-                              if (!confirm('למחוק את הוריאציה?')) return;
-                              try {
-                                const res = await fetch(`/api/product-variation-costs?id=${variation.id}`, { method: 'DELETE' });
-                                if (res.ok) {
-                                  setVariations(variations.filter(v => v.id !== variation.id));
-                                }
-                              } catch (error) {
-                                console.error('Error deleting variation:', error);
-                              }
-                            }}
-                            className="p-1.5 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-        </div>
-      )}
     </div>
   );
 }
