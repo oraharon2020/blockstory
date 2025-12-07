@@ -66,9 +66,6 @@ export default function SupplierOrdersManager({ businessId }: SupplierOrdersMana
   // Dropdowns
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
-  
-  // PDF Modal
-  const [showPDFModal, setShowPDFModal] = useState(false);
 
   // Load order statuses from WooCommerce on mount
   useEffect(() => {
@@ -434,15 +431,10 @@ export default function SupplierOrdersManager({ businessId }: SupplierOrdersMana
 
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-3">
-            <button
-              onClick={() => setShowPDFModal(true)}
-              disabled={filteredOrders.length === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
-              title={filteredOrders.length === 0 ? 'אין הזמנות להצגה' : ''}
-            >
-              <FileText className="w-4 h-4" />
-              הנפק דוח PDF
-            </button>
+            <PDFReportGenerator
+              orders={filteredOrders}
+              selectedStatuses={new Set(selectedStatuses)}
+            />
             <button
               onClick={handleMarkAllReady}
               disabled={filteredOrders.filter(o => !o.is_ready).length === 0}
@@ -469,24 +461,7 @@ export default function SupplierOrdersManager({ businessId }: SupplierOrdersMana
             onToggleReady={handleToggleReady}
           />
 
-          {/* PDF Modal */}
-          {showPDFModal && (
-            <PDFReportGenerator
-              supplier={selectedSupplierObj || { id: '', name: 'כל הספקים' }}
-              orders={filteredOrders}
-              filters={{
-                filterType: 'date',
-                startDate: '',
-                endDate: '',
-                orderIds: '',
-                statuses: selectedStatuses,
-                searchTerm,
-                showReadyOnly,
-                showNotReadyOnly,
-              }}
-              onClose={() => setShowPDFModal(false)}
-            />
-          )}
+          {/* PDF Export Button is in the header, no modal needed */}
         </>
       )}
 
