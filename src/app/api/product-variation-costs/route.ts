@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+export const dynamic = 'force-dynamic';
 import { supabase, TABLES } from '@/lib/supabase';
 
 // GET - Get variation costs for a product

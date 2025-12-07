@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, TABLES } from '@/lib/supabase';
 
+export const dynamic = 'force-dynamic';
+
 // GET - Get total product costs for a specific date or date range
 export async function GET(request: NextRequest) {
   try {

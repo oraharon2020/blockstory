@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+export const dynamic = 'force-dynamic';
 import { supabase, TABLES } from '@/lib/supabase';
 
 // Convert snake_case from DB to camelCase for frontend
