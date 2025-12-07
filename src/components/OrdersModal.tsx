@@ -161,7 +161,12 @@ const getVariationKey = (item: LineItem): string => {
   const variations = getItemVariations(item);
   if (variations.length === 0) return '';
   // Sort for consistency and join
-  return variations.sort().join(' | ');
+  const key = variations.sort().join(' | ');
+  
+  // Debug log to help troubleshoot matching
+  console.log(`Variation key for "${item.name}":`, key);
+  
+  return key;
 };
 
 // Get variation attributes as object for saving
