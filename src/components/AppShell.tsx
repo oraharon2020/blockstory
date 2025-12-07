@@ -8,7 +8,7 @@ import LoginPage from '@/components/LoginPage';
 import BusinessSelector from '@/components/BusinessSelector';
 import BusinessManager from '@/components/BusinessManager';
 import UserManager from '@/components/UserManager';
-import { Loader2, Plus, Store, LayoutDashboard, Package, Settings, BarChart3 } from 'lucide-react';
+import { Loader2, Plus, Store, LayoutDashboard, Package, Settings, BarChart3, Truck } from 'lucide-react';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -24,6 +24,7 @@ export default function AppShell({ children }: AppShellProps) {
     { name: 'דשבורד', href: '/', icon: LayoutDashboard },
     { name: 'סטטיסטיקות', href: '/statistics', icon: BarChart3 },
     { name: 'עלויות מוצרים', href: '/products', icon: Package },
+    { name: 'הזמנות לספקים', href: '/supplier-orders', icon: Truck },
     { name: 'הגדרות', href: '/settings', icon: Settings },
   ];
 

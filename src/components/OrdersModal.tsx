@@ -62,6 +62,7 @@ interface OrderItemCost {
   quantity?: number;
   shipping_cost?: number;
   supplier_name?: string;
+  is_ready?: boolean;
 }
 
 interface ItemCostState {
@@ -75,6 +76,7 @@ interface ItemCostState {
   saving: boolean;
   isDefault: boolean;
   isVariationCost: boolean; // האם העלות מגיעה מוריאציה ספציפית
+  isReady: boolean; // האם מסומן כמוכן
 }
 
 interface OrdersModalProps {
@@ -354,6 +356,7 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
             saving: false,
             isDefault,
             isVariationCost,
+            isReady: savedItem?.is_ready || false,
           });
         });
       });
@@ -807,7 +810,12 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
                               }`}>
                                 {/* Product name and quantity */}
                                 <div className="flex items-center justify-between mb-2">
-                                  <div className="flex-1">
+                                  <div className="flex-1 flex items-center gap-2">
+                                    {state?.isReady && (
+                                      <span className="inline-flex items-center justify-center w-5 h-5 bg-green-500 text-white rounded-full" title="יצא להכנה">
+                                        <Check className="w-3 h-3" />
+                                      </span>
+                                    )}
                                     <span className="font-medium text-gray-900">{item.name}</span>
                                     <span className="text-gray-400 mr-2">x{item.quantity}</span>
                                     {!hasCost && (

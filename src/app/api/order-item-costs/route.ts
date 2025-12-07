@@ -180,7 +180,10 @@ export async function POST(request: NextRequest) {
       save_as_default, 
       order_date, 
       businessId, 
-      shipping_cost 
+      shipping_cost,
+      adjusted_cost,
+      is_ready,
+      notes
     } = body;
 
     if (!order_id || !line_item_id) {
@@ -210,6 +213,9 @@ export async function POST(request: NextRequest) {
           order_date: order_date || null,
           business_id: businessId || null,
           shipping_cost: shipping_cost !== undefined ? shipping_cost : null,
+          adjusted_cost: adjusted_cost !== undefined ? adjusted_cost : null,
+          is_ready: is_ready !== undefined ? is_ready : false,
+          notes: notes !== undefined ? notes : null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', existing.id)
@@ -254,6 +260,9 @@ export async function POST(request: NextRequest) {
         variation_key: variation_key || null,
         variation_attributes: variation_attributes || null,
         shipping_cost: shipping_cost !== undefined ? shipping_cost : null,
+        adjusted_cost: adjusted_cost !== undefined ? adjusted_cost : null,
+        is_ready: is_ready !== undefined ? is_ready : false,
+        notes: notes !== undefined ? notes : null,
         order_date: order_date || null,
         updated_at: new Date().toISOString(),
       };

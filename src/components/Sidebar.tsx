@@ -7,12 +7,14 @@ import {
   Settings, 
   TrendingUp,
   Menu,
-  X
+  X,
+  Truck
 } from 'lucide-react';
 import { useState, ReactNode } from 'react';
 
 const navigation = [
   { name: 'דשבורד', href: '/', icon: LayoutDashboard },
+  { name: 'הזמנות לספקים', href: '/supplier-orders', icon: Truck },
   { name: 'הגדרות', href: '/settings', icon: Settings },
 ];
 
