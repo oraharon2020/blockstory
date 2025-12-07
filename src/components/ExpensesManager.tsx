@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Loader2, Receipt, Globe, Check, X, Copy, Users } from 'lucide-react';
+import { Plus, Trash2, Loader2, Receipt, Globe, Check, X, Copy, Users, RotateCcw } from 'lucide-react';
 import { formatCurrency } from '@/lib/calculations';
 import EmployeesManager from './EmployeesManager';
+import RefundsManager from './RefundsManager';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Expense {
@@ -29,7 +30,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
   const [vatExpenses, setVatExpenses] = useState<Expense[]>([]);
   const [noVatExpenses, setNoVatExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'vat' | 'noVat' | 'employees'>('vat');
+  const [activeTab, setActiveTab] = useState<'vat' | 'noVat' | 'employees' | 'refunds'>('vat');
   const [showAddForm, setShowAddForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copying, setCopying] = useState(false);
@@ -264,11 +265,24 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
           <Users className="w-4 h-4" />
           <span>עובדים</span>
         </button>
+        <button
+          onClick={() => setActiveTab('refunds')}
+          className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors border-b-2 ${
+            activeTab === 'refunds'
+              ? 'border-red-600 text-red-600 bg-red-50'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <RotateCcw className="w-4 h-4" />
+          <span>זיכויים</span>
+        </button>
       </div>
 
       {/* Employees Tab */}
       {activeTab === 'employees' ? (
         <EmployeesManager month={month} year={year} />
+      ) : activeTab === 'refunds' ? (
+        <RefundsManager month={month} year={year} onUpdate={onUpdate} />
       ) : (
         <>
           {/* Add Button */}

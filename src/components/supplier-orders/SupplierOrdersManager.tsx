@@ -556,6 +556,7 @@ export default function SupplierOrdersManager({ businessId }: SupplierOrdersMana
             <PDFReportGenerator
               orders={filteredOrders}
               selectedStatuses={new Set(selectedStatuses)}
+              availableSuppliers={suppliers.map(s => s.name)}
             />
             <button
               onClick={handleMarkAllReady}

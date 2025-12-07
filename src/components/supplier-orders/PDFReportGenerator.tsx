@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { FileText } from 'lucide-react';
+import React, { useState } from 'react';
+import { FileText, ChevronDown, Building2, Edit3 } from 'lucide-react';
 import { Document, Page, Text, View, StyleSheet, pdf, Font } from '@react-pdf/renderer';
 import { SupplierOrder } from './types';
 
@@ -18,6 +18,7 @@ interface GroupedOrders {
 interface PDFReportGeneratorProps {
   orders: SupplierOrder[];
   selectedStatuses: Set<string> | string[];
+  availableSuppliers?: string[];
 }
 
 // PDF Styles
@@ -160,8 +161,14 @@ const formatCurrency = (amount: number | string | null): string => {
 };
 
 // PDF Document Component
-const PDFDocument = ({ orders, selectedStatuses }: PDFReportGeneratorProps) => {
-  const groupedOrders: GroupedOrders = orders.reduce((acc, item) => {
+const PDFDocument = ({ orders, selectedStatuses, supplierNameOverride }: PDFReportGeneratorProps & { supplierNameOverride?: string }) => {
+  // If supplier override provided, replace "ללא ספק" with it
+  const processedOrders = orders.map(item => ({
+    ...item,
+    supplier_name: item.supplier_name || supplierNameOverride || 'ללא ספק',
+  }));
+
+  const groupedOrders: GroupedOrders = processedOrders.reduce((acc, item) => {
     const supplier = item.supplier_name || 'ללא ספק';
     if (!acc[supplier]) {
       acc[supplier] = [];
@@ -170,12 +177,12 @@ const PDFDocument = ({ orders, selectedStatuses }: PDFReportGeneratorProps) => {
     return acc;
   }, {} as GroupedOrders);
 
-  const totalCost = orders.reduce((sum, item) => {
+  const totalCost = processedOrders.reduce((sum, item) => {
     const cost = item.adjusted_cost ?? item.unit_cost ?? 0;
     return sum + (cost * item.quantity);
   }, 0);
 
-  const totalItems = orders.reduce((sum, item) => sum + item.quantity, 0);
+  const totalItems = processedOrders.reduce((sum, item) => sum + item.quantity, 0);
   const statusArray = selectedStatuses ? Array.from(selectedStatuses as Iterable<string>) : [];
 
   return (
@@ -288,19 +295,37 @@ const PDFDocument = ({ orders, selectedStatuses }: PDFReportGeneratorProps) => {
   );
 };
 
-export default function PDFReportGenerator({ orders, selectedStatuses }: PDFReportGeneratorProps) {
+export default function PDFReportGenerator({ orders, selectedStatuses, availableSuppliers = [] }: PDFReportGeneratorProps) {
+  const [showOptions, setShowOptions] = useState(false);
+  const [supplierForReport, setSupplierForReport] = useState('');
+  const [customSupplierName, setCustomSupplierName] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
+
+  // Get unique suppliers from orders
+  const uniqueSuppliersFromOrders = Array.from(new Set(orders.map(o => o.supplier_name).filter(Boolean)));
+  const allSuppliers = Array.from(new Set([...availableSuppliers, ...uniqueSuppliersFromOrders]));
+
   const generatePDF = async () => {
     try {
-      const blob = await pdf(<PDFDocument orders={orders} selectedStatuses={selectedStatuses} />).toBlob();
+      const supplierOverride = showCustomInput ? customSupplierName : supplierForReport;
+      const blob = await pdf(
+        <PDFDocument 
+          orders={orders} 
+          selectedStatuses={selectedStatuses} 
+          supplierNameOverride={supplierOverride || undefined}
+        />
+      ).toBlob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       const date = new Date().toLocaleDateString('he-IL').replace(/\//g, '-');
-      link.download = `דוח_הזמנות_ספקים_${date}.pdf`;
+      const supplierSuffix = supplierOverride ? `_${supplierOverride}` : '';
+      link.download = `דוח_הזמנות_ספקים${supplierSuffix}_${date}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
+      setShowOptions(false);
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('שגיאה ביצירת הPDF');
@@ -308,13 +333,86 @@ export default function PDFReportGenerator({ orders, selectedStatuses }: PDFRepo
   };
 
   return (
-    <button
-      onClick={generatePDF}
-      disabled={orders.length === 0}
-      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-    >
-      <FileText className="w-4 h-4" />
-      <span>ייצא לPDF</span>
-    </button>
+    <div className="relative">
+      <button
+        onClick={() => setShowOptions(!showOptions)}
+        disabled={orders.length === 0}
+        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      >
+        <FileText className="w-4 h-4" />
+        <span>ייצא לPDF</span>
+        <ChevronDown className={`w-4 h-4 transition-transform ${showOptions ? 'rotate-180' : ''}`} />
+      </button>
+
+      {showOptions && (
+        <div className="absolute z-30 mt-2 w-72 bg-white border rounded-xl shadow-lg p-4 left-0" dir="rtl">
+          <h4 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-blue-500" />
+            שם ספק לדוח
+          </h4>
+          
+          <p className="text-xs text-gray-500 mb-3">
+            בחר ספק או הזן שם ידנית (יחליף "ללא ספק")
+          </p>
+
+          {/* Toggle between dropdown and custom input */}
+          <div className="flex gap-2 mb-3">
+            <button
+              onClick={() => setShowCustomInput(false)}
+              className={`flex-1 px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                !showCustomInput ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              בחר מרשימה
+            </button>
+            <button
+              onClick={() => setShowCustomInput(true)}
+              className={`flex-1 px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center justify-center gap-1 ${
+                showCustomInput ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <Edit3 className="w-3 h-3" />
+              הזן ידנית
+            </button>
+          </div>
+
+          {showCustomInput ? (
+            <input
+              type="text"
+              placeholder="הזן שם ספק..."
+              value={customSupplierName}
+              onChange={(e) => setCustomSupplierName(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-3"
+            />
+          ) : (
+            <select
+              value={supplierForReport}
+              onChange={(e) => setSupplierForReport(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-3"
+            >
+              <option value="">ללא שינוי (ברירת מחדל)</option>
+              {allSuppliers.map(supplier => (
+                <option key={supplier} value={supplier}>{supplier}</option>
+              ))}
+            </select>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={generatePDF}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+            >
+              הורד PDF
+            </button>
+            <button
+              onClick={() => setShowOptions(false)}
+              className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+            >
+              ביטול
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
