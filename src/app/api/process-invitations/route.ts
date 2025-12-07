@@ -12,8 +12,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing userId or email' }, { status: 400 });
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY!;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.log('Supabase service key not configured, skipping invitation processing');
+      return NextResponse.json({ message: 'Invitation processing not configured', processed: 0 });
+    }
 
     // Use service key to bypass RLS
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
