@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-export const dynamic = 'force-dynamic';
 import { supabase, TABLES } from '@/lib/supabase';
+
+export const dynamic = 'force-dynamic';
 
 // GET - Get all product costs or specific product
 export async function GET(request: NextRequest) {

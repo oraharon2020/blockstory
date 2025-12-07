@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-export const dynamic = 'force-dynamic';
 import { createClient } from '@supabase/supabase-js';
+
+export const dynamic = 'force-dynamic';
 
 // This API processes pending invitations for a user
 // Called after a user signs in via magic link

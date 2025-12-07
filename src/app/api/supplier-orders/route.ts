@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-export const dynamic = 'force-dynamic';
 import { supabase, TABLES } from '@/lib/supabase';
 import WooCommerceRestApi from '@woocommerce/woocommerce-rest-api';
+
+export const dynamic = 'force-dynamic';
 
 // GET - Get orders filtered by status (and optionally supplier)
 export async function GET(request: NextRequest) {
