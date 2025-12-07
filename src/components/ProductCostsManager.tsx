@@ -443,35 +443,33 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      <div className="flex items-center justify-center h-48">
+        <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-4" dir="rtl">
+    <div className="space-y-3" dir="rtl">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-          <span className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center">
-            <Package className="w-4 h-4 text-orange-600" />
-          </span>
+        <h2 className="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
+          <Package className="w-4 h-4 text-orange-600" />
           עלויות מוצרים
         </h2>
-        <div className="flex gap-2">
+        <div className="flex gap-1.5">
           <button
             onClick={() => setShowSuppliersModal(true)}
-            className="flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm"
+            className="flex items-center gap-1 px-2 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-xs"
           >
-            <Building2 className="w-4 h-4" />
-            ניהול ספקים ({suppliers.length})
+            <Building2 className="w-3 h-3" />
+            ספקים ({suppliers.length})
           </button>
           <button
             onClick={() => setShowAddForm(!showAddForm)}
-            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+            className="flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-xs"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3 h-3" />
             הוסף מוצר
           </button>
         </div>
@@ -480,116 +478,116 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
       {/* Suppliers Modal */}
       {showSuppliersModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[70vh] overflow-hidden">
             {/* Modal Header */}
-            <div className="bg-purple-600 text-white p-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold flex items-center gap-2">
-                <Building2 className="w-5 h-5" />
+            <div className="bg-purple-600 text-white px-3 py-2 flex items-center justify-between">
+              <h3 className="text-sm font-bold flex items-center gap-1.5">
+                <Building2 className="w-4 h-4" />
                 ניהול ספקים
               </h3>
               <button
                 onClick={() => setShowSuppliersModal(false)}
-                className="p-1 hover:bg-purple-500 rounded-lg transition-colors"
+                className="p-1 hover:bg-purple-500 rounded transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-4 space-y-4 overflow-y-auto max-h-[60vh]">
+            <div className="p-3 space-y-3 overflow-y-auto max-h-[50vh]">
               {/* Add new supplier form */}
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                <h4 className="font-medium text-purple-800 mb-3">הוסף ספק חדש</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="bg-purple-50 border border-purple-200 rounded p-2.5">
+                <h4 className="text-xs font-medium text-purple-800 mb-2">הוסף ספק חדש</h4>
+                <div className="grid grid-cols-2 gap-2">
                   <input
                     type="text"
                     value={newSupplier.name}
                     onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })}
                     placeholder="שם הספק *"
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-purple-500 focus:border-transparent"
                   />
                   <input
                     type="text"
                     value={newSupplier.contact_name}
                     onChange={(e) => setNewSupplier({ ...newSupplier, contact_name: e.target.value })}
                     placeholder="איש קשר"
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-purple-500 focus:border-transparent"
                   />
                   <input
                     type="tel"
                     value={newSupplier.phone}
                     onChange={(e) => setNewSupplier({ ...newSupplier, phone: e.target.value })}
                     placeholder="טלפון"
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-purple-500 focus:border-transparent"
                   />
                   <input
                     type="email"
                     value={newSupplier.email}
                     onChange={(e) => setNewSupplier({ ...newSupplier, email: e.target.value })}
                     placeholder="אימייל"
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-purple-500 focus:border-transparent"
                   />
                 </div>
                 <button
                   onClick={handleAddSupplier}
                   disabled={addingSupplier || !newSupplier.name}
-                  className="mt-3 flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors text-sm"
+                  className="mt-2 flex items-center gap-1 px-2.5 py-1 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 transition-colors text-xs"
                 >
-                  {addingSupplier ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  {addingSupplier ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
                   הוסף ספק
                 </button>
               </div>
 
               {/* Suppliers list */}
-              <div className="space-y-2">
-                <h4 className="font-medium text-gray-700">ספקים קיימים ({suppliers.length})</h4>
+              <div className="space-y-1.5">
+                <h4 className="text-xs font-medium text-gray-700">ספקים ({suppliers.length})</h4>
                 {suppliers.length === 0 ? (
-                  <p className="text-gray-500 text-sm text-center py-4">אין ספקים עדיין</p>
+                  <p className="text-gray-500 text-xs text-center py-3">אין ספקים עדיין</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     {suppliers.map(supplier => (
-                      <div key={supplier.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                      <div key={supplier.id} className="bg-gray-50 border border-gray-200 rounded p-2 text-xs">
                         {editingSupplier?.id === supplier.id ? (
-                          <div className="space-y-2">
-                            <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1.5">
+                            <div className="grid grid-cols-2 gap-1.5">
                               <input
                                 type="text"
                                 value={editingSupplier.name}
                                 onChange={(e) => setEditingSupplier({ ...editingSupplier, name: e.target.value })}
-                                className="px-2 py-1 border rounded text-sm"
+                                className="px-2 py-1 border rounded text-xs"
                                 placeholder="שם הספק"
                               />
                               <input
                                 type="text"
                                 value={editingSupplier.contact_name || ''}
                                 onChange={(e) => setEditingSupplier({ ...editingSupplier, contact_name: e.target.value })}
-                                className="px-2 py-1 border rounded text-sm"
+                                className="px-2 py-1 border rounded text-xs"
                                 placeholder="איש קשר"
                               />
                               <input
                                 type="tel"
                                 value={editingSupplier.phone || ''}
                                 onChange={(e) => setEditingSupplier({ ...editingSupplier, phone: e.target.value })}
-                                className="px-2 py-1 border rounded text-sm"
+                                className="px-2 py-1 border rounded text-xs"
                                 placeholder="טלפון"
                               />
                               <input
                                 type="email"
                                 value={editingSupplier.email || ''}
                                 onChange={(e) => setEditingSupplier({ ...editingSupplier, email: e.target.value })}
-                                className="px-2 py-1 border rounded text-sm"
+                                className="px-2 py-1 border rounded text-xs"
                                 placeholder="אימייל"
                               />
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex gap-1">
                               <button
                                 onClick={handleUpdateSupplier}
-                                className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+                                className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
                               >
                                 שמור
                               </button>
                               <button
                                 onClick={() => setEditingSupplier(null)}
-                                className="px-3 py-1 bg-gray-300 text-gray-700 rounded text-sm hover:bg-gray-400"
+                                className="px-2 py-1 bg-gray-300 text-gray-700 rounded text-xs hover:bg-gray-400"
                               >
                                 ביטול
                               </button>
@@ -600,24 +598,24 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
                             <div>
                               <span className="font-medium">{supplier.name}</span>
                               {supplier.contact_name && (
-                                <span className="text-gray-500 text-sm mr-2">({supplier.contact_name})</span>
+                                <span className="text-gray-500 mr-1">({supplier.contact_name})</span>
                               )}
                               {supplier.phone && (
-                                <span className="text-gray-500 text-sm mr-2">📞 {supplier.phone}</span>
+                                <span className="text-gray-500 mr-1">📞 {supplier.phone}</span>
                               )}
                             </div>
-                            <div className="flex gap-1">
+                            <div className="flex gap-0.5">
                               <button
                                 onClick={() => setEditingSupplier(supplier)}
-                                className="p-1.5 text-blue-600 hover:bg-blue-100 rounded transition-colors"
+                                className="p-1 text-blue-600 hover:bg-blue-100 rounded transition-colors"
                               >
-                                <Edit2 className="w-4 h-4" />
+                                <Edit2 className="w-3 h-3" />
                               </button>
                               <button
                                 onClick={() => handleDeleteSupplier(supplier.id)}
-                                className="p-1.5 text-red-600 hover:bg-red-100 rounded transition-colors"
+                                className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="w-3 h-3" />
                               </button>
                             </div>
                           </div>
@@ -630,10 +628,10 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
             </div>
 
             {/* Modal Footer */}
-            <div className="border-t p-4 bg-gray-50">
+            <div className="border-t p-2 bg-gray-50">
               <button
                 onClick={() => setShowSuppliersModal(false)}
-                className="w-full px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
+                className="w-full px-3 py-1.5 bg-gray-200 hover:bg-gray-300 rounded text-xs transition-colors"
               >
                 סגור
               </button>
@@ -644,48 +642,48 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
 
       {/* Add New Product Form */}
       {showAddForm && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="bg-blue-50 border border-blue-200 rounded p-2.5 space-y-2">
+          <div className="grid grid-cols-3 gap-2">
             <input
               type="text"
               value={newProduct.name}
               onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
               placeholder="שם המוצר"
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent"
             />
             <div className="relative">
               <select
                 value={newProduct.supplier}
                 onChange={(e) => setNewProduct({ ...newProduct, supplier: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
               >
-                <option value="">בחר ספק (אופציונלי)</option>
+                <option value="">ספק (אופציונלי)</option>
                 {suppliers.map(s => (
                   <option key={s.id} value={s.name}>{s.name}</option>
                 ))}
               </select>
-              <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <ChevronDown className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
             </div>
             <input
               type="number"
               value={newProduct.cost}
               onChange={(e) => setNewProduct({ ...newProduct, cost: e.target.value })}
-              placeholder="עלות ליחידה (₪)"
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="עלות (₪)"
+              className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             <button
               onClick={handleAddNew}
               disabled={addingNew || !newProduct.name}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors text-sm"
+              className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 transition-colors text-xs"
             >
-              {addingNew ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              {addingNew ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
               שמור
             </button>
             <button
               onClick={() => { setShowAddForm(false); setNewProduct({ name: '', cost: '', supplier: '' }); }}
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
+              className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors text-xs"
             >
               ביטול
             </button>
@@ -694,57 +692,57 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
       )}
 
       {/* Stats Bar */}
-      <div className="flex flex-wrap gap-3 text-sm">
-        <div className="bg-gray-100 px-3 py-1.5 rounded-full text-gray-600">
-          סה״כ: {totalProducts} מוצרים
-        </div>
-        <div className="bg-purple-100 px-3 py-1.5 rounded-full text-purple-700">
+      <div className="flex flex-wrap gap-2 text-xs">
+        <span className="bg-gray-100 px-2 py-1 rounded text-gray-600">
+          {totalProducts} מוצרים
+        </span>
+        <span className="bg-purple-100 px-2 py-1 rounded text-purple-700">
           {totalVariations} וריאציות
-        </div>
-        <div className="bg-green-100 px-3 py-1.5 rounded-full text-green-700">
+        </span>
+        <span className="bg-green-100 px-2 py-1 rounded text-green-700">
           עם עלות: {productsWithCost}
-        </div>
-        <div className="bg-orange-100 px-3 py-1.5 rounded-full text-orange-700">
+        </span>
+        <span className="bg-orange-100 px-2 py-1 rounded text-orange-700">
           ללא עלות: {productsWithoutCost}
-        </div>
+        </span>
       </div>
 
       {/* Search and Filters */}
-      <div className="space-y-3">
+      <div className="space-y-2">
         {/* Search */}
         <div className="relative">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="חפש לפי שם מוצר, וריאציה, SKU או ספק..."
-            className="w-full pr-10 pl-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="חפש מוצר, וריאציה, SKU או ספק..."
+            className="w-full pr-8 pl-3 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
 
         {/* Filter Row */}
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2 items-center">
           {/* Supplier Filter */}
           <div className="relative">
             <select
               value={filterSupplier}
               onChange={(e) => setFilterSupplier(e.target.value)}
-              className="pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white text-sm min-w-[140px]"
+              className="pl-6 pr-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent appearance-none bg-white min-w-[100px]"
             >
               <option value="">כל הספקים</option>
               {suppliers.map(supplier => (
                 <option key={supplier.id} value={supplier.name}>{supplier.name}</option>
               ))}
             </select>
-            <Building2 className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <Building2 className="absolute left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
           </div>
 
           {/* Cost Status Filter */}
-          <div className="flex border border-gray-300 rounded-lg overflow-hidden">
+          <div className="flex border border-gray-300 rounded overflow-hidden">
             <button
               onClick={() => setFilterCostStatus('all')}
-              className={`px-3 py-2 text-sm transition-colors ${
+              className={`px-2 py-1 text-xs transition-colors ${
                 filterCostStatus === 'all' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
               }`}
             >
@@ -752,7 +750,7 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
             </button>
             <button
               onClick={() => setFilterCostStatus('with-cost')}
-              className={`px-3 py-2 text-sm border-r border-l transition-colors ${
+              className={`px-2 py-1 text-xs border-r border-l transition-colors ${
                 filterCostStatus === 'with-cost' ? 'bg-green-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
               }`}
             >
@@ -760,30 +758,28 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
             </button>
             <button
               onClick={() => setFilterCostStatus('no-cost')}
-              className={`px-3 py-2 text-sm transition-colors ${
+              className={`px-2 py-1 text-xs transition-colors ${
                 filterCostStatus === 'no-cost' ? 'bg-orange-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
               }`}
             >
-              ללא עלות
+              ללא
             </button>
           </div>
 
           {/* Sort */}
-          <div className="flex items-center gap-2 mr-auto">
-            <span className="text-sm text-gray-500">מיון:</span>
+          <div className="flex items-center gap-1 mr-auto">
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as 'name' | 'cost' | 'date')}
-              className="px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+              className="px-1.5 py-1 text-xs border border-gray-300 rounded bg-white"
             >
               <option value="name">שם</option>
               <option value="cost">עלות</option>
-              <option value="date">תאריך עדכון</option>
+              <option value="date">תאריך</option>
             </select>
             <button
               onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-              className="px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white hover:bg-gray-50"
-              title={sortOrder === 'asc' ? 'סדר עולה' : 'סדר יורד'}
+              className="px-1.5 py-1 text-xs border border-gray-300 rounded bg-white hover:bg-gray-50"
             >
               {sortOrder === 'asc' ? '↑' : '↓'}
             </button>
@@ -797,9 +793,9 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
                 setFilterSupplier('');
                 setFilterCostStatus('all');
               }}
-              className="px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded transition-colors"
             >
-              נקה סינון
+              נקה
             </button>
           )}
         </div>
@@ -807,23 +803,23 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
 
       {/* Products Table */}
       {filteredProducts.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-          <p>{productsWithVariations.length === 0 ? 'אין מוצרים עדיין' : 'לא נמצאו מוצרים'}</p>
-          <p className="text-sm mt-1">עלויות מוצרים יתווספו אוטומטית כשתזין אותן בהזמנות</p>
+        <div className="text-center py-6 text-gray-500">
+          <Package className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+          <p className="text-xs">{productsWithVariations.length === 0 ? 'אין מוצרים עדיין' : 'לא נמצאו מוצרים'}</p>
+          <p className="text-xs mt-0.5">עלויות מוצרים יתווספו אוטומטית כשתזין אותן בהזמנות</p>
         </div>
       ) : (
-        <div className="border rounded-lg overflow-hidden">
-          <table className="w-full">
+        <div className="border rounded overflow-hidden">
+          <table className="w-full text-xs">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-right text-sm font-medium text-gray-600 w-8"></th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">מוצר</th>
-                <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">SKU</th>
-                <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">ספק</th>
-                <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">עלות ליחידה</th>
-                <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">עדכון אחרון</th>
-                <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">פעולות</th>
+                <th className="px-2 py-1.5 text-right font-medium text-gray-600 w-6"></th>
+                <th className="px-2 py-1.5 text-right font-medium text-gray-600">מוצר</th>
+                <th className="px-2 py-1.5 text-center font-medium text-gray-600">SKU</th>
+                <th className="px-2 py-1.5 text-center font-medium text-gray-600">ספק</th>
+                <th className="px-2 py-1.5 text-center font-medium text-gray-600">עלות</th>
+                <th className="px-2 py-1.5 text-center font-medium text-gray-600">עדכון</th>
+                <th className="px-2 py-1.5 text-center font-medium text-gray-600 w-16">פעולות</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -832,68 +828,60 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
                   {/* Product Row */}
                   <tr key={product.id} className="hover:bg-gray-50">
                     {/* Expand Button */}
-                    <td className="px-4 py-3">
+                    <td className="px-2 py-1.5">
                       {product.variations.length > 0 && (
                         <button
                           onClick={() => toggleExpand(product.id)}
-                          className="p-1 hover:bg-gray-200 rounded transition-colors"
+                          className="p-0.5 hover:bg-gray-200 rounded transition-colors"
                         >
                           {expandedProducts.has(product.id) ? (
-                            <ChevronDown className="w-4 h-4 text-gray-500" />
+                            <ChevronDown className="w-3 h-3 text-gray-500" />
                           ) : (
-                            <ChevronRight className="w-4 h-4 text-gray-500" />
+                            <ChevronRight className="w-3 h-3 text-gray-500" />
                           )}
                         </button>
                       )}
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-800">{product.product_name}</span>
+                    <td className="px-2 py-1.5">
+                      <div className="flex items-center gap-1">
+                        <span className="font-medium text-gray-800 truncate max-w-[200px]">{product.product_name}</span>
                         {product.variations.length > 0 && (
-                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
-                            {product.variations.length} וריאציות
+                          <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
+                            {product.variations.length}
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className="text-gray-500 text-sm">{product.sku || '-'}</span>
+                    <td className="px-2 py-1.5 text-center">
+                      <span className="text-gray-400">{product.sku || '-'}</span>
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-2 py-1.5 text-center">
                       {editingId === product.id ? (
-                        <div className="relative">
-                          <select
-                            value={editSupplier}
-                            onChange={(e) => setEditSupplier(e.target.value)}
-                            className="w-32 px-2 py-1 border border-blue-300 rounded text-center focus:ring-2 focus:ring-blue-500 appearance-none bg-white text-sm"
-                          >
-                            <option value="">ללא ספק</option>
-                            {suppliers.map(s => (
-                              <option key={s.id} value={s.name}>{s.name}</option>
-                            ))}
-                          </select>
-                        </div>
+                        <select
+                          value={editSupplier}
+                          onChange={(e) => setEditSupplier(e.target.value)}
+                          className="w-24 px-1 py-0.5 border border-blue-300 rounded text-center focus:ring-1 focus:ring-blue-500 appearance-none bg-white text-xs"
+                        >
+                          <option value="">ללא</option>
+                          {suppliers.map(s => (
+                            <option key={s.id} value={s.name}>{s.name}</option>
+                          ))}
+                        </select>
                       ) : (
-                        <span className={`text-sm ${product.supplier_name ? 'text-blue-600 flex items-center justify-center gap-1' : 'text-gray-400'}`}>
-                          {product.supplier_name ? (
-                            <>
-                              <Building2 className="w-3 h-3" />
-                              {product.supplier_name}
-                            </>
-                          ) : '-'}
+                        <span className={product.supplier_name ? 'text-blue-600' : 'text-gray-400'}>
+                          {product.supplier_name || '-'}
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-2 py-1.5 text-center">
                       {product.id < 0 ? (
-                        // This is a variation-only product, no base cost
-                        <span className="text-gray-400 text-sm">-</span>
+                        <span className="text-gray-400">-</span>
                       ) : editingId === product.id ? (
                         <input
                           type="number"
                           value={editValue}
                           onChange={(e) => setEditValue(e.target.value)}
-                          className="w-24 px-2 py-1 border border-blue-300 rounded text-center focus:ring-2 focus:ring-blue-500"
+                          className="w-16 px-1 py-0.5 border border-blue-300 rounded text-center focus:ring-1 focus:ring-blue-500"
                           autoFocus
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') handleSave(product);
@@ -902,44 +890,44 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
                         />
                       ) : (
                         <span 
-                          className="font-medium text-green-600 cursor-pointer hover:bg-green-50 px-2 py-1 rounded"
+                          className="font-medium text-green-600 cursor-pointer hover:bg-green-50 px-1 py-0.5 rounded"
                           onClick={() => handleEdit(product)}
                         >
                           {formatCurrency(product.unit_cost)}
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className="text-gray-500 text-sm">{formatDate(product.updated_at)}</span>
+                    <td className="px-2 py-1.5 text-center text-gray-400">
+                      {formatDate(product.updated_at)}
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-2">
+                    <td className="px-2 py-1.5 text-center">
+                      <div className="flex items-center justify-center gap-0.5">
                         {editingId === product.id ? (
                           <>
                             <button
                               onClick={() => handleSave(product)}
                               disabled={savingId === product.id}
-                              className="p-1.5 bg-green-100 text-green-600 rounded hover:bg-green-200 transition-colors"
+                              className="p-1 bg-green-100 text-green-600 rounded hover:bg-green-200 transition-colors"
                             >
                               {savingId === product.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <Loader2 className="w-3 h-3 animate-spin" />
                               ) : (
-                                <Save className="w-4 h-4" />
+                                <Save className="w-3 h-3" />
                               )}
                             </button>
                             <button
                               onClick={() => { setEditingId(null); setEditSupplier(''); }}
-                              className="p-1.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors text-xs"
+                              className="p-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
                             >
-                              ✕
+                              <X className="w-3 h-3" />
                             </button>
                           </>
                         ) : product.id > 0 ? (
                           <button
                             onClick={() => handleDelete(product.id)}
-                            className="p-1.5 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
+                            className="p-1 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3 h-3" />
                           </button>
                         ) : null}
                       </div>
@@ -949,45 +937,41 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
                   {/* Variation Rows */}
                   {expandedProducts.has(product.id) && product.variations.map((variation) => (
                     <tr key={`var-${variation.id}`} className="bg-purple-50/30 hover:bg-purple-50/50">
-                      <td className="px-4 py-2"></td>
-                      <td className="px-4 py-2 pr-8">
-                        <div className="flex items-center gap-2">
-                          <span className="w-4 h-4 border-r-2 border-b-2 border-gray-300 rounded-br-lg"></span>
-                          <span className="text-sm bg-purple-100 text-purple-700 px-2 py-1 rounded">
+                      <td className="px-2 py-1"></td>
+                      <td className="px-2 py-1 pr-6">
+                        <div className="flex items-center gap-1">
+                          <span className="text-purple-400">└</span>
+                          <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
                             {variation.variation_key || 'בסיסי'}
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-2 text-center">
-                        <span className="text-gray-400 text-sm">-</span>
-                      </td>
-                      <td className="px-4 py-2 text-center">
+                      <td className="px-2 py-1 text-center text-gray-400">-</td>
+                      <td className="px-2 py-1 text-center">
                         {editingVariationId === variation.id ? (
-                          <div className="relative">
-                            <select
-                              value={editSupplier}
-                              onChange={(e) => setEditSupplier(e.target.value)}
-                              className="w-32 px-2 py-1 border border-purple-300 rounded text-center focus:ring-2 focus:ring-purple-500 appearance-none bg-white text-sm"
-                            >
-                              <option value="">ללא ספק</option>
-                              {suppliers.map(s => (
-                                <option key={s.id} value={s.name}>{s.name}</option>
-                              ))}
-                            </select>
-                          </div>
+                          <select
+                            value={editSupplier}
+                            onChange={(e) => setEditSupplier(e.target.value)}
+                            className="w-24 px-1 py-0.5 border border-purple-300 rounded text-center focus:ring-1 focus:ring-purple-500 appearance-none bg-white text-xs"
+                          >
+                            <option value="">ללא</option>
+                            {suppliers.map(s => (
+                              <option key={s.id} value={s.name}>{s.name}</option>
+                            ))}
+                          </select>
                         ) : (
-                          <span className={`text-sm ${variation.supplier_name ? 'text-purple-600' : 'text-gray-400'}`}>
+                          <span className={variation.supplier_name ? 'text-purple-600' : 'text-gray-400'}>
                             {variation.supplier_name || '-'}
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-2 text-center">
+                      <td className="px-2 py-1 text-center">
                         {editingVariationId === variation.id ? (
                           <input
                             type="number"
                             value={editValue}
                             onChange={(e) => setEditValue(e.target.value)}
-                            className="w-24 px-2 py-1 border border-purple-300 rounded text-center focus:ring-2 focus:ring-purple-500"
+                            className="w-16 px-1 py-0.5 border border-purple-300 rounded text-center focus:ring-1 focus:ring-purple-500"
                             autoFocus
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') handleSaveVariation(variation);
@@ -996,44 +980,44 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
                           />
                         ) : (
                           <span 
-                            className="font-medium text-purple-600 cursor-pointer hover:bg-purple-100 px-2 py-1 rounded"
+                            className="font-medium text-purple-600 cursor-pointer hover:bg-purple-100 px-1 py-0.5 rounded"
                             onClick={() => handleEditVariation(variation)}
                           >
                             {formatCurrency(variation.unit_cost)}
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-2 text-center">
-                        <span className="text-gray-500 text-xs">{formatDate(variation.updated_at)}</span>
+                      <td className="px-2 py-1 text-center text-gray-400">
+                        {formatDate(variation.updated_at)}
                       </td>
-                      <td className="px-4 py-2 text-center">
-                        <div className="flex items-center justify-center gap-2">
+                      <td className="px-2 py-1 text-center">
+                        <div className="flex items-center justify-center gap-0.5">
                           {editingVariationId === variation.id ? (
                             <>
                               <button
                                 onClick={() => handleSaveVariation(variation)}
                                 disabled={savingId === variation.id}
-                                className="p-1 bg-green-100 text-green-600 rounded hover:bg-green-200 transition-colors"
+                                className="p-0.5 bg-green-100 text-green-600 rounded hover:bg-green-200 transition-colors"
                               >
                                 {savingId === variation.id ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
                                 ) : (
-                                  <Save className="w-3 h-3" />
+                                  <Save className="w-2.5 h-2.5" />
                                 )}
                               </button>
                               <button
                                 onClick={() => { setEditingVariationId(null); setEditSupplier(''); }}
-                                className="p-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors text-xs"
+                                className="p-0.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
                               >
-                                ✕
+                                <X className="w-2.5 h-2.5" />
                               </button>
                             </>
                           ) : (
                             <button
                               onClick={() => handleDeleteVariation(variation.id)}
-                              className="p-1 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
+                              className="p-0.5 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
                             >
-                              <Trash2 className="w-3 h-3" />
+                              <Trash2 className="w-2.5 h-2.5" />
                             </button>
                           )}
                         </div>
@@ -1048,8 +1032,8 @@ export default function ProductCostsManager({ businessId }: ProductCostsManagerP
       )}
 
       {/* Info */}
-      <p className="text-sm text-gray-500">
-        💡 טיפ: כשתזין עלות למוצר בפופאפ ההזמנות, היא תישמר כאן אוטומטית. לחץ על החץ ליד המוצר לראות את הוריאציות שלו.
+      <p className="text-xs text-gray-500">
+        💡 עלויות מוצרים נשמרות אוטומטית כשמזינים אותן בהזמנות. לחץ על החץ לראות וריאציות.
       </p>
     </div>
   );
