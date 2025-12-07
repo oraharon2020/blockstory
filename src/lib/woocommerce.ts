@@ -42,6 +42,9 @@ export async function fetchOrdersByDate(
 ) {
   try {
     const statuses = validStatuses || DEFAULT_VALID_STATUSES;
+    console.log(`🔍 WooCommerce query: date=${date}, statuses count=${statuses.length}`);
+    console.log(`   First 5 statuses: ${statuses.slice(0, 5).join(', ')}`);
+    
     // Use dates_are_gmt=false to use the store's timezone (Jerusalem)
     const response = await client.get('orders', {
       after: `${date}T00:00:00`,
@@ -50,9 +53,12 @@ export async function fetchOrdersByDate(
       status: statuses,
       dates_are_gmt: false,
     });
+    
+    console.log(`   📦 Response: ${response.data?.length || 0} orders`);
     return response.data;
-  } catch (error) {
-    console.error('Error fetching WooCommerce orders for date:', date, error);
+  } catch (error: any) {
+    console.error('Error fetching WooCommerce orders for date:', date);
+    console.error('Error details:', error?.response?.data || error.message);
     throw error;
   }
 }

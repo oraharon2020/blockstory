@@ -47,12 +47,17 @@ export async function GET(request: NextRequest) {
     }
 
     // Call the sync logic with stored credentials
+    // Convert materials_rate from percentage (30) to decimal (0.30) if needed
+    const materialsRate = settings.materials_rate 
+      ? (settings.materials_rate > 1 ? settings.materials_rate / 100 : settings.materials_rate)
+      : 0.3;
+
     return await syncData({
       date,
       wooUrl: settings.woo_url,
       consumerKey: settings.consumer_key,
       consumerSecret: settings.consumer_secret,
-      materialsRate: settings.materials_rate || 0.3,
+      materialsRate,
       shippingCost: settings.shipping_cost || 0,
       businessId,
       validOrderStatuses: settings.valid_order_statuses,
