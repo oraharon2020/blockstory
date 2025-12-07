@@ -41,28 +41,45 @@ export async function GET(request: NextRequest) {
     }
 
     if (date) {
-      // Single date - return total
-      const totalCost = (costs || []).reduce((sum, item) => sum + (parseFloat(item.item_cost) || 0), 0);
+      // Single date - return total (item_cost * quantity)
+      const totalCost = (costs || []).reduce((sum, item) => {
+        const cost = parseFloat(item.item_cost) || 0;
+        const qty = item.quantity || 1;
+        return sum + (cost * qty);
+      }, 0);
       return NextResponse.json({ 
         date,
         totalCost,
         itemsCount: costs?.length || 0,
       });
     } else {
-      // Date range - return grouped by date
+      // Date range - return grouped by date (item_cost * quantity)
       const costsByDate: Record<string, number> = {};
+      const shippingByDate: Record<string, number> = {};
+      
       (costs || []).forEach(item => {
         if (item.order_date) {
+          // Materials cost
           if (!costsByDate[item.order_date]) {
             costsByDate[item.order_date] = 0;
           }
-          costsByDate[item.order_date] += parseFloat(item.item_cost) || 0;
+          const cost = parseFloat(item.item_cost) || 0;
+          const qty = item.quantity || 1;
+          costsByDate[item.order_date] += cost * qty;
+          
+          // Shipping cost (stored without VAT, returned without VAT)
+          if (!shippingByDate[item.order_date]) {
+            shippingByDate[item.order_date] = 0;
+          }
+          shippingByDate[item.order_date] += parseFloat(item.shipping_cost) || 0;
         }
       });
 
       return NextResponse.json({ 
         costsByDate,
+        shippingByDate,
         totalCost: Object.values(costsByDate).reduce((sum, cost) => sum + cost, 0),
+        totalShipping: Object.values(shippingByDate).reduce((sum, cost) => sum + cost, 0),
       });
     }
   } catch (error: any) {

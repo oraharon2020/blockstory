@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, Package, Loader2, User, MapPin, CreditCard, Save, TrendingUp, AlertCircle, Building2, ChevronDown, ChevronUp, Star, Check, ChevronsUpDown, Plus } from 'lucide-react';
+import { X, Package, Loader2, User, MapPin, CreditCard, Save, TrendingUp, AlertCircle, Building2, ChevronDown, ChevronUp, Star, Check, ChevronsUpDown, Plus, Truck } from 'lucide-react';
 import { formatCurrency } from '@/lib/calculations';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -62,6 +62,7 @@ interface OrderItemCost {
   quantity?: number;
   shipping_cost?: number;
   supplier_name?: string;
+  supplier_id?: string;
   is_ready?: boolean;
 }
 
@@ -100,9 +101,6 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 // Get variations from meta_data (filter out internal WooCommerce keys and HTML content)
 const getItemVariations = (item: LineItem): string[] => {
   if (!item.meta_data) return [];
-  
-  // Debug: log all meta_data to see what Gravity Forms sends
-  console.log('Item meta_data for', item.name, ':', JSON.stringify(item.meta_data, null, 2));
   
   // Filter out internal keys, system keys, and HTML content
   const variations = item.meta_data
@@ -165,9 +163,6 @@ const getVariationKey = (item: LineItem): string => {
   // Sort for consistency and join
   const key = variations.sort().join(' | ');
   
-  // Debug log to help troubleshoot matching
-  console.log(`Variation key for "${item.name}":`, key);
-  
   return key;
 };
 
@@ -203,6 +198,10 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
   const [loadingCosts, setLoadingCosts] = useState(false);
   const [manualShippingPerItem, setManualShippingPerItem] = useState(false);
   const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
+  
+  // VAT settings for shipping
+  const [vatRate, setVatRate] = useState(18);
+  const [addVatToShipping, setAddVatToShipping] = useState(true);
   
   // Add supplier state
   const [showAddSupplier, setShowAddSupplier] = useState(false);
@@ -242,6 +241,7 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'add_supplier',
           name: newSupplierName.trim(),
           businessId: currentBusiness.id,
         }),
@@ -270,6 +270,7 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
         const json = await res.json();
         if (json.data) {
           setManualShippingPerItem(json.data.manualShippingPerItem ?? false);
+          setVatRate(json.data.vatRate ?? 18);
         }
       } catch (error) {
         console.error('Error loading business settings:', error);
@@ -359,6 +360,7 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
           if (savedItem !== undefined) {
             cost = savedItem.item_cost.toString();
             supplier = savedItem.supplier_name || '';
+            supplierId = savedItem.supplier_id || '';
           } else {
             // Try variation cost first
             const varCost = variationCostMap.get(`${item.product_id}_${variationKey}`);
@@ -544,9 +546,14 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
     const unitCost = parseFloat(state.cost) || 0;
     const quantity = parseFloat(state.quantity) || 1;
     const totalItemCost = unitCost * quantity;
+    
+    // Shipping cost is always saved WITHOUT VAT
+    // VAT will be calculated when displaying in the cashflow table
+    const baseShippingCost = parseFloat(state.shippingCost) || 0;
 
     try {
       // Save to order_item_costs (save unit cost and quantity separately)
+      // Note: shipping_cost is saved WITHOUT VAT - VAT is calculated in daily-costs API
       const res = await fetch('/api/order-item-costs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -557,7 +564,7 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
           product_name: item.name,
           item_cost: unitCost,
           quantity: quantity,
-          shipping_cost: manualShippingPerItem ? (parseFloat(state.shippingCost) || 0) : null,
+          shipping_cost: manualShippingPerItem ? baseShippingCost : null,
           supplier_name: state.supplier || null,
           supplier_id: selectedSupplier?.id || null,
           variation_key: variationKey || null,
@@ -669,120 +676,145 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" dir="rtl">
-      {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      
-      {/* Modal */}
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-2xl">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <Package className="w-6 h-6" />
-                הזמנות ליום {formatDate(date)}
-              </h2>
-              <div className="flex items-center gap-4 mt-1">
-                <p className="text-blue-100">
-                  {orders.length} הזמנות | סה"כ {formatCurrency(totalRevenue)}
-                </p>
-                {!loadingCosts && (
-                  <p className={`flex items-center gap-1 ${hasAnyMissingCosts ? 'text-yellow-200' : 'text-green-200'}`}>
-                    <TrendingUp className="w-4 h-4" />
-                    רווח: {formatCurrency(totalProfit)}
-                    {hasAnyMissingCosts && <AlertCircle className="w-4 h-4" />}
-                  </p>
-                )}
-              </div>
+    <div className="fixed inset-0 z-50 flex flex-col bg-gray-100" dir="rtl">
+      {/* Header - Fixed at top */}
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white px-4 py-2.5 shadow-lg">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Package className="w-5 h-5" />
+            <h2 className="text-base font-bold">
+              הזמנות ליום {formatDate(date)}
+            </h2>
+            <div className="flex items-center gap-4 text-blue-100 text-sm">
+              <span className="bg-white/20 px-2 py-0.5 rounded-full font-medium">
+                {orders.length} הזמנות
+              </span>
+              <span className="font-semibold">
+                סה"כ: {formatCurrency(totalRevenue)}
+              </span>
+              {!loadingCosts && (
+                <span className={`flex items-center gap-1.5 font-semibold ${hasAnyMissingCosts ? 'text-yellow-300' : 'text-green-300'}`}>
+                  <TrendingUp className="w-4 h-4" />
+                  רווח: {formatCurrency(totalProfit)}
+                  {hasAnyMissingCosts && (
+                    <span title="חסרות עלויות">
+                      <AlertCircle className="w-4 h-4" />
+                    </span>
+                  )}
+                </span>
+              )}
             </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+            title="סגור (Esc)"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="bg-white border-b px-4 py-1.5 shadow-sm">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          {/* VAT Toggle for shipping */}
+          {manualShippingPerItem ? (
+            <label className="flex items-center gap-1.5 cursor-pointer bg-orange-50 px-2.5 py-1 rounded border border-orange-200 text-xs">
+              <input
+                type="checkbox"
+                checked={addVatToShipping}
+                onChange={(e) => setAddVatToShipping(e.target.checked)}
+                className="w-3.5 h-3.5 text-orange-600 rounded border-gray-300 focus:ring-orange-500"
+              />
+              <span className="text-orange-800 font-medium">
+                הוסף מע"מ ({vatRate}%) למשלוח
+              </span>
+            </label>
+          ) : (
+            <div />
+          )}
+          
+          <div className="flex gap-1.5">
             <button
-              onClick={onClose}
-              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              onClick={expandAll}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors font-medium"
             >
-              <X className="w-6 h-6" />
+              <ChevronsUpDown className="w-3.5 h-3.5" />
+              פתח הכל
+            </button>
+            <button
+              onClick={collapseAll}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors font-medium"
+            >
+              <ChevronUp className="w-3.5 h-3.5" />
+              סגור הכל
             </button>
           </div>
         </div>
+      </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+      {/* Content - Scrollable */}
+      <div className="flex-1 overflow-y-auto px-4 py-3">
+        <div className="max-w-7xl mx-auto">
           {isLoading || loadingCosts ? (
             <div className="flex items-center justify-center h-48">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+              <div className="text-center">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-2" />
+                <p className="text-gray-500 text-sm">טוען הזמנות...</p>
+              </div>
             </div>
           ) : orders.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
-              <Package className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-              <p className="text-lg">אין הזמנות ליום זה</p>
+              <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <p className="text-base">אין הזמנות ליום זה</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {/* Expand/Collapse All Buttons */}
-              <div className="flex justify-end gap-2 mb-4">
-                <button
-                  onClick={expandAll}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
-                >
-                  <ChevronsUpDown className="w-4 h-4" />
-                  פתח הכל
-                </button>
-                <button
-                  onClick={collapseAll}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  <ChevronUp className="w-4 h-4" />
-                  סגור הכל
-                </button>
-              </div>
+            <div className="grid gap-2">
               {orders.map((order, index) => {
                 const { profit, hasMissingCosts } = calculateOrderProfit(order);
                 const isExpanded = expandedOrders.has(order.id);
                 const orderIndex = index + 1;
                 
                 // Alternate background colors for better visual separation
-                const bgColor = index % 2 === 0 ? 'bg-white' : 'bg-slate-50';
                 const borderColor = hasMissingCosts ? 'border-orange-300' : 
-                                   order.status === 'completed' ? 'border-green-300' : 'border-blue-300';
+                                   order.status === 'completed' ? 'border-green-300' : 'border-blue-200';
                 
                 return (
                   <div
                     key={order.id}
-                    className={`rounded-xl overflow-hidden border-2 ${borderColor} ${bgColor} transition-all duration-200`}
+                    className={`bg-white rounded-lg overflow-hidden border ${borderColor} shadow-sm hover:shadow transition-all`}
                   >
                     {/* Order header - Clickable accordion trigger */}
                     <div 
                       onClick={() => toggleOrder(order.id)}
-                      className={`flex items-center justify-between p-4 cursor-pointer hover:bg-gray-100/50 transition-colors ${
-                        hasMissingCosts ? 'bg-orange-50/50' : ''
+                      className={`flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors ${
+                        hasMissingCosts ? 'bg-orange-50/30' : ''
                       }`}
                     >
                       <div className="flex items-center gap-3">
                         {/* Order number badge */}
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                          hasMissingCosts ? 'bg-orange-200 text-orange-700' : 
-                          order.status === 'completed' ? 'bg-green-200 text-green-700' : 
-                          'bg-blue-200 text-blue-700'
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${
+                          hasMissingCosts ? 'bg-orange-100 text-orange-700' : 
+                          order.status === 'completed' ? 'bg-green-100 text-green-700' : 
+                          'bg-blue-100 text-blue-700'
                         }`}>
                           {orderIndex}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-gray-900">#{order.id}</span>
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            <span className="font-semibold text-sm text-gray-900">#{order.id}</span>
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                               STATUS_LABELS[order.status]?.color || 'bg-gray-100 text-gray-700'
                             }`}>
                               {STATUS_LABELS[order.status]?.label || order.status}
                             </span>
                           </div>
-                          <div className="flex items-center gap-3 text-sm text-gray-500 mt-0.5">
+                          <div className="flex items-center gap-2 text-xs text-gray-500">
                             <span>{order.billing.first_name} {order.billing.last_name}</span>
-                            <span>•</span>
+                            <span className="text-gray-300">|</span>
                             <span>{formatTime(order.date_created)}</span>
-                            <span>•</span>
+                            <span className="text-gray-300">|</span>
                             <span>{order.line_items.length} פריטים</span>
                           </div>
                         </div>
@@ -790,42 +822,41 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
                       
                       <div className="flex items-center gap-4">
                         <div className="text-left">
-                          <span className="font-bold text-lg text-green-600 block">
+                          <span className="font-bold text-sm text-gray-900 block">
                             {formatCurrency(parseFloat(order.total))}
                           </span>
-                          <span className={`text-sm ${hasMissingCosts ? 'text-orange-600' : 'text-blue-600'}`}>
+                          <span className={`text-xs font-medium ${hasMissingCosts ? 'text-orange-600' : 'text-green-600'}`}>
                             רווח: {formatCurrency(profit)}
                             {hasMissingCosts && ' ⚠️'}
                           </span>
                         </div>
-                        <div className={`p-2 rounded-full transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
-                          <ChevronDown className="w-5 h-5 text-gray-400" />
+                        <div className={`p-1.5 bg-gray-100 rounded transition-transform duration-200 ${isExpanded ? 'rotate-180 bg-blue-100' : ''}`}>
+                          <ChevronDown className={`w-4 h-4 ${isExpanded ? 'text-blue-600' : 'text-gray-400'}`} />
                         </div>
                       </div>
                     </div>
 
                     {/* Expanded content */}
                     {isExpanded && (
-                      <div className="border-t border-gray-200 p-4 bg-gray-50/50">
+                      <div className="border-t border-gray-100 px-3 py-2 bg-gray-50/50">
                         {/* Customer info */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm mb-4 bg-white rounded-lg p-3">
-                          <div className="flex items-center gap-2 text-gray-600">
-                            <User className="w-4 h-4 text-blue-500" />
-                            <span>{order.billing.first_name} {order.billing.last_name}</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-gray-600">
-                            <MapPin className="w-4 h-4 text-green-500" />
-                            <span>{order.shipping.city || order.billing.city}</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-gray-600">
-                            <CreditCard className="w-4 h-4 text-purple-500" />
-                            <span>{order.payment_method_title}</span>
-                          </div>
+                        <div className="flex flex-wrap gap-3 text-xs mb-2 text-gray-600">
+                          <span className="flex items-center gap-1">
+                            <User className="w-3 h-3 text-blue-500" />
+                            {order.billing.first_name} {order.billing.last_name}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-green-500" />
+                            {order.shipping.city || order.billing.city}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <CreditCard className="w-3 h-3 text-purple-500" />
+                            {order.payment_method_title}
+                          </span>
                         </div>
 
                         {/* Line items with cost inputs */}
-                        <div className="space-y-3">
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">פריטים בהזמנה:</p>
+                        <div className="space-y-2">
                           {order.line_items.map((item) => {
                             const key = `${order.id}_${item.id}`;
                             const state = itemCostStates.get(key);
@@ -838,41 +869,41 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
                             const hasCost = state?.cost && parseFloat(state.cost) > 0;
 
                             return (
-                              <div key={item.id} className={`text-sm bg-white p-4 rounded-xl border-2 transition-all shadow-sm ${
+                              <div key={item.id} className={`text-xs bg-white p-2 rounded-lg border transition-all ${
                                 state?.saved ? 'border-green-300 bg-green-50/30' : 
-                                hasCost ? 'border-blue-300 bg-blue-50/30' : 'border-orange-300 bg-orange-50/30'
+                                hasCost ? 'border-blue-200' : 'border-orange-200 bg-orange-50/20'
                               }`}>
-                                {/* Product name and quantity */}
-                                <div className="flex items-center justify-between mb-2">
-                                  <div className="flex-1 flex items-center gap-2">
+                                {/* Product name and price row */}
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <div className="flex-1 flex items-center gap-1.5 min-w-0">
                                     {state?.isReady && (
-                                      <span className="inline-flex items-center justify-center w-5 h-5 bg-green-500 text-white rounded-full" title="יצא להכנה">
-                                        <Check className="w-3 h-3" />
+                                      <span title="יצא להכנה">
+                                        <Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
                                       </span>
                                     )}
-                                    <span className="font-medium text-gray-900">{item.name}</span>
-                                    <span className="text-gray-400 mr-2">x{item.quantity}</span>
+                                    <span className="font-medium text-gray-900 truncate">{item.name}</span>
+                                    <span className="text-gray-400 flex-shrink-0">x{item.quantity}</span>
                                     {!hasCost && (
-                                      <span className="text-xs text-orange-500 mr-2">⚠️ חסרה עלות</span>
+                                      <span className="text-orange-500 flex-shrink-0">⚠️</span>
                                     )}
+                                  </div>
+                                  <div className="text-left flex-shrink-0 mr-2">
+                                    <span className="font-semibold text-gray-900">{formatCurrency(parseFloat(item.total))}</span>
+                                    {itemProfit !== null && (
+                                      <span className={`text-xs block ${itemProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        רווח: {formatCurrency(itemProfit)}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="text-left">
-                                  <span className="font-medium text-gray-900">{formatCurrency(parseFloat(item.total))}</span>
-                                  {itemProfit !== null && (
-                                    <span className={`text-xs block ${itemProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                      רווח: {formatCurrency(itemProfit)}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
                               
                               {/* Variations */}
                               {getItemVariations(item).length > 0 && (
-                                <div className="flex flex-wrap gap-1 mb-2">
+                                <div className="flex flex-wrap gap-1 mb-1.5">
                                   {getItemVariations(item).map((variation, idx) => (
                                     <span 
                                       key={idx} 
-                                      className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full"
+                                      className="text-xs bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded"
                                     >
                                       {variation}
                                     </span>
@@ -880,11 +911,11 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
                                 </div>
                               )}
                               
-                              {/* Cost input row */}
-                              <div className="flex items-center gap-2 flex-wrap bg-gray-50 p-2 rounded-lg">
-                                {/* Supplier select with add button */}
+                              {/* Cost inputs - single compact row */}
+                              <div className="flex items-center gap-2 flex-wrap bg-gray-50 p-1.5 rounded border border-gray-100">
+                                {/* Supplier */}
                                 <div className="flex items-center gap-1">
-                                  <Building2 className="w-4 h-4 text-gray-400" />
+                                  <Building2 className="w-3.5 h-3.5 text-gray-400" />
                                   {suppliers.length > 0 ? (
                                     <select
                                       value={state?.supplierId || state?.supplier || ''}
@@ -892,118 +923,114 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
                                         const selectedSupplier = suppliers.find(s => s.id === e.target.value || s.name === e.target.value);
                                         handleSupplierChange(order.id, item.id, selectedSupplier?.name || '', selectedSupplier?.id || '', item);
                                       }}
-                                      className="px-2 py-1.5 text-sm border border-gray-300 rounded bg-white min-w-[100px]"
+                                      className="px-1.5 py-1 text-xs border border-gray-200 rounded bg-white w-24"
                                     >
-                                      <option value="">בחר ספק</option>
+                                      <option value="">ספק</option>
                                       {suppliers.map(s => (
                                         <option key={s.id} value={s.id}>{s.name}</option>
                                       ))}
                                     </select>
-                                  ) : (
-                                    <span className="text-sm text-gray-400">אין ספקים</span>
-                                  )}
+                                  ) : null}
                                   <button
                                     type="button"
                                     onClick={() => setShowAddSupplier(true)}
-                                    className="p-1 text-blue-600 hover:bg-blue-100 rounded transition-colors"
-                                    title="הוסף ספק חדש"
+                                    className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                    title="הוסף ספק"
                                   >
-                                    <Plus className="w-4 h-4" />
+                                    <Plus className="w-3 h-3" />
                                   </button>
                                 </div>
                                 
                                 {/* Cost input */}
                                 <div className="flex items-center gap-1">
-                                  <span className="text-sm text-gray-600">עלות:</span>
+                                  <span className="text-xs text-gray-500">עלות:</span>
                                   <input
                                     type="number"
                                     value={state?.cost || ''}
                                     onChange={(e) => handleCostChange(order.id, item.id, e.target.value)}
                                     placeholder="0"
-                                    className={`w-20 px-2 py-1.5 text-sm border-2 rounded text-center font-medium ${
+                                    className={`w-16 px-1.5 py-1 text-xs border rounded text-center font-medium ${
                                       state?.isDefault ? 'border-blue-300 bg-blue-50 text-blue-700' : 
                                       state?.saved ? 'border-green-300 bg-green-50 text-green-700' : 
-                                      'border-gray-300 focus:border-blue-500'
+                                      'border-gray-200'
                                     }`}
                                   />
-                                  <span className="text-gray-400">₪</span>
+                                  <span className="text-gray-400 text-xs">₪</span>
                                 </div>
 
-                                {/* Quantity input */}
+                                {/* Quantity */}
                                 <div className="flex items-center gap-1">
-                                  <span className="text-sm text-gray-600">×</span>
+                                  <span className="text-gray-400">×</span>
                                   <input
                                     type="number"
                                     min="1"
                                     value={state?.quantity || '1'}
                                     onChange={(e) => handleQuantityChange(order.id, item.id, e.target.value)}
-                                    className="w-14 px-2 py-1.5 text-sm border-2 border-gray-300 rounded text-center font-medium focus:border-blue-500"
+                                    className="w-10 px-1 py-1 text-xs border border-gray-200 rounded text-center font-medium"
                                   />
                                 </div>
 
-                                {/* Total cost display */}
+                                {/* Total if qty > 1 */}
                                 {state?.cost && parseFloat(state.quantity || '1') > 1 && (
-                                  <div className="flex items-center gap-1 text-sm text-gray-600">
-                                    <span>=</span>
-                                    <span className="font-medium text-gray-800">
-                                      {formatCurrency((parseFloat(state.cost) || 0) * (parseFloat(state.quantity) || 1))}
-                                    </span>
-                                  </div>
+                                  <span className="text-xs text-gray-600 font-medium">
+                                    = {formatCurrency((parseFloat(state.cost) || 0) * (parseFloat(state.quantity) || 1))}
+                                  </span>
                                 )}
                                 
-                                {/* Shipping cost input - only when manual shipping is enabled */}
+                                {/* Shipping cost - only when manual shipping enabled */}
                                 {manualShippingPerItem && (
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-sm text-gray-600">משלוח:</span>
+                                  <div className="flex items-center gap-1 border-r border-gray-200 pr-2">
+                                    <Truck className="w-3.5 h-3.5 text-orange-400" />
                                     <input
                                       type="number"
                                       value={state?.shippingCost || ''}
                                       onChange={(e) => handleShippingCostChange(order.id, item.id, e.target.value)}
                                       placeholder="0"
-                                      className="w-20 px-2 py-1.5 text-sm border-2 border-orange-300 rounded text-center font-medium bg-orange-50 text-orange-700 focus:border-orange-500"
+                                      className="w-14 px-1.5 py-1 text-xs border border-orange-200 rounded text-center font-medium bg-orange-50 text-orange-700"
                                     />
-                                    <span className="text-gray-400">₪</span>
+                                    {addVatToShipping && state?.shippingCost && parseFloat(state.shippingCost) > 0 && (
+                                      <span className="text-xs text-orange-600">
+                                        (+מע״מ: {formatCurrency(parseFloat(state.shippingCost) * (1 + vatRate / 100))})
+                                      </span>
+                                    )}
                                   </div>
                                 )}
                                 
                                 {/* Action buttons */}
                                 <div className="flex items-center gap-1 mr-auto">
-                                  {/* Save button */}
                                   <button
                                     onClick={() => saveCost(order, item, false)}
                                     disabled={!state?.cost || state?.saving}
-                                    className={`flex items-center gap-1 px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
                                       state?.saved 
-                                        ? 'bg-green-100 text-green-700' 
-                                        : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                        ? 'bg-green-500 text-white' 
+                                        : 'bg-blue-500 text-white hover:bg-blue-600'
                                     } disabled:opacity-50 disabled:cursor-not-allowed`}
-                                    title="שמור עלות להזמנה זו"
                                   >
                                     {state?.saving ? (
-                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                      <Loader2 className="w-3 h-3 animate-spin" />
                                     ) : state?.saved ? (
                                       <>
-                                        <Check className="w-4 h-4" />
+                                        <Check className="w-3 h-3" />
                                         נשמר
                                       </>
                                     ) : (
                                       <>
-                                        <Save className="w-4 h-4" />
+                                        <Save className="w-3 h-3" />
                                         שמור
                                       </>
                                     )}
                                   </button>
 
-                                  {/* Save as default button - always show when there's a cost */}
                                   {state?.cost && (
                                     <button
                                       onClick={() => saveCost(order, item, true)}
                                       disabled={state?.saving}
-                                      className="flex items-center gap-1 px-3 py-1.5 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors text-sm font-medium"
-                                      title="שמור כברירת מחדל - יחול על כל ההזמנות העתידיות"
+                                      className="flex items-center gap-1 px-2 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 text-xs font-medium"
+                                      title="שמור כברירת מחדל"
                                     >
-                                      <Star className="w-4 h-4" />
-                                      שמור כברירת מחדל
+                                      <Star className="w-3 h-3" />
+                                      ברירת מחדל
                                     </button>
                                   )}
                                 </div>
@@ -1012,10 +1039,10 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
                               {/* Status indicator */}
                               {state?.isDefault && (
                                 <div className={`text-xs mt-1 flex items-center gap-1 ${state.isVariationCost ? 'text-purple-600' : 'text-blue-600'}`}>
-                                  <Star className="w-3 h-3" />
+                                  <Star className="w-2.5 h-2.5" />
                                   {state.isVariationCost 
-                                    ? `עלות לוריאציה זו${state.supplier ? ` מספק: ${state.supplier}` : ''} - לחץ "שמור" לאשר`
-                                    : 'עלות ברירת מחדל - לחץ "שמור" כדי לאשר להזמנה זו'
+                                    ? `עלות וריאציה${state.supplier ? ` (${state.supplier})` : ''}`
+                                    : 'ברירת מחדל - לחץ שמור לאישור'
                                   }
                                 </div>
                               )}
@@ -1025,9 +1052,9 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
                           
                           {/* Shipping total */}
                           {parseFloat(order.shipping_total) > 0 && (
-                            <div className="flex justify-between text-sm text-gray-500 pt-3 mt-3 border-t border-gray-200 bg-white rounded-lg p-3">
-                              <span className="font-medium">עלות משלוח (מהאתר)</span>
-                              <span className="font-bold">{formatCurrency(parseFloat(order.shipping_total))}</span>
+                            <div className="flex justify-between text-xs text-gray-500 pt-2 mt-2 border-t border-gray-100">
+                              <span>משלוח (מהאתר)</span>
+                              <span className="font-medium">{formatCurrency(parseFloat(order.shipping_total))}</span>
                             </div>
                           )}
                         </div>
@@ -1040,19 +1067,26 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
           )}
         </div>
 
-        {/* Footer */}
-        <div className="border-t p-4 bg-gray-50 rounded-b-2xl">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-500">
-              <span>מציג {orders.length} הזמנות</span>
+        {/* Footer - Fixed at bottom */}
+        <div className="border-t border-gray-200 px-4 py-2 bg-white shadow-sm">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-4 text-xs text-gray-600">
+              <span className="flex items-center gap-1">
+                <Package className="w-3.5 h-3.5" />
+                {orders.length} הזמנות
+              </span>
               {hasAnyMissingCosts && (
-                <span className="text-yellow-600 mr-2">* חסרות עלויות לחלק מהמוצרים</span>
+                <span className="flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded">
+                  <AlertCircle className="w-3 h-3" />
+                  חסרות עלויות
+                </span>
               )}
             </div>
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
+              className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-xs font-medium flex items-center gap-1"
             >
+              <X className="w-3 h-3" />
               סגור
             </button>
           </div>
@@ -1063,9 +1097,9 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
       {showAddSupplier && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/30" onClick={() => setShowAddSupplier(false)} />
-          <div className="relative bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm" dir="rtl">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-blue-600" />
+          <div className="relative bg-white rounded-lg shadow-xl p-4 w-full max-w-xs" dir="rtl">
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
+              <Building2 className="w-4 h-4 text-blue-600" />
               הוסף ספק חדש
             </h3>
             <input
@@ -1073,7 +1107,7 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
               value={newSupplierName}
               onChange={(e) => setNewSupplierName(e.target.value)}
               placeholder="שם הספק"
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none mb-4"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:border-blue-500 outline-none mb-3"
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && newSupplierName.trim()) {
@@ -1090,7 +1124,7 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
                   setShowAddSupplier(false);
                   setNewSupplierName('');
                 }}
-                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded transition-colors"
               >
                 ביטול
               </button>
@@ -1098,16 +1132,16 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
                 type="button"
                 onClick={handleAddSupplier}
                 disabled={!newSupplierName.trim() || addingSupplier}
-                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-3 py-1.5 text-xs bg-blue-600 text-white hover:bg-blue-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
               >
                 {addingSupplier ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="w-3 h-3 animate-spin" />
                     מוסיף...
                   </>
                 ) : (
                   <>
-                    <Plus className="w-4 h-4" />
+                    <Plus className="w-3 h-3" />
                     הוסף
                   </>
                 )}

@@ -197,8 +197,11 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
       const dailyEmpCost = employeesJson.dailyCost || 0;
       setEmployeeDailyCost(dailyEmpCost);
       
-      // Get costs by date
+      // Get costs by date (materials)
       const costsByDate: Record<string, number> = costsJson.costsByDate || {};
+      
+      // Get shipping by date (from order_item_costs - stored without VAT)
+      const shippingByDate: Record<string, number> = costsJson.shippingByDate || {};
       
       // Get refunds by date
       const refundsByDate: Record<string, number> = refundsJson.refundsByDate || {};
@@ -231,15 +234,23 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
           const dayExpenses = expensesByDate[dateStr] || { vat: 0, vatAmount: 0, noVat: 0 };
           const dayRefunds = refundsByDate[dateStr] || 0;
           
+          // Use manual shipping from order_item_costs if available, otherwise use existing
+          const manualShipping = shippingByDate[dateStr] || 0;
+          
           if (existing) {
             // Recalculate totals with real materials cost and expenses
             // VAT calculation: revenue VAT - deductible VAT from all sources
             const revenueVat = existing.vat || 0;
-            const shippingCost = existing.shippingCost || 0;
+            
+            // If we have manual shipping from order_item_costs, use it (stored without VAT, add VAT)
+            // Manual shipping is entered without VAT, so we add VAT here
+            const vatRate = 17;
+            const shippingCost = manualShipping > 0 
+              ? manualShipping * (1 + vatRate / 100)  // Add VAT to manual shipping
+              : (existing.shippingCost || 0);         // Use existing shipping (already includes VAT)
             
             // Calculate VAT from shipping and materials (they include VAT)
             // Formula: amount * (vatRate / (100 + vatRate)) where vatRate = 17%
-            const vatRate = 17;
             const shippingVat = shippingCost * (vatRate / (100 + vatRate));
             const materialsVat = materialsCost * (vatRate / (100 + vatRate));
             
@@ -263,6 +274,7 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
             
             return {
               ...existing,
+              shippingCost,
               materialsCost,
               vat: netVat,
               totalExpenses,

@@ -5,20 +5,27 @@ export const dynamic = 'force-dynamic';
 
 // Helper function to update daily materials cost from order item costs
 async function updateDailyMaterialsCost(orderDate: string, businessId: string) {
+  console.log(`🔧 updateDailyMaterialsCost called: date=${orderDate}, businessId=${businessId}`);
   try {
     // Get all item costs for orders on this date (including quantity)
-    const { data: itemCosts } = await supabase
+    const { data: itemCosts, error: fetchError } = await supabase
       .from(TABLES.ORDER_ITEM_COSTS)
       .select('item_cost, quantity')
       .eq('order_date', orderDate)
       .eq('business_id', businessId);
     
+    console.log(`📦 Found ${itemCosts?.length || 0} item costs for date ${orderDate}`, itemCosts);
+    if (fetchError) console.error('Error fetching item costs:', fetchError);
+    
     // Calculate total: item_cost * quantity for each item
     const totalMaterialsCost = itemCosts?.reduce((sum, item) => {
       const cost = parseFloat(item.item_cost) || 0;
       const qty = item.quantity || 1;
+      console.log(`  - Item: cost=${cost}, qty=${qty}, subtotal=${cost * qty}`);
       return sum + (cost * qty);
     }, 0) || 0;
+    
+    console.log(`💰 Total materials cost: ${totalMaterialsCost}`);
     
     // Get existing daily data
     const { data: existingDaily } = await supabase
@@ -44,7 +51,7 @@ async function updateDailyMaterialsCost(orderDate: string, businessId: string) {
       const roi = revenue > 0 ? (profit / revenue) * 100 : (profit < 0 ? -100 : 0);
       
       // Update daily data
-      await supabase
+      const { error: updateError } = await supabase
         .from(TABLES.DAILY_DATA)
         .update({
           materials_cost: totalMaterialsCost,
@@ -55,7 +62,13 @@ async function updateDailyMaterialsCost(orderDate: string, businessId: string) {
         })
         .eq('id', existingDaily.id);
       
-      console.log(`Updated daily materials cost for ${orderDate}: ${totalMaterialsCost}`);
+      if (updateError) {
+        console.error(`❌ Failed to update daily data:`, updateError);
+      } else {
+        console.log(`✅ Updated daily materials cost for ${orderDate}: ${totalMaterialsCost}`);
+      }
+    } else {
+      console.log(`⚠️ No daily data found for ${orderDate}`);
     }
   } catch (error) {
     console.error('Error updating daily materials cost:', error);
