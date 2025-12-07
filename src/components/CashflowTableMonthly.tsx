@@ -117,6 +117,9 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
   
   // Employee daily cost
   const [employeeDailyCost, setEmployeeDailyCost] = useState(0);
+  
+  // VAT rate from business settings
+  const [vatRate, setVatRate] = useState(18); // Default 18%
 
   // Load visible columns from localStorage
   useEffect(() => {
@@ -178,13 +181,14 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
     try {
       if (showLoading) setLoading(true);
       
-      // Fetch cashflow data, daily costs, expenses, employee cost, and refunds in parallel
-      const [cashflowRes, costsRes, expensesRes, employeesRes, refundsRes] = await Promise.all([
+      // Fetch cashflow data, daily costs, expenses, employee cost, refunds, and business settings in parallel
+      const [cashflowRes, costsRes, expensesRes, employeesRes, refundsRes, settingsRes] = await Promise.all([
         fetch(`/api/cashflow?${buildQueryParams({ start: startDate, end: endDate })}`),
         fetch(`/api/daily-costs?${buildQueryParams({ startDate, endDate })}`),
         fetch(`/api/expenses?${buildQueryParams({ startDate, endDate })}`),
         fetch(`/api/employees?${buildQueryParams({ month: String(month + 1), year: String(year) })}`),
         fetch(`/api/refunds?${buildQueryParams({ startDate, endDate })}`),
+        fetch(`/api/business-settings?${buildQueryParams({})}`),
       ]);
       
       const cashflowJson = await cashflowRes.json();
@@ -192,6 +196,11 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
       const expensesJson = await expensesRes.json();
       const employeesJson = await employeesRes.json();
       const refundsJson = await refundsRes.json();
+      const settingsJson = await settingsRes.json();
+      
+      // Get VAT rate from business settings
+      const businessVatRate = parseFloat(settingsJson.vatRate) || 18;
+      setVatRate(businessVatRate);
       
       // Get employee daily cost
       const dailyEmpCost = employeesJson.dailyCost || 0;
@@ -244,15 +253,15 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
             
             // If we have manual shipping from order_item_costs, use it (stored without VAT, add VAT)
             // Manual shipping is entered without VAT, so we add VAT here
-            const vatRate = 17;
+            // Using businessVatRate from settings (default 18%)
             const shippingCost = manualShipping > 0 
-              ? manualShipping * (1 + vatRate / 100)  // Add VAT to manual shipping
+              ? manualShipping * (1 + businessVatRate / 100)  // Add VAT to manual shipping
               : (existing.shippingCost || 0);         // Use existing shipping (already includes VAT)
             
             // Calculate VAT from shipping and materials (they include VAT)
-            // Formula: amount * (vatRate / (100 + vatRate)) where vatRate = 17%
-            const shippingVat = shippingCost * (vatRate / (100 + vatRate));
-            const materialsVat = materialsCost * (vatRate / (100 + vatRate));
+            // Formula: amount * (vatRate / (100 + vatRate))
+            const shippingVat = shippingCost * (businessVatRate / (100 + businessVatRate));
+            const materialsVat = materialsCost * (businessVatRate / (100 + businessVatRate));
             
             // Total deductible VAT = expenses VAT + shipping VAT + materials VAT
             const totalDeductibleVat = dayExpenses.vatAmount + shippingVat + materialsVat;

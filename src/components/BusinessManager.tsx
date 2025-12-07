@@ -69,7 +69,7 @@ export default function BusinessManager({ isOpen, onClose }: BusinessManagerProp
             wooUrl: settings.woo_url || '',
             consumerKey: settings.consumer_key || '',
             consumerSecret: settings.consumer_secret || '',
-            vatRate: String(settings.vat_rate || 17),
+            vatRate: String(settings.vat_rate || 18),
             shippingCostPerOrder: String(settings.shipping_cost || 0),
             creditCardFeePercent: String(settings.credit_card_rate || 1.5),
             validOrderStatuses: settings.valid_order_statuses || ['completed', 'processing'],
@@ -172,7 +172,7 @@ export default function BusinessManager({ isOpen, onClose }: BusinessManagerProp
             woo_url: newBusiness.wooUrl || null,
             consumer_key: newBusiness.consumerKey || null,
             consumer_secret: newBusiness.consumerSecret || null,
-            vat_rate: 17,
+            vat_rate: 18,
             shipping_cost: 0,
             credit_card_rate: 1.5,
             materials_rate: 30,
@@ -209,7 +209,7 @@ export default function BusinessManager({ isOpen, onClose }: BusinessManagerProp
           woo_url: settings.wooUrl || null,
           consumer_key: settings.consumerKey || null,
           consumer_secret: settings.consumerSecret || null,
-          vat_rate: parseFloat(settings.vatRate || '17'),
+          vat_rate: parseFloat(settings.vatRate || '18'),
           shipping_cost: parseFloat(settings.shippingCostPerOrder || '0'),
           credit_card_rate: parseFloat(settings.creditCardFeePercent || '1.5'),
           valid_order_statuses: settings.validOrderStatuses || ['completed', 'processing'],
@@ -482,7 +482,7 @@ export default function BusinessManager({ isOpen, onClose }: BusinessManagerProp
                           <label className="block text-xs text-gray-500 mb-1">אחוז מע"מ</label>
                           <input
                             type="number"
-                            value={selectedBusiness.settings?.vatRate || '17'}
+                            value={selectedBusiness.settings?.vatRate || '18'}
                             onChange={(e) => setSelectedBusiness({
                               ...selectedBusiness,
                               settings: { ...selectedBusiness.settings, vatRate: e.target.value }

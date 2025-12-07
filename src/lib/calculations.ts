@@ -1,6 +1,6 @@
 import { DailyData } from '@/types';
 
-const VAT_RATE = 0.17; // 17% מע"מ
+const VAT_RATE = 0.18; // 18% מע"מ
 const CREDIT_CARD_FEE_RATE = 0.025; // 2.5% עמלת אשראי
 const DEFAULT_MATERIALS_RATE = 0.30; // 30% עלות חומרי גלם
 

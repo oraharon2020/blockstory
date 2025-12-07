@@ -34,7 +34,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
   const [showAddForm, setShowAddForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copying, setCopying] = useState(false);
-  const [vatRate, setVatRate] = useState(17); // Default 17%
+  const [vatRate, setVatRate] = useState(18); // Default 18%
   const [newExpense, setNewExpense] = useState({
     expense_date: '',
     description: '',
@@ -66,7 +66,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
           return acc;
         }, {});
         if (settings.vatRate) {
-          setVatRate(parseFloat(settings.vatRate) || 17);
+          setVatRate(parseFloat(settings.vatRate) || 18);
         }
       }
     } catch (error) {

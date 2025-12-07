@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     }
 
     const materialsRate = (parseFloat(settings.materialsRate) || 30) / 100;
-    const vatRate = (parseFloat(settings.vatRate) || 17) / 100;
+    const vatRate = (parseFloat(settings.vatRate) || 18) / 100;
     const creditCardRate = (parseFloat(settings.creditCardRate) || 2.5) / 100;
 
     // Handle different webhook topics
@@ -116,7 +116,7 @@ async function updateDailyData(
   settings: any
 ) {
   const materialsRate = (settings?.materialsRate || 30) / 100;
-  const vatRate = (settings?.vatRate || 17) / 100;
+  const vatRate = (settings?.vatRate || 18) / 100;
   const creditCardRate = (settings?.creditCardRate || 2.5) / 100;
 
   // Get current daily data
@@ -217,7 +217,7 @@ async function recalculateDayFromWooCommerce(date: string, settings: any) {
     }
 
     const materialsRate = (settings?.materialsRate || 30) / 100;
-    const vatRate = (settings?.vatRate || 17) / 100;
+    const vatRate = (settings?.vatRate || 18) / 100;
     const creditCardRate = (settings?.creditCardRate || 2.5) / 100;
 
     const materialsCost = totalRevenue * materialsRate;
