@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// PATCH - Update a specific order item (adjusted_cost, is_ready, notes)
+// PATCH - Update a specific order item (unit_cost, adjusted_cost, is_ready, notes, supplier_name)
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
@@ -131,13 +131,13 @@ export async function PATCH(request: NextRequest) {
       businessId, 
       orderId, 
       itemId,
-      adjusted_cost,
+      unit_cost,        // העלות הבסיסית - מסנכרנת לפופאפ בלוח התזרים
+      adjusted_cost,    // עלות מותאמת (אופציונלי)
       is_ready,
       notes,
       product_name,
       product_id,
       supplier_name,
-      unit_cost,
       quantity,
       order_date
     } = body;
@@ -163,6 +163,10 @@ export async function PATCH(request: NextRequest) {
         updated_at: new Date().toISOString(),
       };
 
+      // Update item_cost (syncs with OrdersModal popup)
+      if (unit_cost !== undefined) {
+        updateData.item_cost = unit_cost;
+      }
       if (adjusted_cost !== undefined) {
         updateData.adjusted_cost = adjusted_cost;
       }
@@ -171,6 +175,9 @@ export async function PATCH(request: NextRequest) {
       }
       if (notes !== undefined) {
         updateData.notes = notes;
+      }
+      if (supplier_name !== undefined) {
+        updateData.supplier_name = supplier_name;
       }
 
       const { data, error } = await supabase

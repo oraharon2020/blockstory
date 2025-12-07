@@ -50,9 +50,19 @@ export default function OrdersTable({
     const key = `${order.order_id}-${order.item_id}`;
     setSavingItem(key);
     
+    const newCost = parseFloat(editValues.cost) || 0;
+    
+    // Save unit_cost (syncs with OrdersModal popup) and adjusted_cost
     const success = await onUpdateOrder(order.order_id, order.item_id, {
-      adjusted_cost: parseFloat(editValues.cost) || null,
+      unit_cost: newCost,
+      adjusted_cost: newCost,
       notes: editValues.notes || null,
+      // Include required fields for insert
+      product_name: order.product_name,
+      product_id: order.product_id,
+      supplier_name: order.supplier_name,
+      quantity: order.quantity,
+      order_date: order.order_date,
     });
     
     if (success) {
