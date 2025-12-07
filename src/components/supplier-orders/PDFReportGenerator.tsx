@@ -255,7 +255,7 @@ const PDFDocument = ({ orders, selectedStatuses }: PDFReportGeneratorProps) => {
                         {item.is_ready ? '✓' : ''}
                       </Text>
                       <View style={styles.colProduct}>
-                        <Text style={styles.cellText}>{item.product_name || item.name || ''}</Text>
+                        <Text style={styles.cellText}>{item.product_name || ''}</Text>
                         {item.notes && <Text style={styles.cellTextSmall}>הערה: {item.notes}</Text>}
                       </View>
                       <Text style={[styles.cellText, styles.colQty]}>{item.quantity}</Text>
