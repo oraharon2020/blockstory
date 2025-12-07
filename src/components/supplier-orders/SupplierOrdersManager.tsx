@@ -62,6 +62,8 @@ export default function SupplierOrdersManager({ businessId }: SupplierOrdersMana
   const [searchTerm, setSearchTerm] = useState('');
   const [showReadyOnly, setShowReadyOnly] = useState(false);
   const [showNotReadyOnly, setShowNotReadyOnly] = useState(false);
+  const [statusSearchTerm, setStatusSearchTerm] = useState(''); // חיפוש סטטוסים
+  const [orderIdsFilter, setOrderIdsFilter] = useState(''); // פילטר מספרי הזמנות
   
   // Dropdowns
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
@@ -77,15 +79,26 @@ export default function SupplierOrdersManager({ businessId }: SupplierOrdersMana
     loadSuppliers();
   }, [businessId]);
 
-  // Load orders when status selection changes
+  // Load orders when status selection changes OR when loading by order IDs
   useEffect(() => {
-    if (selectedStatuses.length > 0) {
+    if (selectedStatuses.length > 0 && !orderIdsFilter.trim()) {
       loadOrders();
-    } else {
+    } else if (!orderIdsFilter.trim()) {
       setOrders([]);
       setFilteredOrders([]);
     }
   }, [selectedStatuses, businessId]);
+
+  // Load orders by IDs when orderIdsFilter changes (debounced)
+  useEffect(() => {
+    if (!orderIdsFilter.trim()) return;
+    
+    const timeoutId = setTimeout(() => {
+      loadOrdersByIds();
+    }, 500); // Debounce 500ms
+    
+    return () => clearTimeout(timeoutId);
+  }, [orderIdsFilter, businessId]);
 
   // Filter orders locally when search/supplier/ready filters change
   useEffect(() => {
@@ -130,6 +143,32 @@ export default function SupplierOrdersManager({ businessId }: SupplierOrdersMana
       setOrders(json.data || []);
     } catch (error) {
       console.error('Error loading orders:', error);
+      setOrders([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadOrdersByIds = async () => {
+    const orderIds = orderIdsFilter
+      .split(/[\s,\n]+/)
+      .map(id => id.trim())
+      .filter(id => id.length > 0 && !isNaN(parseInt(id, 10)));
+    
+    if (orderIds.length === 0) return;
+    
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        businessId,
+        orderIds: orderIds.join(','),
+      });
+      
+      const res = await fetch(`/api/supplier-orders?${params.toString()}`);
+      const json = await res.json();
+      setOrders(json.data || []);
+    } catch (error) {
+      console.error('Error loading orders by IDs:', error);
       setOrders([]);
     } finally {
       setLoading(false);
@@ -290,27 +329,66 @@ export default function SupplierOrdersManager({ businessId }: SupplierOrdersMana
             </button>
             
             {showStatusDropdown && (
-              <div className="absolute z-20 mt-2 w-full md:w-96 bg-white border rounded-xl shadow-lg p-2 max-h-80 overflow-y-auto">
-                {orderStatuses.map(status => (
-                  <label
-                    key={status.slug}
-                    className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 rounded-lg cursor-pointer"
-                  >
+              <div className="absolute z-20 mt-2 w-full md:w-96 bg-white border rounded-xl shadow-lg max-h-96 overflow-hidden flex flex-col">
+                {/* Search box for statuses */}
+                <div className="p-2 border-b sticky top-0 bg-white">
+                  <div className="relative">
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
-                      type="checkbox"
-                      checked={selectedStatuses.includes(status.slug)}
-                      onChange={() => toggleStatus(status.slug)}
-                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      type="text"
+                      placeholder="חיפוש סטטוס..."
+                      value={statusSearchTerm}
+                      onChange={(e) => setStatusSearchTerm(e.target.value)}
+                      className="w-full pr-9 pl-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                      onClick={(e) => e.stopPropagation()}
                     />
-                    <span className={`px-2 py-1 rounded-lg text-sm ${getStatusColor(status.slug)}`}>
-                      {status.name}
-                    </span>
-                    {status.total !== undefined && (
-                      <span className="text-xs text-gray-400 mr-auto">({status.total})</span>
-                    )}
-                  </label>
-                ))}
-                <div className="border-t mt-2 pt-2 flex gap-2 sticky bottom-0 bg-white">
+                  </div>
+                </div>
+                
+                {/* Status list */}
+                <div className="overflow-y-auto flex-1 p-2">
+                  {orderStatuses
+                    .filter(status => {
+                      if (!statusSearchTerm) return true;
+                      const term = statusSearchTerm.toLowerCase();
+                      return status.name.toLowerCase().includes(term) || 
+                             status.slug.toLowerCase().includes(term) ||
+                             (status.name_en && status.name_en.toLowerCase().includes(term));
+                    })
+                    .map(status => (
+                    <label
+                      key={status.slug}
+                      className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 rounded-lg cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedStatuses.includes(status.slug)}
+                        onChange={() => toggleStatus(status.slug)}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className={`px-2 py-1 rounded-lg text-sm ${getStatusColor(status.slug)}`}>
+                        {status.name}
+                      </span>
+                      {status.total !== undefined && (
+                        <span className="text-xs text-gray-400 mr-auto">({status.total})</span>
+                      )}
+                    </label>
+                  ))}
+                  {orderStatuses.filter(status => {
+                    if (!statusSearchTerm) return true;
+                    const term = statusSearchTerm.toLowerCase();
+                    return status.name.toLowerCase().includes(term) || 
+                           status.slug.toLowerCase().includes(term) ||
+                           (status.name_en && status.name_en.toLowerCase().includes(term));
+                  }).length === 0 && (
+                    <div className="text-center py-4 text-gray-500 text-sm">
+                      לא נמצאו סטטוסים תואמים
+                    </div>
+                  )}
+                </div>
+                
+                {/* Actions */}
+                <div className="border-t p-2 flex gap-2 sticky bottom-0 bg-white">
                   <button
                     onClick={() => setSelectedStatuses(orderStatuses.map(s => s.slug))}
                     className="flex-1 px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded-lg"
@@ -330,7 +408,51 @@ export default function SupplierOrdersManager({ businessId }: SupplierOrdersMana
         )}
       </div>
 
-      {selectedStatuses.length > 0 && (
+      {/* Order IDs Filter - Independent of status selection */}
+      <div className="bg-white rounded-2xl shadow-sm border p-4">
+        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+          <div className="flex items-center gap-2 min-w-fit">
+            <Hash className="w-5 h-5 text-purple-500" />
+            <span className="font-medium text-gray-700">חיפוש לפי מספרי הזמנות:</span>
+          </div>
+          <div className="flex-1 w-full">
+            <textarea
+              placeholder="הזן מספרי הזמנות מופרדים בפסיק, רווח או שורה חדשה... (לדוגמה: 53866, 53865, 53864)"
+              value={orderIdsFilter}
+              onChange={(e) => {
+                setOrderIdsFilter(e.target.value);
+                // Clear status selection when using order IDs
+                if (e.target.value.trim()) {
+                  setSelectedStatuses([]);
+                }
+              }}
+              className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+              rows={2}
+            />
+          </div>
+          {orderIdsFilter && (
+            <button
+              onClick={() => setOrderIdsFilter('')}
+              className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl border border-gray-200"
+            >
+              נקה
+            </button>
+          )}
+        </div>
+        {orderIdsFilter && (
+          <div className="mt-2 text-sm text-purple-600 font-medium">
+            {(() => {
+              const ids = orderIdsFilter
+                .split(/[\s,\n]+/)
+                .map(id => id.trim())
+                .filter(id => id.length > 0 && !isNaN(parseInt(id, 10)));
+              return `מחפש ${ids.length} הזמנות...`;
+            })()}
+          </div>
+        )}
+      </div>
+
+      {(selectedStatuses.length > 0 || orderIdsFilter.trim()) && (
         <>
           {/* Secondary Filters */}
           <div className="bg-white rounded-2xl shadow-sm border p-4">

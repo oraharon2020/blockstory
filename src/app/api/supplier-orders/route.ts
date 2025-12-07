@@ -38,23 +38,41 @@ export async function GET(request: NextRequest) {
       version: 'wc/v3',
     });
 
-    // Fetch orders from WooCommerce
-    const statusArray = statuses ? statuses.split(',') : ['processing'];
-    
     const allOrders: any[] = [];
     
-    // Fetch orders for each status
-    for (const status of statusArray) {
-      try {
-        const response = await wooClient.get('orders', {
-          status: status,
-          per_page: 100,
-          orderby: 'date',
-          order: 'desc',
-        });
-        allOrders.push(...response.data);
-      } catch (e) {
-        console.error(`Error fetching orders with status ${status}:`, e);
+    // If orderIds are specified, fetch those specific orders
+    if (orderIds) {
+      const orderIdArray = orderIds.split(',').map(id => id.trim()).filter(id => id);
+      
+      // Fetch orders by ID (in batches to avoid too many requests)
+      for (const orderId of orderIdArray) {
+        try {
+          const response = await wooClient.get(`orders/${orderId}`);
+          if (response.data) {
+            allOrders.push(response.data);
+          }
+        } catch (e: any) {
+          // Order might not exist, skip
+          console.log(`Order ${orderId} not found or error:`, e.message);
+        }
+      }
+    } else {
+      // Fetch orders by status
+      const statusArray = statuses ? statuses.split(',') : ['processing'];
+      
+      // Fetch orders for each status
+      for (const status of statusArray) {
+        try {
+          const response = await wooClient.get('orders', {
+            status: status,
+            per_page: 100,
+            orderby: 'date',
+            order: 'desc',
+          });
+          allOrders.push(...response.data);
+        } catch (e) {
+          console.error(`Error fetching orders with status ${status}:`, e);
+        }
       }
     }
 
