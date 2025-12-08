@@ -103,7 +103,7 @@ function main() {
     'AND Impressions > 0'
   );
   
-  // Get search terms (top 100 by cost)
+  // Get search terms (will filter top 100 in code)
   var searchTermReport = AdsApp.report(
     'SELECT ' +
     'CampaignId, ' +
@@ -116,9 +116,7 @@ function main() {
     'FROM SEARCH_QUERY_PERFORMANCE_REPORT ' +
     'WHERE Date >= ' + formatDate(startDate) + ' ' +
     'AND Date <= ' + formatDate(endDate) + ' ' +
-    'AND Impressions > 0 ' +
-    'ORDER BY Cost DESC ' +
-    'LIMIT 100'
+    'AND Impressions > 0'
   );
   
   // Process campaign data by date
@@ -234,6 +232,11 @@ function main() {
   for (var date in dataByDate) {
     var dayData = dataByDate[date];
     
+    // Sort search terms by cost and take top 100
+    var topSearchTerms = dayData.searchTerms.sort(function(a, b) {
+      return b.cost - a.cost;
+    }).slice(0, 100);
+    
     var payload = {
       businessId: CONFIG.BUSINESS_ID,
       secretKey: CONFIG.SECRET_KEY,
@@ -247,7 +250,7 @@ function main() {
         campaigns: dayData.campaigns,
         adGroups: dayData.adGroups,
         keywords: dayData.keywords,
-        searchTerms: dayData.searchTerms
+        searchTerms: topSearchTerms
       }
     };
     
