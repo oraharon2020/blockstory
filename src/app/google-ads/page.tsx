@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/components/AuthProvider';
+import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import {
@@ -68,7 +68,7 @@ interface DailySummary {
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 export default function GoogleAdsPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, currentBusiness } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'overview' | 'campaigns' | 'keywords' | 'search-terms'>('overview');
   const [dateRange, setDateRange] = useState('30');
@@ -86,12 +86,14 @@ export default function GoogleAdsPage() {
   }, [user, loading, router]);
 
   useEffect(() => {
-    if (user) {
+    if (currentBusiness) {
       fetchData();
     }
-  }, [user, dateRange]);
+  }, [currentBusiness, dateRange]);
 
   const fetchData = async () => {
+    if (!currentBusiness) return;
+    
     setIsLoading(true);
     setError(null);
 
@@ -101,7 +103,7 @@ export default function GoogleAdsPage() {
       startDate.setDate(startDate.getDate() - parseInt(dateRange));
 
       const response = await fetch(
-        `/api/google-ads?startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}`
+        `/api/google-ads?businessId=${currentBusiness.id}&startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}`
       );
 
       if (!response.ok) {

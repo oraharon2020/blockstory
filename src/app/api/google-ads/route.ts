@@ -1,38 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
+interface KeywordData {
+  keyword: string;
+  match_type: string;
+  quality_score: number;
+  cost: number;
+  clicks: number;
+  impressions: number;
+  conversions: number;
+  ctr: number;
+  avg_cpc: number;
+  [key: string]: unknown;
+}
+
+interface SearchTermData {
+  query: string;
+  cost: number;
+  clicks: number;
+  impressions: number;
+  conversions: number;
+  [key: string]: unknown;
+}
+
 export async function GET(request: NextRequest) {
   try {
-    // Get authenticated user
-    const cookieStore = cookies();
-    const supabaseClient = createServerComponentClient({ cookies: () => cookieStore });
-    const { data: { user } } = await supabaseClient.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Get business ID
-    const { data: businessSettings } = await supabase
-      .from('business_settings')
-      .select('business_id')
-      .eq('user_id', user.id)
-      .single();
-
-    if (!businessSettings) {
-      return NextResponse.json({ error: 'Business not found' }, { status: 404 });
-    }
-
-    const businessId = businessSettings.business_id;
-
-    // Parse date range from query params
+    // Parse query params
     const searchParams = request.nextUrl.searchParams;
+    const businessId = searchParams.get('businessId');
     const startDate = searchParams.get('startDate') || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const endDate = searchParams.get('endDate') || new Date().toISOString().split('T')[0];
+
+    if (!businessId) {
+      return NextResponse.json({ error: 'Missing businessId' }, { status: 400 });
+    }
 
     // Fetch campaigns
     const { data: campaigns, error: campaignsError } = await supabase
@@ -106,8 +109,8 @@ export async function GET(request: NextRequest) {
     const dailySummary = Object.values(dailySummaryMap).sort((a, b) => a.date.localeCompare(b.date));
 
     // Aggregate keywords by keyword name
-    const keywordsMap: Record<string, typeof keywords[0]> = {};
-    (keywords || []).forEach(kw => {
+    const keywordsMap: Record<string, KeywordData> = {};
+    ((keywords || []) as KeywordData[]).forEach(kw => {
       const key = `${kw.keyword}_${kw.match_type}`;
       if (!keywordsMap[key]) {
         keywordsMap[key] = { ...kw, cost: 0, clicks: 0, impressions: 0, conversions: 0 };
@@ -119,8 +122,8 @@ export async function GET(request: NextRequest) {
     });
 
     // Aggregate search terms
-    const searchTermsMap: Record<string, typeof searchTerms[0]> = {};
-    (searchTerms || []).forEach(term => {
+    const searchTermsMap: Record<string, SearchTermData> = {};
+    ((searchTerms || []) as SearchTermData[]).forEach(term => {
       if (!searchTermsMap[term.query]) {
         searchTermsMap[term.query] = { ...term, cost: 0, clicks: 0, impressions: 0, conversions: 0 };
       }
