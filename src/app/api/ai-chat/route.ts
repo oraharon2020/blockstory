@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getFullBusinessData, formatFullDataForPrompt } from '@/lib/ai/dataContext';
+import { getFullBusinessData, formatFullDataForPrompt, getBusinessContext } from '@/lib/ai/dataContext';
 import Anthropic from '@anthropic-ai/sdk';
 
 export const dynamic = 'force-dynamic';

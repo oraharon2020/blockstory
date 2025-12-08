@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { businessId, name, salary, month, year, id } = body;
+    const { businessId, name, role, salary, month, year, id } = body;
 
     if (!businessId || !name || salary === undefined || !month || !year) {
       return NextResponse.json(
@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
         .from('employees')
         .update({
           name,
+          role: role || null,
           salary: parseFloat(salary) || 0,
           updated_at: new Date().toISOString(),
         })
@@ -95,6 +96,7 @@ export async function POST(request: NextRequest) {
         .insert({
           business_id: businessId,
           name,
+          role: role || null,
           salary: parseFloat(salary) || 0,
           month: parseInt(month),
           year: parseInt(year),
