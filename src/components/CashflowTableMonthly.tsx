@@ -374,8 +374,42 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
         });
         
         // Sort by date ascending (1st at top, 31st at bottom)
-        setData(dates.sort((a, b) => a.date.localeCompare(b.date)));
+        const sortedDates = dates.sort((a, b) => a.date.localeCompare(b.date));
+        setData(sortedDates);
         setLastUpdate(new Date());
+        
+        // Save calculated data back to DB for AI and other consumers
+        // Only update rows that have orders (revenue > 0) to avoid overwriting with empty data
+        if (currentBusiness?.id) {
+          const rowsToUpdate = sortedDates.filter(row => row.revenue > 0 || row.totalExpenses > 0);
+          for (const row of rowsToUpdate) {
+            fetch('/api/cashflow', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                date: row.date,
+                revenue: row.revenue,
+                ordersCount: row.ordersCount,
+                itemsCount: row.itemsCount || 0,
+                googleAdsCost: row.googleAdsCost,
+                facebookAdsCost: row.facebookAdsCost,
+                tiktokAdsCost: row.tiktokAdsCost,
+                shippingCost: row.shippingCost,
+                materialsCost: row.materialsCost,
+                creditCardFees: row.creditCardFees,
+                vat: row.vat,
+                employeeCost: row.employeeCost,
+                customerRefunds: row.customerRefunds,
+                expensesVat: row.expensesVat,
+                expensesNoVat: row.expensesNoVat,
+                totalExpenses: row.totalExpenses,
+                profit: row.profit,
+                roi: row.revenue > 0 ? (row.profit / row.revenue) * 100 : 0,
+                businessId: currentBusiness.id,
+              }),
+            }).catch(err => console.error('Error syncing row to DB:', err));
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching data:', error);

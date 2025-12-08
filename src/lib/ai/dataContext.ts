@@ -134,15 +134,27 @@ ${JSON.stringify(productCosts, null, 2)}
 ${JSON.stringify(settings, null, 2)}
 
 ═══════════════════════════════════════════════════════════════
-📋 מבנה הנתונים:
-- daily_cashflow: תאריך, הכנסות, הזמנות, עלויות פרסום (google_ads_cost, facebook_ads_cost, tiktok_ads_cost), עלות חומרים, משלוח, רווח
-- order_item_costs: פרטי כל פריט שנמכר - order_id, product_name, quantity, item_cost, item_price, order_date
-- expenses_vat: הוצאות מוכרות עם מע"מ - description, amount, expense_date, supplier_name, payment_method
-- expenses_no_vat: הוצאות חו"ל - description, amount, expense_date, supplier_name
-- customer_refunds: זיכויים - amount, refund_date, customer_name, reason
-- employees: name, role, monthly_cost, is_active
-- products: name, regular_price, cost_price (עלות)
-- product_costs: product_id, product_name, cost_price, supplier_name
+📋 מבנה הנתונים (שמות עמודות מדויקים!):
+
+- daily_cashflow: date, revenue (הכנסות), orders_count, items_count (מוצרים שנמכרו), google_ads_cost, facebook_ads_cost, tiktok_ads_cost, materials_cost (עלות חומרים), shipping_cost (משלוח), vat (מע"מ), credit_card_fees (עמלות), total_expenses (סה"כ הוצאות), profit (רווח), roi
+
+- order_item_costs: order_id, order_date, product_name, quantity (כמות), item_cost (עלות המוצר!), adjusted_cost, shipping_cost, supplier_name, variation_key
+  ⚠️ אין item_price! להכנסות השתמש ב-daily_cashflow.revenue
+
+- expenses_vat: expense_date, description, amount (סכום), vat_amount (סכום המע"מ), category, supplier_name, payment_method
+
+- expenses_no_vat: expense_date, description, amount, category, supplier_name, payment_method
+
+- customer_refunds: refund_date, amount, customer_name, reason, description, order_id
+
+- employees: name, role, salary (=משכורת חודשית!), month, year, notes
+  ⚠️ השתמש ב-salary ולא monthly_cost!
+
+- product_costs: product_id, product_name, sku, unit_cost (=עלות יחידה), supplier_name
+
+- business_settings: vat_rate, credit_card_rate, credit_fee_mode, expenses_spread_mode, shipping_cost, valid_order_statuses
+  ⚠️ שמות בsnake_case!
+
 ═══════════════════════════════════════════════════════════════
 `.trim();
 }

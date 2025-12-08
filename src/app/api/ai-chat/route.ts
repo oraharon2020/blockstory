@@ -1,52 +1,222 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getFullBusinessData, formatFullDataForPrompt, getBusinessContext } from '@/lib/ai/dataContext';
+import { supabase } from '@/lib/supabase';
 import Anthropic from '@anthropic-ai/sdk';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // Allow longer responses
+export const maxDuration = 60;
 
-// Initialize Anthropic (Claude)
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-// System prompt for Claude
-const SYSTEM_PROMPT = `אתה יועץ עסקי חכם ומומחה בניתוח נתונים פיננסיים בשם "בלוק". 
-אתה עוזר לבעלי עסקים להבין את הנתונים שלהם ומספק תובנות והמלצות.
+// Define the database query tool
+const tools: Anthropic.Tool[] = [
+  {
+    name: 'query_database',
+    description: `Query the business database. Available tables and their EXACT columns:
+    
+    - daily_cashflow: id, date, revenue, orders_count, items_count, google_ads_cost, facebook_ads_cost, tiktok_ads_cost, shipping_cost, materials_cost, credit_card_fees, vat, employee_cost (שכר עובדים יומי), refunds_amount (זיכויים), expenses_vat_amount (הוצאות מוכרות), expenses_no_vat_amount (הוצאות חו"ל), total_expenses, profit, roi, business_id, created_at, updated_at
+    
+    - order_item_costs: id, order_id, line_item_id, product_id, product_name, item_cost, quantity, adjusted_cost, shipping_cost, order_date, supplier_name, supplier_id, variation_key, variation_attributes, is_ready, notes, business_id, updated_at
+    (פרטי כל פריט שנמכר - שים לב: אין item_price, יש item_cost שזה עלות המוצר)
+    
+    - expenses_vat: id, expense_date, description, amount, vat_amount, category, supplier_name, payment_method, is_recurring, business_id, created_at
+    (הוצאות מוכרות עם מע"מ)
+    
+    - expenses_no_vat: id, expense_date, description, amount, category, supplier_name, payment_method, is_recurring, business_id, created_at
+    (הוצאות חו"ל/לא מוכרות)
+    
+    - customer_refunds: id, refund_date, description, amount, order_id, customer_name, reason, business_id, created_at, updated_at
+    (זיכויים/החזרים)
+    
+    - employees: id, name, role, salary (=משכורת חודשית), month, year, notes, business_id, created_at, updated_at
+    (עובדים - salary זו המשכורת החודשית)
+    
+    - product_costs: id, product_id, sku, product_name, unit_cost (=עלות יחידה), supplier_name, business_id, updated_at
+    (עלויות מוצרים - unit_cost היא עלות המוצר)
+    
+    - businesses: id, name, logo_url, is_active, created_at, created_by
+    (פרטי העסק)
+    
+    - business_settings: id, business_id, woo_url, consumer_key, consumer_secret, vat_rate, credit_card_rate, shipping_cost, materials_rate, valid_order_statuses, manual_shipping_per_item, charge_shipping_on_free_orders, free_shipping_methods, credit_fee_mode, expenses_spread_mode, created_at, updated_at
+    (הגדרות העסק - שים לב: snake_case!)
+    
+    IMPORTANT: Use EXACT column names as listed above!`,
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        table: {
+          type: 'string',
+          description: 'The table to query'
+        },
+        select: {
+          type: 'string',
+          description: 'Columns to select. Use * for all, or specific columns. Can include aggregations like SUM(), COUNT(), AVG()'
+        },
+        filters: {
+          type: 'object',
+          description: 'Filter conditions as key-value pairs. Example: {"date": "2025-12-01"} or use special keys like "date_gte" for >= , "date_lte" for <='
+        },
+        orderBy: {
+          type: 'object',
+          description: 'Order by column. Example: {"column": "date", "ascending": false}'
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of rows to return'
+        }
+      },
+      required: ['table', 'select']
+    }
+  }
+];
 
-הסגנון שלך:
-- אתה מדבר בעברית טבעית וזורמת, כמו חבר טוב שמבין בעסקים
-- אתה יכול להיות קצת יותר אישי ולהשתמש באימוג'ים כשמתאים
-- תן תשובות מפורטות כשצריך, אבל אל תמלמל סתם
-- אם משהו לא ברור לך, שאל
-- תמיד נסה לתת ערך מוסף - לא רק לחזור על המספרים, אלא לפרש אותם
+// Execute database query
+async function executeQuery(
+  businessId: string,
+  table: string,
+  select: string,
+  filters?: Record<string, any>,
+  orderBy?: { column: string; ascending?: boolean },
+  limit?: number
+): Promise<any> {
+  try {
+    let query = supabase.from(table).select(select);
+    
+    // Always filter by business_id (except for businesses table)
+    if (table !== 'businesses') {
+      query = query.eq('business_id', businessId);
+    } else {
+      query = query.eq('id', businessId);
+    }
+    
+    // Apply filters
+    if (filters) {
+      for (const [key, value] of Object.entries(filters)) {
+        if (key.endsWith('_gte')) {
+          query = query.gte(key.replace('_gte', ''), value);
+        } else if (key.endsWith('_lte')) {
+          query = query.lte(key.replace('_lte', ''), value);
+        } else if (key.endsWith('_gt')) {
+          query = query.gt(key.replace('_gt', ''), value);
+        } else if (key.endsWith('_lt')) {
+          query = query.lt(key.replace('_lt', ''), value);
+        } else if (key.endsWith('_neq')) {
+          query = query.neq(key.replace('_neq', ''), value);
+        } else if (key.endsWith('_like')) {
+          query = query.ilike(key.replace('_like', ''), `%${value}%`);
+        } else if (key.endsWith('_in') && Array.isArray(value)) {
+          query = query.in(key.replace('_in', ''), value);
+        } else {
+          query = query.eq(key, value);
+        }
+      }
+    }
+    
+    // Apply ordering
+    if (orderBy) {
+      query = query.order(orderBy.column, { ascending: orderBy.ascending ?? true });
+    }
+    
+    // Apply limit
+    if (limit) {
+      query = query.limit(limit);
+    }
+    
+    const { data, error } = await query;
+    
+    if (error) {
+      return { error: error.message, hint: 'Check column names and table structure' };
+    }
+    
+    return { 
+      data, 
+      rowCount: data?.length || 0,
+      query: { table, select, filters, orderBy, limit }
+    };
+  } catch (err: any) {
+    return { error: err.message };
+  }
+}
 
-אתה יכול:
-- לנתח הכנסות, הוצאות, רווחים ומגמות
-- להשוות תקופות ולזהות שינויים
-- להמליץ על דרכים לשפר את העסק
-- לענות על שאלות כלליות על עסקים, מיסים, שיווק וכו'
-- לחפש מידע באינטרנט כשצריך (מחירים, מתחרים, טרנדים)
+// Process tool calls
+async function processToolCall(
+  toolName: string,
+  toolInput: any,
+  businessId: string
+): Promise<string> {
+  if (toolName === 'query_database') {
+    const { table, select, filters, orderBy, limit } = toolInput;
+    const result = await executeQuery(businessId, table, select, filters, orderBy, limit);
+    return JSON.stringify(result, null, 2);
+  }
+  
+  return JSON.stringify({ error: 'Unknown tool' });
+}
 
-כשאתה מציג מספרים:
-- השתמש בסימן ₪ לשקלים
-- עגל מספרים גדולים (אלפים, מיליונים)
-- השתמש באחוזים להשוואות
+// System prompt
+const SYSTEM_PROMPT = `אתה יועץ עסקי מנוסה עם גישה מלאה לנתוני העסק.
 
-אם יש לך גישה לנתוני העסק, השתמש בהם. אם לא, תגיד שאתה צריך יותר מידע.`;
+הגישה שלך:
+- ישיר ותכליתי. לא חנפן, לא מחמיא סתם
+- אם משהו לא טוב בנתונים - אמור את זה ישר
+- תמיד בצד הלימוד - עזור להבין למה, לא רק מה
+- שאל שאלות חכמות שיגרמו לבעל העסק לחשוב
+- אם חסר מידע - תגיד, אל תמציא
+- דבר בגובה העיניים, כמו חבר שמבין בעסקים
+
+כשמציגים נתונים:
+- תן את המספרים ואז תסביר מה המשמעות
+- אם יש בעיה - הצע פתרון או שאל שאלה שתוביל לפתרון
+- השווה לתקופות קודמות כשרלוונטי
+- תן תובנות אקשנביליות, לא רק סטטיסטיקות
+
+מה לא לעשות:
+- לא להגיד "מעולה!" או "יופי!" על כל דבר
+- לא להתנצל יותר מדי
+- לא לחזור על מה שהמשתמש אמר
+- לא להוסיף אימוג'ים מיותרים בכל משפט
+
+טבלאות בדאטהבייס (שמות מדויקים!):
+
+daily_cashflow - תזרים יומי:
+  date, revenue, orders_count, items_count, profit, total_expenses,
+  google_ads_cost, facebook_ads_cost, tiktok_ads_cost,
+  shipping_cost, materials_cost, vat, credit_card_fees,
+  employee_cost, refunds_amount, expenses_vat_amount, expenses_no_vat_amount
+
+order_item_costs - מוצרים שנמכרו:
+  order_id, order_date, product_name, quantity, item_cost, shipping_cost, supplier_name
+
+expenses_vat - הוצאות מוכרות:
+  expense_date, description, amount, vat_amount, category, supplier_name
+
+expenses_no_vat - הוצאות חו"ל:
+  expense_date, description, amount, category, supplier_name
+
+customer_refunds - זיכויים:
+  refund_date, amount, customer_name, reason
+
+employees - עובדים:
+  name, role, salary (חודשי), month, year
+
+product_costs - עלויות מוצרים:
+  product_name, sku, unit_cost, supplier_name
+
+סינון תאריכים: {"date_gte": "2025-12-01", "date_lte": "2025-12-31"}
+
+אם צריך נתונים - השתמש בכלי query_database.`;
 
 interface ChatRequest {
   message: string;
   businessId: string;
-  timeframe?: string;
   conversationHistory?: Array<{role: 'user' | 'assistant'; content: string}>;
-  enableWebSearch?: boolean;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body: ChatRequest = await request.json();
-    const { message, businessId, timeframe = 'this_month', conversationHistory = [], enableWebSearch = true } = body;
+    const { message, businessId, conversationHistory = [] } = body;
 
     if (!businessId) {
       return NextResponse.json({ error: 'Missing businessId' }, { status: 400 });
@@ -56,7 +226,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing message' }, { status: 400 });
     }
 
-    // Check if API key is configured
     if (!process.env.ANTHROPIC_API_KEY) {
       return NextResponse.json({ 
         error: 'AI service not configured',
@@ -64,64 +233,89 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
 
-    // Always load full month data - let the AI figure out what the user is asking about
-    // Get business context/data
-    let contextPrompt = '';
-    let businessData = null;
-    
-    try {
-      // Get ALL business data - expenses, products, employees, everything
-      businessData = await getFullBusinessData(businessId);
-      contextPrompt = formatFullDataForPrompt(businessData);
-    } catch (err) {
-      console.error('Error fetching business context:', err);
-      contextPrompt = 'לא הצלחתי לטעון את נתוני העסק כרגע.';
-    }
+    // Get business name for context
+    const { data: businessData } = await supabase
+      .from('businesses')
+      .select('name')
+      .eq('id', businessId)
+      .single();
 
-    // Build messages array for Claude
+    const businessName = businessData?.name || 'העסק';
+
+    // Build messages
     const messages: Anthropic.MessageParam[] = [
-      // Include conversation history (last 20 messages for better context)
-      ...conversationHistory.slice(-20).map(msg => ({
+      ...conversationHistory.slice(-10).map(msg => ({
         role: msg.role as 'user' | 'assistant',
         content: msg.content
       })),
       { role: 'user', content: message }
     ];
 
-    // Full system with business data
-    const fullSystem = `${SYSTEM_PROMPT}
-
----
-נתוני העסק העדכניים:
-${contextPrompt}
----
-
-אם המשתמש שואל על משהו שלא קשור לנתונים (כמו עצות כלליות, שאלות על שיווק, מתחרים וכו'), אתה יכול לענות מהידע שלך או לציין שאתה צריך לחפש מידע עדכני.`;
-
-    // Call Claude API with web search capability
-    const response = await anthropic.messages.create({
+    // Initial API call with tools
+    let response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 2048,
-      system: fullSystem,
+      max_tokens: 4096,
+      system: `${SYSTEM_PROMPT}\n\nשם העסק: ${businessName}\nתאריך היום: ${new Date().toISOString().split('T')[0]}`,
+      tools,
       messages,
     });
 
-    // Extract text response
+    // Process tool calls iteratively (up to 10 iterations)
+    let iterations = 0;
+    while (response.stop_reason === 'tool_use' && iterations < 10) {
+      iterations++;
+      
+      const toolUseBlocks = response.content.filter(
+        (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use'
+      );
+
+      const toolResults: Anthropic.ToolResultBlockParam[] = [];
+
+      for (const toolUse of toolUseBlocks) {
+        console.log(`🔧 AI calling tool: ${toolUse.name}`, JSON.stringify(toolUse.input).substring(0, 200));
+        const result = await processToolCall(toolUse.name, toolUse.input, businessId);
+        console.log(`📊 Tool result rows: ${JSON.parse(result).rowCount || 0}`);
+        
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: toolUse.id,
+          content: result
+        });
+      }
+
+      // Continue the conversation with tool results
+      messages.push({
+        role: 'assistant',
+        content: response.content
+      });
+      messages.push({
+        role: 'user',
+        content: toolResults
+      });
+
+      // Get next response
+      response = await anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        system: `${SYSTEM_PROMPT}\n\nשם העסק: ${businessName}\nתאריך היום: ${new Date().toISOString().split('T')[0]}`,
+        tools,
+        messages,
+      });
+    }
+
+    // Extract final text response
     const textContent = response.content.find(block => block.type === 'text');
     const responseText = textContent?.type === 'text' ? textContent.text : 'מצטער, לא הצלחתי לעבד את השאלה';
 
     return NextResponse.json({
       response: responseText,
-      context: businessData ? {
-        businessName: businessData.business?.name,
-        period: businessData.thisMonth?.period,
-      } : null
+      context: { businessName },
+      toolCalls: iterations
     });
 
   } catch (error: any) {
     console.error('AI Chat error:', error);
     
-    // Handle specific errors
     if (error.message?.includes('API key') || error.message?.includes('authentication')) {
       return NextResponse.json({ 
         error: 'AI service not configured',
@@ -143,70 +337,10 @@ ${contextPrompt}
   }
 }
 
-// Detect timeframe from Hebrew text - be more careful with detection
-function detectTimeframe(message: string): string | null {
-  const lowerMessage = message.toLowerCase();
-  
-  // Check for specific date patterns first (like "היום הראשון", "ב-1 לחודש")
-  // If the message contains specific day references, let the AI handle it with full month data
-  if (lowerMessage.match(/יום ה?(ראשון|שני|שלישי|רביעי|חמישי|שישי|שבת) (ב|של)?חודש/) ||
-      lowerMessage.match(/ב-?\d+ (ל|ב)?חודש/) ||
-      lowerMessage.match(/היום ה(ראשון|אחרון)/) ||
-      lowerMessage.match(/תחילת (ה)?חודש/) ||
-      lowerMessage.match(/סוף (ה)?חודש/)) {
-    return 'this_month'; // Give full month data, let AI figure out specific day
-  }
-  
-  // Only match "היום" when it's standalone (not part of "היום הראשון" etc.)
-  if ((lowerMessage.includes('היום') && !lowerMessage.includes('היום ה')) || 
-      lowerMessage.includes('today')) {
-    return 'today';
-  }
-  if (lowerMessage.includes('אתמול') || lowerMessage.includes('yesterday')) {
-    return 'yesterday';
-  }
-  if (lowerMessage.includes('השבוע הזה') || lowerMessage.includes('השבוע') || lowerMessage.includes('this week')) {
-    return 'this_week';
-  }
-  if (lowerMessage.includes('שבוע שעבר') || lowerMessage.includes('last week')) {
-    return 'last_week';
-  }
-  if (lowerMessage.includes('החודש הזה') || lowerMessage.includes('החודש') || lowerMessage.includes('this month')) {
-    return 'this_month';
-  }
-  if (lowerMessage.includes('חודש שעבר') || lowerMessage.includes('last month')) {
-    return 'last_month';
-  }
-  if (lowerMessage.includes('השנה') || lowerMessage.includes('this year')) {
-    return 'this_year';
-  }
-  if (lowerMessage.includes('שנה שעברה') || lowerMessage.includes('last year')) {
-    return 'last_year';
-  }
-  
-  return null;
-}
-
-// GET endpoint to get business metrics without chat
+// GET endpoint for testing
 export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const businessId = searchParams.get('businessId');
-    const timeframe = searchParams.get('timeframe') || 'this_month';
-
-    if (!businessId) {
-      return NextResponse.json({ error: 'Missing businessId' }, { status: 400 });
-    }
-
-    const context = await getBusinessContext(businessId, timeframe);
-
-    return NextResponse.json({
-      success: true,
-      data: context
-    });
-
-  } catch (error: any) {
-    console.error('AI Context error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  return NextResponse.json({ 
+    status: 'AI Chat with Tool Use enabled',
+    tools: tools.map(t => t.name)
+  });
 }

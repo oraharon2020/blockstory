@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings, Save, Loader2, Eye, EyeOff, TestTube, Check, X, Store, Calculator, Package, HelpCircle, ListChecks, Truck, Webhook } from 'lucide-react';
+import { Settings, Save, Loader2, Eye, EyeOff, TestTube, Check, X, Store, Calculator, Package, HelpCircle, ListChecks, Truck, Webhook, BarChart3, Copy } from 'lucide-react';
 import ProductCostsManager from './ProductCostsManager';
 import OrderStatusSelector from './OrderStatusSelector';
 import { useAuth } from '@/contexts/AuthContext';
@@ -22,7 +22,7 @@ interface SettingsFormData {
   freeShippingMethods: string[];
 }
 
-type TabType = 'woocommerce' | 'business' | 'products' | 'webhook';
+type TabType = 'woocommerce' | 'business' | 'products' | 'webhook' | 'googleads';
 
 export default function SettingsPage() {
   const { currentBusiness } = useAuth();
@@ -166,6 +166,7 @@ export default function SettingsPage() {
     { id: 'woocommerce' as TabType, label: 'חיבור WooCommerce', icon: Store, color: 'purple' },
     { id: 'business' as TabType, label: 'פרמטרים עסקיים', icon: Calculator, color: 'green' },
     { id: 'products' as TabType, label: 'עלויות מוצרים', icon: Package, color: 'orange' },
+    { id: 'googleads' as TabType, label: 'Google Ads', icon: BarChart3, color: 'blue' },
     { id: 'webhook' as TabType, label: 'Webhook התראות', icon: Webhook, color: 'emerald' },
   ];
 
@@ -634,6 +635,11 @@ export default function SettingsPage() {
             </div>
           )}
 
+          {/* Google Ads Tab */}
+          {activeTab === 'googleads' && (
+            <GoogleAdsSetupTab businessId={currentBusiness?.id} />
+          )}
+
           {/* Webhook Tab */}
           {activeTab === 'webhook' && (
             <WebhookSetupTab />
@@ -844,6 +850,240 @@ function WebhookSetupTab() {
         <p className="text-xs text-gray-500 mt-3">
           💡 הזמנות עם סטטוס Cancelled, Refunded, Failed או Pending לא נספרות כהכנסה
         </p>
+      </div>
+    </div>
+  );
+}
+
+// Google Ads Setup Tab Component
+function GoogleAdsSetupTab({ businessId }: { businessId?: string }) {
+  const [webhookSecret, setWebhookSecret] = useState<string>('');
+  const [autoSync, setAutoSync] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const webhookUrl = typeof window !== 'undefined' 
+    ? `${window.location.origin}/api/webhook/google-ads`
+    : '';
+
+  useEffect(() => {
+    if (businessId) {
+      loadGoogleAdsSettings();
+    }
+  }, [businessId]);
+
+  const loadGoogleAdsSettings = async () => {
+    try {
+      const res = await fetch(`/api/business-settings?businessId=${businessId}`);
+      const json = await res.json();
+      if (json.data) {
+        setWebhookSecret(json.data.googleAdsWebhookSecret || generateSecret());
+        setAutoSync(json.data.googleAdsAutoSync ?? false);
+      } else {
+        setWebhookSecret(generateSecret());
+      }
+    } catch (error) {
+      console.error('Error loading Google Ads settings:', error);
+      setWebhookSecret(generateSecret());
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const generateSecret = () => {
+    return 'gads_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  };
+
+  const handleSave = async () => {
+    if (!businessId) return;
+    setSaving(true);
+    try {
+      await fetch('/api/business-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessId,
+          googleAdsWebhookSecret: webhookSecret,
+          googleAdsAutoSync: autoSync,
+        }),
+      });
+    } catch (error) {
+      console.error('Error saving Google Ads settings:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCopy = async (text: string, field: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(field);
+      setTimeout(() => setCopied(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  const regenerateSecret = () => {
+    setWebhookSecret(generateSecret());
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start gap-4 p-4 bg-blue-50 rounded-lg border border-blue-100">
+        <BarChart3 className="w-10 h-10 text-blue-600 flex-shrink-0" />
+        <div>
+          <h3 className="font-semibold text-blue-900">חיבור Google Ads</h3>
+          <p className="text-blue-700 text-sm">קבל נתוני פרסום אוטומטיים ישירות מגוגל אדס</p>
+        </div>
+      </div>
+
+      {/* Auto Sync Toggle */}
+      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+        <div>
+          <h4 className="font-medium text-gray-900">סנכרון אוטומטי</h4>
+          <p className="text-sm text-gray-500">עדכן את עמודת גוגל אדס אוטומטית מהנתונים שמתקבלים</p>
+        </div>
+        <button
+          onClick={() => setAutoSync(!autoSync)}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+            autoSync ? 'bg-blue-600' : 'bg-gray-300'
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+              autoSync ? 'translate-x-6' : 'translate-x-1'
+            }`}
+          />
+        </button>
+      </div>
+
+      {/* Setup Instructions */}
+      <div className="border rounded-lg p-4">
+        <h4 className="font-semibold text-gray-900 mb-4">הוראות הגדרה:</h4>
+        
+        <div className="space-y-4">
+          <div className="flex gap-3">
+            <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-medium">1</span>
+            <div>
+              <p className="font-medium text-gray-800">פתח את Google Ads</p>
+              <p className="text-sm text-gray-500">Tools & Settings → Scripts</p>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-medium">2</span>
+            <div>
+              <p className="font-medium text-gray-800">צור Script חדש</p>
+              <p className="text-sm text-gray-500">לחץ על + ליצירת script חדש</p>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-medium">3</span>
+            <div>
+              <p className="font-medium text-gray-800">העתק את הקוד</p>
+              <a 
+                href="/google-ads-script.js" 
+                target="_blank"
+                className="text-sm text-blue-600 hover:underline"
+              >
+                לחץ כאן להורדת הקוד →
+              </a>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-medium">4</span>
+            <div>
+              <p className="font-medium text-gray-800">עדכן את הפרמטרים בקוד:</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Parameters to copy */}
+        <div className="mt-4 space-y-3 bg-gray-50 p-4 rounded-lg">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">WEBHOOK_URL:</label>
+            <div className="flex gap-2">
+              <code className="flex-1 px-3 py-2 bg-white border rounded text-sm break-all">{webhookUrl}</code>
+              <button
+                onClick={() => handleCopy(webhookUrl, 'url')}
+                className={`px-3 py-2 rounded transition-colors ${
+                  copied === 'url' ? 'bg-green-100 text-green-700' : 'bg-gray-200 hover:bg-gray-300'
+                }`}
+              >
+                {copied === 'url' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">BUSINESS_ID:</label>
+            <div className="flex gap-2">
+              <code className="flex-1 px-3 py-2 bg-white border rounded text-sm break-all">{businessId}</code>
+              <button
+                onClick={() => handleCopy(businessId || '', 'business')}
+                className={`px-3 py-2 rounded transition-colors ${
+                  copied === 'business' ? 'bg-green-100 text-green-700' : 'bg-gray-200 hover:bg-gray-300'
+                }`}
+              >
+                {copied === 'business' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">SECRET_KEY:</label>
+            <div className="flex gap-2">
+              <code className="flex-1 px-3 py-2 bg-white border rounded text-sm break-all">{webhookSecret}</code>
+              <button
+                onClick={() => handleCopy(webhookSecret, 'secret')}
+                className={`px-3 py-2 rounded transition-colors ${
+                  copied === 'secret' ? 'bg-green-100 text-green-700' : 'bg-gray-200 hover:bg-gray-300'
+                }`}
+              >
+                {copied === 'secret' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
+            <button
+              onClick={regenerateSecret}
+              className="mt-1 text-xs text-blue-600 hover:underline"
+            >
+              יצירת מפתח חדש
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 flex gap-3">
+          <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-medium">5</span>
+          <div>
+            <p className="font-medium text-gray-800">הגדר תזמון</p>
+            <p className="text-sm text-gray-500">לחץ על ה-Script → Frequency → Daily (מומלץ בשעה 6:00 בבוקר)</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Save Button */}
+      <div className="flex justify-end">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+        >
+          {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+          שמירה
+        </button>
       </div>
     </div>
   );

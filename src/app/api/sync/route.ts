@@ -204,6 +204,93 @@ async function syncData(params: {
   const creditCardFees = calculateCreditCardFees(revenue);
   const vat = calculateVAT(revenue);
 
+  // ========== NEW: Calculate employee daily cost ==========
+  let employeeCost = 0;
+  if (businessId) {
+    const syncDate = new Date(date);
+    const syncMonth = syncDate.getMonth() + 1; // 1-12
+    const syncYear = syncDate.getFullYear();
+    const daysInMonth = new Date(syncYear, syncMonth, 0).getDate();
+    
+    const { data: employees } = await supabase
+      .from('employees')
+      .select('salary')
+      .eq('business_id', businessId)
+      .eq('month', syncMonth)
+      .eq('year', syncYear);
+    
+    if (employees && employees.length > 0) {
+      const totalMonthlySalary = employees.reduce((sum, emp) => sum + (parseFloat(emp.salary) || 0), 0);
+      employeeCost = totalMonthlySalary / daysInMonth;
+    }
+  }
+
+  // ========== NEW: Calculate refunds for this day ==========
+  let refundsAmount = 0;
+  if (businessId) {
+    const { data: refunds } = await supabase
+      .from('customer_refunds')
+      .select('amount')
+      .eq('business_id', businessId)
+      .eq('refund_date', date);
+    
+    if (refunds && refunds.length > 0) {
+      refundsAmount = refunds.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
+    }
+  }
+
+  // ========== NEW: Calculate expenses (VAT and No VAT) ==========
+  let expensesVatAmount = 0;
+  let expensesNoVatAmount = 0;
+  
+  if (businessId) {
+    const syncDate = new Date(date);
+    const syncMonth = syncDate.getMonth() + 1;
+    const syncYear = syncDate.getFullYear();
+    const daysInMonth = new Date(syncYear, syncMonth, 0).getDate();
+    const monthStart = `${syncYear}-${String(syncMonth).padStart(2, '0')}-01`;
+    const monthEnd = `${syncYear}-${String(syncMonth).padStart(2, '0')}-${daysInMonth}`;
+    
+    // Get expenses spread mode from settings
+    const { data: expenseSettings } = await supabase
+      .from('business_settings')
+      .select('expenses_spread_mode')
+      .eq('business_id', businessId)
+      .single();
+    
+    const spreadMode = expenseSettings?.expenses_spread_mode || 'exact';
+    
+    // Get expenses with VAT for this month
+    const { data: expensesVat } = await supabase
+      .from('expenses_vat')
+      .select('amount, expense_date')
+      .eq('business_id', businessId)
+      .gte('expense_date', monthStart)
+      .lte('expense_date', monthEnd);
+    
+    // Get expenses without VAT for this month
+    const { data: expensesNoVat } = await supabase
+      .from('expenses_no_vat')
+      .select('amount, expense_date')
+      .eq('business_id', businessId)
+      .gte('expense_date', monthStart)
+      .lte('expense_date', monthEnd);
+    
+    if (spreadMode === 'spread') {
+      // Spread all monthly expenses across all days
+      const totalVat = expensesVat?.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0) || 0;
+      const totalNoVat = expensesNoVat?.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0) || 0;
+      expensesVatAmount = totalVat / daysInMonth;
+      expensesNoVatAmount = totalNoVat / daysInMonth;
+    } else {
+      // Exact date mode - only count expenses from this specific date
+      expensesVatAmount = expensesVat?.filter(e => e.expense_date === date)
+        .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0) || 0;
+      expensesNoVatAmount = expensesNoVat?.filter(e => e.expense_date === date)
+        .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0) || 0;
+    }
+  }
+
   // Get existing data for manual entries (ads costs) - filter by business_id if provided
   let existingQuery = supabase
     .from(TABLES.DAILY_DATA)
@@ -222,7 +309,8 @@ async function syncData(params: {
   const facebookAdsCost = existingData?.facebook_ads_cost || 0;
   const tiktokAdsCost = existingData?.tiktok_ads_cost || 0;
 
-  const totalExpenses = googleAdsCost + facebookAdsCost + tiktokAdsCost + finalShippingCost + materialsCost + creditCardFees + vat;
+  // Calculate TOTAL expenses including all new fields
+  const totalExpenses = googleAdsCost + facebookAdsCost + tiktokAdsCost + finalShippingCost + materialsCost + creditCardFees + vat + employeeCost + refundsAmount + expensesVatAmount + expensesNoVatAmount;
   const profit = calculateProfit(revenue, totalExpenses);
   const roi = calculateROI(profit, totalExpenses, revenue);
 
@@ -238,6 +326,12 @@ async function syncData(params: {
     materials_cost: materialsCost,
     credit_card_fees: creditCardFees,
     vat,
+    // NEW columns
+    employee_cost: employeeCost,
+    refunds_amount: refundsAmount,
+    expenses_vat_amount: expensesVatAmount,
+    expenses_no_vat_amount: expensesNoVatAmount,
+    // Recalculated totals
     total_expenses: totalExpenses,
     profit,
     roi,

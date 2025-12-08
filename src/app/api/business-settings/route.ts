@@ -82,6 +82,10 @@ export async function POST(request: NextRequest) {
       manual_shipping_per_item: settings.manualShippingPerItem ?? false,
       charge_shipping_on_free_orders: settings.chargeShippingOnFreeOrders ?? true,
       free_shipping_methods: settings.freeShippingMethods || ['local_pickup'],
+      // Google Ads settings
+      google_ads_webhook_secret: settings.googleAdsWebhookSecret,
+      google_ads_auto_sync: settings.googleAdsAutoSync,
+      google_ads_customer_id: settings.googleAdsCustomerId,
       updated_at: new Date().toISOString(),
     };
 
