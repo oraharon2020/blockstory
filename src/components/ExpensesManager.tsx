@@ -16,6 +16,7 @@ interface Expense {
   supplier_name?: string;
   is_recurring: boolean;
   category?: string;
+  payment_method?: 'credit' | 'bank_transfer' | 'check';
 }
 
 interface ExpensesManagerProps {
@@ -43,6 +44,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
     description: '',
     amount: '',
     supplier_name: '',
+    payment_method: 'credit' as 'credit' | 'bank_transfer' | 'check',
   });
   
   // Refs for quick navigation
@@ -58,6 +60,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
     supplier_name: '',
     is_recurring: false,
     category: '',
+    payment_method: 'credit' as 'credit' | 'bank_transfer' | 'check',
   });
 
   // Date range for the month
@@ -128,6 +131,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
           ...newExpense,
           amount: amount,
           vat_amount: vatAmount,
+          payment_method: newExpense.payment_method,
           businessId: currentBusiness?.id,
         }),
       });
@@ -144,6 +148,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
           supplier_name: '',
           is_recurring: false,
           category: '',
+          payment_method: 'credit',
         });
         setLastAdded(result.id);
         setTimeout(() => setLastAdded(null), 2000);
@@ -198,13 +203,14 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
       description: expense.description,
       amount: String(expense.amount),
       supplier_name: expense.supplier_name || '',
+      payment_method: expense.payment_method || 'credit',
     });
   };
 
   // Cancel editing
   const handleCancelEdit = () => {
     setEditingId(null);
-    setEditData({ expense_date: '', description: '', amount: '', supplier_name: '' });
+    setEditData({ expense_date: '', description: '', amount: '', supplier_name: '', payment_method: 'credit' });
   };
 
   // Save edited expense
@@ -227,6 +233,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
           amount: amount,
           vat_amount: vatAmount,
           supplier_name: editData.supplier_name,
+          payment_method: editData.payment_method,
           businessId: currentBusiness?.id,
         }),
       });
@@ -234,7 +241,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
       if (res.ok) {
         await loadExpenses();
         setEditingId(null);
-        setEditData({ expense_date: '', description: '', amount: '', supplier_name: '' });
+        setEditData({ expense_date: '', description: '', amount: '', supplier_name: '', payment_method: 'credit' });
         onUpdate?.();
       }
     } catch (error) {
@@ -413,10 +420,11 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                   <tr className="bg-gray-50 border-b text-xs font-medium text-gray-500 uppercase">
                     <th className="px-3 py-2.5 text-right w-28">תאריך</th>
                     <th className="px-3 py-2.5 text-right">תיאור</th>
-                    <th className="px-3 py-2.5 text-right w-32">ספק</th>
+                    <th className="px-3 py-2.5 text-right w-28">ספק</th>
                     <th className="px-3 py-2.5 text-center w-24">סכום</th>
+                    <th className="px-3 py-2.5 text-center w-24">תשלום</th>
                     {activeTab === 'vat' && <th className="px-3 py-2.5 text-center w-20">מע"מ</th>}
-                    <th className="px-3 py-2.5 w-10"></th>
+                    <th className="px-3 py-2.5 w-16"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -465,6 +473,17 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                         className="w-full px-2 py-1.5 border rounded text-sm text-center focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white font-medium"
                       />
                     </td>
+                    <td className="px-2 py-1.5">
+                      <select
+                        value={newExpense.payment_method}
+                        onChange={(e) => setNewExpense({ ...newExpense, payment_method: e.target.value as 'credit' | 'bank_transfer' | 'check' })}
+                        className="w-full px-2 py-1.5 border rounded text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                      >
+                        <option value="credit">אשראי</option>
+                        <option value="bank_transfer">העברה</option>
+                        <option value="check">צ'ק</option>
+                      </select>
+                    </td>
                     {activeTab === 'vat' && (
                       <td className="px-2 py-1.5 text-center text-xs text-green-600 font-medium">
                         {newExpense.amount ? formatCurrency(calculateVatFromTotal(parseFloat(newExpense.amount) || 0)) : '-'}
@@ -484,7 +503,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                   
                   {/* Hint row */}
                   <tr className="bg-gray-50/50 border-b">
-                    <td colSpan={activeTab === 'vat' ? 6 : 5} className="px-3 py-1 text-[10px] text-gray-400 flex items-center gap-1">
+                    <td colSpan={activeTab === 'vat' ? 7 : 6} className="px-3 py-1 text-[10px] text-gray-400 flex items-center gap-1">
                       <Zap className="w-3 h-3" />
                       Tab לעבור בין שדות, Enter להוסיף • התאריך נשמר אוטומטית להוצאה הבאה
                     </td>
@@ -493,7 +512,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                   {/* Expense rows */}
                   {currentExpenses.length === 0 ? (
                     <tr>
-                      <td colSpan={activeTab === 'vat' ? 6 : 5} className="text-center py-12 text-gray-400">
+                      <td colSpan={activeTab === 'vat' ? 7 : 6} className="text-center py-12 text-gray-400">
                         <Receipt className="w-10 h-10 mx-auto mb-2 text-gray-200" />
                         <p className="text-sm">אין הוצאות לחודש זה</p>
                         <p className="text-xs mt-1">הזן את ההוצאה הראשונה למעלה</p>
@@ -541,6 +560,17 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                                 className="w-full px-2 py-1 border rounded text-sm text-center"
                               />
                             </td>
+                            <td className="px-2 py-1.5">
+                              <select
+                                value={editData.payment_method}
+                                onChange={(e) => setEditData({ ...editData, payment_method: e.target.value as 'credit' | 'bank_transfer' | 'check' })}
+                                className="w-full px-1 py-1 border rounded text-xs"
+                              >
+                                <option value="credit">אשראי</option>
+                                <option value="bank_transfer">העברה</option>
+                                <option value="check">צ'ק</option>
+                              </select>
+                            </td>
                             {activeTab === 'vat' && (
                               <td className="px-2 py-1.5 text-center text-xs text-green-600">
                                 {editData.amount ? formatCurrency(calculateVatFromTotal(parseFloat(editData.amount) || 0)) : '-'}
@@ -583,6 +613,9 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                             <td className="px-3 py-2 text-center text-sm font-semibold text-gray-900">
                               {formatCurrency(expense.amount)}
                             </td>
+                            <td className="px-3 py-2 text-center text-xs text-gray-500">
+                              {expense.payment_method === 'bank_transfer' ? 'העברה' : expense.payment_method === 'check' ? "צ'ק" : 'אשראי'}
+                            </td>
                             {activeTab === 'vat' && (
                               <td className="px-3 py-2 text-center text-sm font-medium text-green-600">
                                 {formatCurrency(expense.vat_amount || 0)}
@@ -609,7 +642,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                       </tr>
                       {/* Separator line */}
                       <tr>
-                        <td colSpan={activeTab === 'vat' ? 6 : 5} className="p-0">
+                        <td colSpan={activeTab === 'vat' ? 7 : 6} className="p-0">
                           <div className="h-[3px] bg-gray-300"></div>
                         </td>
                       </tr>

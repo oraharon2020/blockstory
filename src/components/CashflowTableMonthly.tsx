@@ -123,6 +123,9 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
   
   // Credit fee mode from business settings
   const [creditFeeMode, setCreditFeeMode] = useState<'percentage' | 'manual'>('percentage');
+  
+  // Expenses spread mode from business settings
+  const [expensesSpreadMode, setExpensesSpreadMode] = useState<'exact' | 'spread'>('exact');
 
   // Load visible columns from localStorage
   useEffect(() => {
@@ -208,7 +211,10 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
       // Get credit fee mode from business settings
       const businessCreditFeeMode = settingsJson.data?.creditFeeMode || 'percentage';
       setCreditFeeMode(businessCreditFeeMode);
-      console.log('Credit Fee Mode:', businessCreditFeeMode, 'Raw:', settingsJson.data?.creditFeeMode);
+      
+      // Get expenses spread mode from business settings
+      const businessExpensesSpreadMode = settingsJson.data?.expensesSpreadMode || 'exact';
+      setExpensesSpreadMode(businessExpensesSpreadMode);
       
       // Get employee daily cost
       const dailyEmpCost = employeesJson.dailyCost || 0;
@@ -225,31 +231,62 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
       
       // Process expenses by date
       const expensesByDate: ExpensesByDate = {};
+      let totalVatExpenses = 0;
+      let totalVatAmount = 0;
+      let totalNoVatExpenses = 0;
+      
       (expensesJson.vatExpenses || []).forEach((exp: any) => {
         const date = exp.expense_date;
+        const amount = exp.amount || 0;
+        const vatAmount = exp.vat_amount || 0;
+        
         if (!expensesByDate[date]) {
           expensesByDate[date] = { vat: 0, vatAmount: 0, noVat: 0 };
         }
-        expensesByDate[date].vat += exp.amount || 0;
-        expensesByDate[date].vatAmount += exp.vat_amount || 0;
+        expensesByDate[date].vat += amount;
+        expensesByDate[date].vatAmount += vatAmount;
+        totalVatExpenses += amount;
+        totalVatAmount += vatAmount;
       });
       (expensesJson.noVatExpenses || []).forEach((exp: any) => {
         const date = exp.expense_date;
+        const amount = exp.amount || 0;
+        
         if (!expensesByDate[date]) {
           expensesByDate[date] = { vat: 0, vatAmount: 0, noVat: 0 };
         }
-        expensesByDate[date].noVat += exp.amount || 0;
+        expensesByDate[date].noVat += amount;
+        totalNoVatExpenses += amount;
       });
+      
+      // Calculate total refunds
+      let totalRefunds = 0;
+      Object.values(refundsByDate).forEach((amount: number) => {
+        totalRefunds += amount;
+      });
+      
+      // Calculate daily spread amounts
+      const allDays = getMonthDays(month, year);
+      const daysCount = allDays.length;
+      const dailyVatExpense = totalVatExpenses / daysCount;
+      const dailyVatAmount = totalVatAmount / daysCount;
+      const dailyNoVatExpense = totalNoVatExpenses / daysCount;
+      const dailyRefund = totalRefunds / daysCount;
       
       if (cashflowJson.data) {
         const dataMap = new Map(cashflowJson.data.map((d: DailyData) => [d.date, d]));
-        const allDays = getMonthDays(month, year);
         
         const dates: DailyDataWithExpenses[] = allDays.map(dateStr => {
           const existing = dataMap.get(dateStr) as DailyData | undefined;
           const materialsCost = costsByDate[dateStr] || 0;
-          const dayExpenses = expensesByDate[dateStr] || { vat: 0, vatAmount: 0, noVat: 0 };
-          const dayRefunds = refundsByDate[dateStr] || 0;
+          
+          // Use spread or exact based on setting
+          const dayExpenses = businessExpensesSpreadMode === 'spread' 
+            ? { vat: dailyVatExpense, vatAmount: dailyVatAmount, noVat: dailyNoVatExpense }
+            : (expensesByDate[dateStr] || { vat: 0, vatAmount: 0, noVat: 0 });
+          const dayRefunds = businessExpensesSpreadMode === 'spread'
+            ? dailyRefund
+            : (refundsByDate[dateStr] || 0);
           
           // Use manual shipping from order_item_costs if available, otherwise use existing
           const manualShipping = shippingByDate[dateStr] || 0;

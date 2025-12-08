@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
       vat_rate: settings.vatRate,
       credit_card_rate: settings.creditCardRate,
       credit_fee_mode: settings.creditFeeMode || 'percentage',
+      expenses_spread_mode: settings.expensesSpreadMode || 'exact',
       shipping_cost: settings.shippingCost,
       materials_rate: settings.materialsRate,
       valid_order_statuses: settings.validOrderStatuses || ['completed', 'processing'],

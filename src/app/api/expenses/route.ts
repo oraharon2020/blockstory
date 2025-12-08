@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { type, expense_date, description, amount, vat_amount, supplier_name, is_recurring, category, businessId } = body;
+    const { type, expense_date, description, amount, vat_amount, supplier_name, is_recurring, category, businessId, payment_method } = body;
 
     if (!expense_date || !description || amount === undefined) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -95,6 +95,7 @@ export async function POST(request: NextRequest) {
       supplier_name: supplier_name || null,
       is_recurring: is_recurring || false,
       category: category || null,
+      payment_method: payment_method || 'credit',
     };
 
     // Add business_id if provided
@@ -159,7 +160,7 @@ export async function DELETE(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, type, expense_date, description, amount, vat_amount, supplier_name, businessId } = body;
+    const { id, type, expense_date, description, amount, vat_amount, supplier_name, businessId, payment_method } = body;
 
     if (!id || !type || !expense_date || !description || amount === undefined) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -172,6 +173,7 @@ export async function PUT(request: NextRequest) {
       description,
       amount: parseFloat(amount) || 0,
       supplier_name: supplier_name || null,
+      payment_method: payment_method || 'credit',
     };
 
     // Only add vat_amount for VAT expenses

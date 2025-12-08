@@ -13,6 +13,7 @@ interface SettingsFormData {
   vatRate: number;
   creditCardRate: number;
   creditFeeMode: 'percentage' | 'manual';
+  expensesSpreadMode: 'exact' | 'spread';
   shippingCost: number;
   materialsRate: number;
   validOrderStatuses: string[];
@@ -33,6 +34,7 @@ export default function SettingsPage() {
     vatRate: 18,
     creditCardRate: 2.5,
     creditFeeMode: 'percentage',
+    expensesSpreadMode: 'exact',
     shippingCost: 0,
     materialsRate: 30,
     validOrderStatuses: ['completed', 'processing'],
@@ -71,6 +73,7 @@ export default function SettingsPage() {
           vatRate: parseFloat(json.data.vatRate) || 18,
           creditCardRate: parseFloat(json.data.creditCardRate) || 2.5,
           creditFeeMode: json.data.creditFeeMode || 'percentage',
+          expensesSpreadMode: json.data.expensesSpreadMode || 'exact',
           shippingCost: parseFloat(json.data.shippingCost) || 0,
           materialsRate: parseFloat(json.data.materialsRate) || 30,
           validOrderStatuses: json.data.validOrderStatuses || ['completed', 'processing'],
@@ -427,6 +430,25 @@ export default function SettingsPage() {
                     {settings.creditFeeMode === 'percentage' 
                       ? 'יחושב אוטומטית מסך ההכנסה' 
                       : 'תוכל לערוך ידנית בטבלת התזרים'}
+                  </p>
+                </div>
+
+                <div className="bg-gray-50 rounded-xl p-5">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    פריסת הוצאות וזיכויים
+                  </label>
+                  <select
+                    value={settings.expensesSpreadMode}
+                    onChange={(e) => setSettings({ ...settings, expensesSpreadMode: e.target.value as 'exact' | 'spread' })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+                  >
+                    <option value="exact">לפי תאריך מדויק</option>
+                    <option value="spread">פריסה על כל החודש</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-2">
+                    {settings.expensesSpreadMode === 'exact' 
+                      ? 'הוצאות וזיכויים יופיעו בתאריך שהוזנו' 
+                      : 'הוצאות וזיכויים יתחלקו שווה בכל ימי החודש'}
                   </p>
                 </div>
 
