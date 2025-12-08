@@ -1,7 +1,8 @@
 /**
- * Google Ads Script - Daily Spend Reporter
+ * Google Ads Script - Full Campaign Reporter
  * 
- * This script runs daily and sends spend data to your CRM webhook.
+ * This script runs daily and sends comprehensive campaign data to your CRM webhook.
+ * Includes: campaigns, ad groups, keywords, search terms, and all key metrics.
  * 
  * SETUP:
  * 1. Go to Google Ads → Tools & Settings → Scripts
@@ -40,8 +41,8 @@ function main() {
   
   Logger.log('Syncing data from ' + formatDate(startDate) + ' to ' + formatDate(endDate));
   
-  // Get campaign data
-  var report = AdsApp.report(
+  // Get campaign performance data with all metrics
+  var campaignReport = AdsApp.report(
     'SELECT ' +
     'CampaignId, ' +
     'CampaignName, ' +
@@ -50,29 +51,105 @@ function main() {
     'Clicks, ' +
     'Impressions, ' +
     'Conversions, ' +
+    'ConversionValue, ' +
+    'Ctr, ' +
+    'AverageCpc, ' +
+    'CostPerConversion, ' +
+    'ConversionRate, ' +
+    'SearchImpressionShare, ' +
     'Date ' +
     'FROM CAMPAIGN_PERFORMANCE_REPORT ' +
     'WHERE Date >= ' + formatDate(startDate) + ' ' +
     'AND Date <= ' + formatDate(endDate)
   );
   
-  // Group by date
-  var dataByDate = {};
-  var rows = report.rows();
+  // Get ad group data
+  var adGroupReport = AdsApp.report(
+    'SELECT ' +
+    'CampaignId, ' +
+    'AdGroupId, ' +
+    'AdGroupName, ' +
+    'AdGroupStatus, ' +
+    'Cost, ' +
+    'Clicks, ' +
+    'Impressions, ' +
+    'Conversions, ' +
+    'Ctr, ' +
+    'AverageCpc, ' +
+    'Date ' +
+    'FROM ADGROUP_PERFORMANCE_REPORT ' +
+    'WHERE Date >= ' + formatDate(startDate) + ' ' +
+    'AND Date <= ' + formatDate(endDate)
+  );
   
-  while (rows.hasNext()) {
-    var row = rows.next();
+  // Get keyword data with Quality Score
+  var keywordReport = AdsApp.report(
+    'SELECT ' +
+    'CampaignId, ' +
+    'AdGroupId, ' +
+    'Criteria, ' +
+    'KeywordMatchType, ' +
+    'QualityScore, ' +
+    'Cost, ' +
+    'Clicks, ' +
+    'Impressions, ' +
+    'Conversions, ' +
+    'Ctr, ' +
+    'AverageCpc, ' +
+    'Date ' +
+    'FROM KEYWORDS_PERFORMANCE_REPORT ' +
+    'WHERE Date >= ' + formatDate(startDate) + ' ' +
+    'AND Date <= ' + formatDate(endDate) + ' ' +
+    'AND Impressions > 0'
+  );
+  
+  // Get search terms (top 100 by cost)
+  var searchTermReport = AdsApp.report(
+    'SELECT ' +
+    'CampaignId, ' +
+    'Query, ' +
+    'Cost, ' +
+    'Clicks, ' +
+    'Impressions, ' +
+    'Conversions, ' +
+    'Date ' +
+    'FROM SEARCH_QUERY_PERFORMANCE_REPORT ' +
+    'WHERE Date >= ' + formatDate(startDate) + ' ' +
+    'AND Date <= ' + formatDate(endDate) + ' ' +
+    'AND Impressions > 0 ' +
+    'ORDER BY Cost DESC ' +
+    'LIMIT 100'
+  );
+  
+  // Process campaign data by date
+  var dataByDate = {};
+  var campaignRows = campaignReport.rows();
+  
+  while (campaignRows.hasNext()) {
+    var row = campaignRows.next();
     var date = row['Date'];
     var cost = parseFloat(row['Cost'].replace(/,/g, '')) || 0;
     
     if (!dataByDate[date]) {
       dataByDate[date] = {
         totalCost: 0,
-        campaigns: []
+        totalClicks: 0,
+        totalImpressions: 0,
+        totalConversions: 0,
+        totalConversionValue: 0,
+        campaigns: [],
+        adGroups: [],
+        keywords: [],
+        searchTerms: []
       };
     }
     
     dataByDate[date].totalCost += cost;
+    dataByDate[date].totalClicks += parseInt(row['Clicks'].replace(/,/g, '')) || 0;
+    dataByDate[date].totalImpressions += parseInt(row['Impressions'].replace(/,/g, '')) || 0;
+    dataByDate[date].totalConversions += parseFloat(row['Conversions'].replace(/,/g, '')) || 0;
+    dataByDate[date].totalConversionValue += parseFloat(row['ConversionValue'].replace(/,/g, '')) || 0;
+    
     dataByDate[date].campaigns.push({
       id: row['CampaignId'],
       name: row['CampaignName'],
@@ -81,7 +158,76 @@ function main() {
       clicks: parseInt(row['Clicks'].replace(/,/g, '')) || 0,
       impressions: parseInt(row['Impressions'].replace(/,/g, '')) || 0,
       conversions: parseFloat(row['Conversions'].replace(/,/g, '')) || 0,
+      conversionValue: parseFloat(row['ConversionValue'].replace(/,/g, '')) || 0,
+      ctr: parseFloat(row['Ctr'].replace('%', '')) || 0,
+      avgCpc: parseFloat(row['AverageCpc'].replace(/,/g, '')) || 0,
+      costPerConversion: parseFloat(row['CostPerConversion'].replace(/,/g, '')) || 0,
+      conversionRate: parseFloat(row['ConversionRate'].replace('%', '')) || 0,
+      impressionShare: parseFloat(row['SearchImpressionShare'].replace('%', '').replace('< ', '')) || 0,
     });
+  }
+  
+  // Process ad group data
+  var adGroupRows = adGroupReport.rows();
+  while (adGroupRows.hasNext()) {
+    var row = adGroupRows.next();
+    var date = row['Date'];
+    
+    if (dataByDate[date]) {
+      dataByDate[date].adGroups.push({
+        campaignId: row['CampaignId'],
+        id: row['AdGroupId'],
+        name: row['AdGroupName'],
+        status: row['AdGroupStatus'],
+        cost: parseFloat(row['Cost'].replace(/,/g, '')) || 0,
+        clicks: parseInt(row['Clicks'].replace(/,/g, '')) || 0,
+        impressions: parseInt(row['Impressions'].replace(/,/g, '')) || 0,
+        conversions: parseFloat(row['Conversions'].replace(/,/g, '')) || 0,
+        ctr: parseFloat(row['Ctr'].replace('%', '')) || 0,
+        avgCpc: parseFloat(row['AverageCpc'].replace(/,/g, '')) || 0,
+      });
+    }
+  }
+  
+  // Process keyword data
+  var keywordRows = keywordReport.rows();
+  while (keywordRows.hasNext()) {
+    var row = keywordRows.next();
+    var date = row['Date'];
+    
+    if (dataByDate[date]) {
+      dataByDate[date].keywords.push({
+        campaignId: row['CampaignId'],
+        adGroupId: row['AdGroupId'],
+        keyword: row['Criteria'],
+        matchType: row['KeywordMatchType'],
+        qualityScore: parseInt(row['QualityScore']) || 0,
+        cost: parseFloat(row['Cost'].replace(/,/g, '')) || 0,
+        clicks: parseInt(row['Clicks'].replace(/,/g, '')) || 0,
+        impressions: parseInt(row['Impressions'].replace(/,/g, '')) || 0,
+        conversions: parseFloat(row['Conversions'].replace(/,/g, '')) || 0,
+        ctr: parseFloat(row['Ctr'].replace('%', '')) || 0,
+        avgCpc: parseFloat(row['AverageCpc'].replace(/,/g, '')) || 0,
+      });
+    }
+  }
+  
+  // Process search terms data
+  var searchTermRows = searchTermReport.rows();
+  while (searchTermRows.hasNext()) {
+    var row = searchTermRows.next();
+    var date = row['Date'];
+    
+    if (dataByDate[date]) {
+      dataByDate[date].searchTerms.push({
+        campaignId: row['CampaignId'],
+        query: row['Query'],
+        cost: parseFloat(row['Cost'].replace(/,/g, '')) || 0,
+        clicks: parseInt(row['Clicks'].replace(/,/g, '')) || 0,
+        impressions: parseInt(row['Impressions'].replace(/,/g, '')) || 0,
+        conversions: parseFloat(row['Conversions'].replace(/,/g, '')) || 0,
+      });
+    }
   }
   
   // Send data for each date
@@ -94,11 +240,21 @@ function main() {
       data: {
         date: formatDateISO(date),
         cost: dayData.totalCost,
-        campaigns: dayData.campaigns
+        clicks: dayData.totalClicks,
+        impressions: dayData.totalImpressions,
+        conversions: dayData.totalConversions,
+        conversionValue: dayData.totalConversionValue,
+        campaigns: dayData.campaigns,
+        adGroups: dayData.adGroups,
+        keywords: dayData.keywords,
+        searchTerms: dayData.searchTerms
       }
     };
     
-    Logger.log('Sending data for ' + date + ': ₪' + dayData.totalCost.toFixed(2));
+    Logger.log('Sending data for ' + date + ': ₪' + dayData.totalCost.toFixed(2) + 
+               ', ' + dayData.totalClicks + ' clicks, ' + 
+               dayData.campaigns.length + ' campaigns, ' +
+               dayData.keywords.length + ' keywords');
     
     try {
       var response = UrlFetchApp.fetch(CONFIG.WEBHOOK_URL, {
@@ -134,9 +290,6 @@ function formatDate(date) {
 
 // Format date as YYYY-MM-DD (for webhook)
 function formatDateISO(dateStr) {
-  // Input: "2025-12-09" or "Dec 9, 2025" depending on account settings
-  // Try to parse and return ISO format
-  
   // If already in YYYY-MM-DD format
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
     return dateStr;

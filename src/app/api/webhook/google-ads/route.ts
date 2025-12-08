@@ -39,9 +39,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Process the data
-    // Expected format: { date: "2025-12-09", cost: 1234.56, campaigns: [...] }
-    const { date, cost, campaigns } = data;
+    // Process the data - now includes full metrics
+    const { 
+      date, 
+      cost, 
+      clicks, 
+      impressions, 
+      conversions, 
+      conversionValue,
+      campaigns, 
+      adGroups, 
+      keywords, 
+      searchTerms 
+    } = data;
 
     if (!date || cost === undefined) {
       return NextResponse.json(
@@ -108,7 +118,6 @@ export async function POST(request: NextRequest) {
 
     // Save campaign details if provided
     if (campaigns && Array.isArray(campaigns) && campaigns.length > 0) {
-      // Upsert campaigns data
       for (const campaign of campaigns) {
         await supabase
           .from('google_ads_campaigns')
@@ -116,11 +125,18 @@ export async function POST(request: NextRequest) {
             business_id: businessId,
             campaign_id: campaign.id,
             campaign_name: campaign.name,
+            status: campaign.status,
             date,
             cost: campaign.cost || 0,
             clicks: campaign.clicks || 0,
             impressions: campaign.impressions || 0,
             conversions: campaign.conversions || 0,
+            conversion_value: campaign.conversionValue || 0,
+            ctr: campaign.ctr || 0,
+            avg_cpc: campaign.avgCpc || 0,
+            cost_per_conversion: campaign.costPerConversion || 0,
+            conversion_rate: campaign.conversionRate || 0,
+            impression_share: campaign.impressionShare || 0,
             updated_at: new Date().toISOString(),
           }, {
             onConflict: 'business_id,campaign_id,date'
@@ -128,11 +144,89 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log(`✅ Google Ads data updated for ${businessId} on ${date}: ₪${cost}`);
+    // Save ad groups if provided
+    if (adGroups && Array.isArray(adGroups) && adGroups.length > 0) {
+      for (const adGroup of adGroups) {
+        await supabase
+          .from('google_ads_ad_groups')
+          .upsert({
+            business_id: businessId,
+            campaign_id: adGroup.campaignId,
+            ad_group_id: adGroup.id,
+            ad_group_name: adGroup.name,
+            status: adGroup.status,
+            date,
+            cost: adGroup.cost || 0,
+            clicks: adGroup.clicks || 0,
+            impressions: adGroup.impressions || 0,
+            conversions: adGroup.conversions || 0,
+            ctr: adGroup.ctr || 0,
+            avg_cpc: adGroup.avgCpc || 0,
+            updated_at: new Date().toISOString(),
+          }, {
+            onConflict: 'business_id,ad_group_id,date'
+          });
+      }
+    }
+
+    // Save keywords if provided
+    if (keywords && Array.isArray(keywords) && keywords.length > 0) {
+      for (const kw of keywords) {
+        await supabase
+          .from('google_ads_keywords')
+          .upsert({
+            business_id: businessId,
+            campaign_id: kw.campaignId,
+            ad_group_id: kw.adGroupId,
+            keyword: kw.keyword,
+            match_type: kw.matchType,
+            quality_score: kw.qualityScore || 0,
+            date,
+            cost: kw.cost || 0,
+            clicks: kw.clicks || 0,
+            impressions: kw.impressions || 0,
+            conversions: kw.conversions || 0,
+            ctr: kw.ctr || 0,
+            avg_cpc: kw.avgCpc || 0,
+            updated_at: new Date().toISOString(),
+          }, {
+            onConflict: 'business_id,keyword,match_type,date'
+          });
+      }
+    }
+
+    // Save search terms if provided
+    if (searchTerms && Array.isArray(searchTerms) && searchTerms.length > 0) {
+      for (const term of searchTerms) {
+        await supabase
+          .from('google_ads_search_terms')
+          .upsert({
+            business_id: businessId,
+            campaign_id: term.campaignId,
+            query: term.query,
+            date,
+            cost: term.cost || 0,
+            clicks: term.clicks || 0,
+            impressions: term.impressions || 0,
+            conversions: term.conversions || 0,
+            updated_at: new Date().toISOString(),
+          }, {
+            onConflict: 'business_id,query,date'
+          });
+      }
+    }
+
+    console.log(`✅ Google Ads data updated for ${businessId} on ${date}: ₪${cost}, ${campaigns?.length || 0} campaigns, ${keywords?.length || 0} keywords`);
 
     return NextResponse.json({
       success: true,
-      message: `Updated Google Ads cost for ${date}: ₪${cost}`,
+      message: `Updated Google Ads data for ${date}: ₪${cost}`,
+      stats: {
+        campaigns: campaigns?.length || 0,
+        adGroups: adGroups?.length || 0,
+        keywords: keywords?.length || 0,
+        searchTerms: searchTerms?.length || 0,
+      }
     });
 
   } catch (error) {
