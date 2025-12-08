@@ -13,6 +13,7 @@ import {
   TrendingDown, 
   DollarSign,
   ShoppingCart,
+  Package,
   Loader2,
   Edit3,
   Check,
@@ -118,6 +119,9 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
   // Employee daily cost
   const [employeeDailyCost, setEmployeeDailyCost] = useState(0);
   
+  // Total products sold
+  const [totalProductsSold, setTotalProductsSold] = useState(0);
+  
   // VAT rate from business settings
   const [vatRate, setVatRate] = useState(18); // Default 18%
   
@@ -219,6 +223,10 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
       // Get employee daily cost
       const dailyEmpCost = employeesJson.dailyCost || 0;
       setEmployeeDailyCost(dailyEmpCost);
+      
+      // Get total products sold
+      const totalQty = costsJson.totalQuantity || 0;
+      setTotalProductsSold(totalQty);
       
       // Get costs by date (materials)
       const costsByDate: Record<string, number> = costsJson.costsByDate || {};
@@ -613,8 +621,9 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
       customerRefunds: acc.customerRefunds + (row.customerRefunds || 0),
       totalExpenses: acc.totalExpenses + row.totalExpenses,
       profit: acc.profit + row.profit,
+      itemsCount: acc.itemsCount + (row.itemsCount || 0),
     }),
-    { revenue: 0, ordersCount: 0, googleAdsCost: 0, facebookAdsCost: 0, tiktokAdsCost: 0, shippingCost: 0, materialsCost: 0, creditCardFees: 0, vat: 0, expensesVat: 0, expensesNoVat: 0, employeeCost: 0, customerRefunds: 0, totalExpenses: 0, profit: 0 }
+    { revenue: 0, ordersCount: 0, itemsCount: 0, googleAdsCost: 0, facebookAdsCost: 0, tiktokAdsCost: 0, shippingCost: 0, materialsCost: 0, creditCardFees: 0, vat: 0, expensesVat: 0, expensesNoVat: 0, employeeCost: 0, customerRefunds: 0, totalExpenses: 0, profit: 0 }
   );
 
   // % רווח ממוצע מההכנסות
@@ -715,7 +724,7 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 p-4 bg-gray-50">
           <div className="bg-white rounded-lg p-4 shadow-sm">
             <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
               <DollarSign className="w-4 h-4" />
@@ -729,6 +738,13 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
               <span>הזמנות</span>
             </div>
             <div className="text-2xl font-bold text-gray-900">{totals.ordersCount}</div>
+          </div>
+          <div className="bg-white rounded-lg p-4 shadow-sm">
+            <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
+              <Package className="w-4 h-4 text-orange-500" />
+              <span>מוצרים שנמכרו</span>
+            </div>
+            <div className="text-2xl font-bold text-orange-600">{totals.itemsCount || totalProductsSold}</div>
           </div>
           <div className="bg-white rounded-lg p-4 shadow-sm">
             <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
@@ -913,28 +929,28 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
                     </td>
                   )}
                   {isColumnVisible('employeeCost') && (
-                    <td className="px-1.5 py-2 bg-indigo-50/70">
+                    <td className={`px-1.5 py-2 ${highlightedRow === row.date ? 'bg-yellow-100 ring-2 ring-yellow-400 ring-inset' : 'bg-indigo-50/70'}`}>
                       <span className={row.employeeCost > 0 ? 'text-indigo-700 font-medium' : 'text-gray-400'}>
                         {formatCurrency(row.employeeCost)}
                       </span>
                     </td>
                   )}
                   {isColumnVisible('customerRefunds') && (
-                    <td className="px-1.5 py-2 bg-red-50/70">
+                    <td className={`px-1.5 py-2 ${highlightedRow === row.date ? 'bg-yellow-100 ring-2 ring-yellow-400 ring-inset' : 'bg-red-50/70'}`}>
                       <span className={(row.customerRefunds || 0) > 0 ? 'text-red-700 font-medium' : 'text-gray-400'}>
                         {formatCurrency(row.customerRefunds || 0)}
                       </span>
                     </td>
                   )}
                   {isColumnVisible('expensesVat') && (
-                    <td className="px-1.5 py-2 bg-purple-50/70">
+                    <td className={`px-1.5 py-2 ${highlightedRow === row.date ? 'bg-yellow-100 ring-2 ring-yellow-400 ring-inset' : 'bg-purple-50/70'}`}>
                       <span className={row.expensesVat > 0 ? 'text-purple-700 font-medium' : 'text-gray-400'}>
                         {formatCurrency(row.expensesVat)}
                       </span>
                     </td>
                   )}
                   {isColumnVisible('expensesNoVat') && (
-                    <td className="px-1.5 py-2 bg-amber-50/70">
+                    <td className={`px-1.5 py-2 ${highlightedRow === row.date ? 'bg-yellow-100 ring-2 ring-yellow-400 ring-inset' : 'bg-amber-50/70'}`}>
                       <span className={row.expensesNoVat > 0 ? 'text-amber-700 font-medium' : 'text-gray-400'}>
                         {formatCurrency(row.expensesNoVat)}
                       </span>

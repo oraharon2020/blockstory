@@ -56,6 +56,7 @@ export async function GET(request: NextRequest) {
       // Date range - return grouped by date (item_cost * quantity)
       const costsByDate: Record<string, number> = {};
       const shippingByDate: Record<string, number> = {};
+      const quantityByDate: Record<string, number> = {};
       
       (costs || []).forEach(item => {
         if (item.order_date) {
@@ -66,6 +67,12 @@ export async function GET(request: NextRequest) {
           const cost = parseFloat(item.item_cost) || 0;
           const qty = item.quantity || 1;
           costsByDate[item.order_date] += cost * qty;
+          
+          // Quantity sold
+          if (!quantityByDate[item.order_date]) {
+            quantityByDate[item.order_date] = 0;
+          }
+          quantityByDate[item.order_date] += qty;
           
           // Shipping cost (stored without VAT, returned without VAT)
           if (!shippingByDate[item.order_date]) {
@@ -78,8 +85,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ 
         costsByDate,
         shippingByDate,
+        quantityByDate,
         totalCost: Object.values(costsByDate).reduce((sum, cost) => sum + cost, 0),
         totalShipping: Object.values(shippingByDate).reduce((sum, cost) => sum + cost, 0),
+        totalQuantity: Object.values(quantityByDate).reduce((sum, qty) => sum + qty, 0),
       });
     }
   } catch (error: any) {

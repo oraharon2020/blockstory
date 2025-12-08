@@ -12,6 +12,17 @@ import {
 const VALID_STATUSES = ['completed', 'processing', 'on-hold'];
 const CANCELLED_STATUSES = ['cancelled', 'refunded', 'failed'];
 
+// Status names in Hebrew
+const STATUS_NAMES: Record<string, string> = {
+  'pending': 'ממתין לתשלום',
+  'processing': 'בטיפול',
+  'on-hold': 'בהמתנה',
+  'completed': 'הושלם',
+  'cancelled': 'בוטל',
+  'refunded': 'הוחזר',
+  'failed': 'נכשל',
+};
+
 // GET handler for webhook verification (WooCommerce sends a ping)
 export async function GET() {
   return NextResponse.json({ status: 'ok', message: 'Webhook endpoint ready' });
@@ -23,6 +34,7 @@ export async function POST(request: NextRequest) {
   try {
     const contentType = request.headers.get('content-type') || '';
     const topic = request.headers.get('x-wc-webhook-topic');
+    const webhookSource = request.headers.get('x-wc-webhook-source') || '';
     
     // Handle ping/verification request (WooCommerce sends form data for ping)
     if (!contentType.includes('application/json')) {
@@ -50,8 +62,23 @@ export async function POST(request: NextRequest) {
     const orderDate = order.date_created?.split('T')[0] || new Date().toISOString().split('T')[0];
     const orderTotal = parseFloat(order.total || '0');
     const shippingTotal = parseFloat(order.shipping_total || '0');
+    const customerName = `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`.trim() || 'לקוח';
 
     console.log(`📦 Order ${orderId} - Status: ${orderStatus}, Total: ${orderTotal}`);
+
+    // Find business_id from webhook source URL
+    let businessId: string | null = null;
+    if (webhookSource) {
+      const { data: businessSettings } = await supabase
+        .from('business_settings')
+        .select('business_id')
+        .ilike('woo_url', `%${new URL(webhookSource).hostname}%`)
+        .single();
+      
+      if (businessSettings) {
+        businessId = businessSettings.business_id;
+      }
+    }
 
     // Get settings for rates (key-value format)
     const { data: settingsData } = await supabase
@@ -70,8 +97,24 @@ export async function POST(request: NextRequest) {
     const vatRate = (parseFloat(settings.vatRate) || 18) / 100;
     const creditCardRate = (parseFloat(settings.creditCardRate) || 2.5) / 100;
 
+    // Track order changes
+    let changeType = '';
+    let changesSummary = '';
+    let oldValue: any = null;
+    let newValue: any = null;
+
     // Handle different webhook topics
     if (topic === 'order.created') {
+      changeType = 'created';
+      changesSummary = `הזמנה חדשה #${orderId} מ${customerName} בסך ₪${orderTotal.toLocaleString()}`;
+      newValue = { 
+        order_id: orderId, 
+        status: orderStatus, 
+        total: orderTotal,
+        customer: customerName,
+        items: order.line_items?.length || 0
+      };
+      
       // Only count valid statuses
       if (!VALID_STATUSES.includes(orderStatus)) {
         console.log(`⏭️ Order ${orderId} skipped - status: ${orderStatus}`);
@@ -81,13 +124,74 @@ export async function POST(request: NextRequest) {
       await updateDailyData(orderDate, orderTotal, shippingTotal, 1, settings);
       
     } else if (topic === 'order.updated') {
+      // Get previous order data from our records
+      const { data: prevOrderData } = await supabase
+        .from('order_changes')
+        .select('new_value')
+        .eq('order_id', orderId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      const prevTotal = prevOrderData?.new_value?.total || 0;
+      const prevStatus = prevOrderData?.new_value?.status || '';
+      
+      // Detect what changed
+      const changes: string[] = [];
+      
+      if (prevStatus && prevStatus !== orderStatus) {
+        changes.push(`סטטוס: ${STATUS_NAMES[prevStatus] || prevStatus} ← ${STATUS_NAMES[orderStatus] || orderStatus}`);
+        changeType = 'status_changed';
+      }
+      
+      if (prevTotal && Math.abs(prevTotal - orderTotal) > 0.01) {
+        const diff = orderTotal - prevTotal;
+        const diffStr = diff > 0 ? `+₪${diff.toLocaleString()}` : `-₪${Math.abs(diff).toLocaleString()}`;
+        changes.push(`סכום: ₪${prevTotal.toLocaleString()} ← ₪${orderTotal.toLocaleString()} (${diffStr})`);
+        changeType = 'total_changed';
+      }
+      
+      if (changes.length === 0) {
+        changes.push('עדכון כללי');
+        changeType = 'updated';
+      }
+      
+      changesSummary = `הזמנה #${orderId} (${customerName}) - ${changes.join(', ')}`;
+      oldValue = { status: prevStatus, total: prevTotal };
+      newValue = { 
+        order_id: orderId, 
+        status: orderStatus, 
+        total: orderTotal,
+        customer: customerName
+      };
+      
       // For updates, we need to recalculate the entire day
-      // This handles status changes (e.g., processing -> cancelled)
       await recalculateDayFromWooCommerce(orderDate, settings);
       
     } else if (topic === 'order.deleted') {
+      changeType = 'deleted';
+      changesSummary = `הזמנה #${orderId} נמחקה`;
+      oldValue = { order_id: orderId };
+      
       // Order was deleted, recalculate the day
       await recalculateDayFromWooCommerce(orderDate, settings);
+    }
+
+    // Save change to order_changes table
+    if (changeType && businessId) {
+      await supabase
+        .from('order_changes')
+        .insert({
+          business_id: businessId,
+          order_id: orderId,
+          change_type: changeType,
+          old_value: oldValue,
+          new_value: newValue,
+          changes_summary: changesSummary,
+          is_read: false,
+        });
+      
+      console.log(`📝 Saved change: ${changesSummary}`);
     }
 
     return NextResponse.json({ 
@@ -95,7 +199,9 @@ export async function POST(request: NextRequest) {
       orderId: order.id,
       topic,
       date: orderDate,
-      total: orderTotal 
+      total: orderTotal,
+      changeType,
+      changesSummary
     });
 
   } catch (error: any) {

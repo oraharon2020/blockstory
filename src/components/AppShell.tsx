@@ -9,6 +9,7 @@ import BusinessSelector from '@/components/BusinessSelector';
 import BusinessManager from '@/components/BusinessManager';
 import UserManager from '@/components/UserManager';
 import { Loader2, Plus, Store, LayoutDashboard, Package, Settings, BarChart3, Truck } from 'lucide-react';
+import OrderNotifications from '@/components/OrderNotifications';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -109,7 +110,8 @@ export default function AppShell({ children }: AppShellProps) {
             })}
           </nav>
 
-          <div className="text-sm text-white/80">
+          <div className="flex items-center gap-4 text-sm text-white/80">
+            <OrderNotifications />
             {user?.email}
           </div>
         </div>

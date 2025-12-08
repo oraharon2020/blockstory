@@ -109,10 +109,19 @@ export function calculateDailyStats(
       }, 0);
   
   const ordersCount = orders.length;
+  
+  // Count total items/products sold (sum of all line_items quantities)
+  const itemsCount = orders.reduce((sum, order) => {
+    if (!order.line_items) return sum;
+    return sum + order.line_items.reduce((itemSum: number, item: any) => {
+      return itemSum + (parseInt(item.quantity) || 1);
+    }, 0);
+  }, 0);
 
   return {
     revenue,
     shippingCost,
     ordersCount,
+    itemsCount,
   };
 }

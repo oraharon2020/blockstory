@@ -230,6 +230,7 @@ async function syncData(params: {
     date,
     revenue,
     orders_count: stats.ordersCount,
+    items_count: stats.itemsCount || 0,
     google_ads_cost: googleAdsCost,
     facebook_ads_cost: facebookAdsCost,
     tiktok_ads_cost: tiktokAdsCost,

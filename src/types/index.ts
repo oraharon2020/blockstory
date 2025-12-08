@@ -23,6 +23,7 @@ export interface DailyData {
   date: string; // YYYY-MM-DD
   revenue: number; // הכנסות
   ordersCount: number; // מספר הזמנות
+  itemsCount?: number; // מספר מוצרים שנמכרו
   googleAdsCost: number; // הוצאות פרסום גוגל
   facebookAdsCost: number; // הוצאות פרסום פייסבוק
   tiktokAdsCost: number; // הוצאות פרסום טיקטוק

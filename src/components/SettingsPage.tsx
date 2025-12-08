@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings, Save, Loader2, Eye, EyeOff, TestTube, Check, X, Store, Calculator, Package, HelpCircle, ListChecks, Truck } from 'lucide-react';
+import { Settings, Save, Loader2, Eye, EyeOff, TestTube, Check, X, Store, Calculator, Package, HelpCircle, ListChecks, Truck, Webhook } from 'lucide-react';
 import ProductCostsManager from './ProductCostsManager';
 import OrderStatusSelector from './OrderStatusSelector';
 import { useAuth } from '@/contexts/AuthContext';
@@ -22,7 +22,7 @@ interface SettingsFormData {
   freeShippingMethods: string[];
 }
 
-type TabType = 'woocommerce' | 'business' | 'products';
+type TabType = 'woocommerce' | 'business' | 'products' | 'webhook';
 
 export default function SettingsPage() {
   const { currentBusiness } = useAuth();
@@ -166,6 +166,7 @@ export default function SettingsPage() {
     { id: 'woocommerce' as TabType, label: 'חיבור WooCommerce', icon: Store, color: 'purple' },
     { id: 'business' as TabType, label: 'פרמטרים עסקיים', icon: Calculator, color: 'green' },
     { id: 'products' as TabType, label: 'עלויות מוצרים', icon: Package, color: 'orange' },
+    { id: 'webhook' as TabType, label: 'Webhook התראות', icon: Webhook, color: 'emerald' },
   ];
 
   return (
@@ -198,9 +199,9 @@ export default function SettingsPage() {
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                   }`}
                   style={isActive ? {
-                    borderColor: tab.color === 'purple' ? '#9333ea' : tab.color === 'green' ? '#16a34a' : '#ea580c',
-                    color: tab.color === 'purple' ? '#9333ea' : tab.color === 'green' ? '#16a34a' : '#ea580c',
-                    backgroundColor: tab.color === 'purple' ? '#faf5ff' : tab.color === 'green' ? '#f0fdf4' : '#fff7ed',
+                    borderColor: tab.color === 'purple' ? '#9333ea' : tab.color === 'green' ? '#16a34a' : tab.color === 'emerald' ? '#059669' : '#ea580c',
+                    color: tab.color === 'purple' ? '#9333ea' : tab.color === 'green' ? '#16a34a' : tab.color === 'emerald' ? '#059669' : '#ea580c',
+                    backgroundColor: tab.color === 'purple' ? '#faf5ff' : tab.color === 'green' ? '#f0fdf4' : tab.color === 'emerald' ? '#ecfdf5' : '#fff7ed',
                   } : {}}
                 >
                   <Icon className="w-5 h-5" />
@@ -632,7 +633,217 @@ export default function SettingsPage() {
               <ProductCostsManager businessId={currentBusiness?.id} />
             </div>
           )}
+
+          {/* Webhook Tab */}
+          {activeTab === 'webhook' && (
+            <WebhookSetupTab />
+          )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Webhook Setup Tab Component
+function WebhookSetupTab() {
+  const [copied, setCopied] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState<string>('');
+  
+  useEffect(() => {
+    setWebhookUrl(`${window.location.origin}/api/webhook/woocommerce`);
+  }, []);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(webhookUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start gap-4 p-4 bg-emerald-50 rounded-lg border border-emerald-100">
+        <Webhook className="w-10 h-10 text-emerald-600 flex-shrink-0" />
+        <div>
+          <h3 className="font-semibold text-emerald-900">הגדרת Webhook לעדכונים בזמן אמת</h3>
+          <p className="text-emerald-700 text-sm">קבל התראות אוטומטיות על כל שינוי בהזמנות</p>
+        </div>
+      </div>
+
+      {/* What is Webhook */}
+      <div className="flex gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <HelpCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+        <div className="text-sm text-blue-800">
+          <p className="font-medium mb-1">מה זה Webhook?</p>
+          <p>Webhook מאפשר ל-WooCommerce לשלוח הודעה למערכת שלך בכל פעם שיש שינוי בהזמנה. 
+             כך תקבל התראה על הזמנות חדשות, שינויי סטטוס, עדכון סכומים ועוד - הכל בזמן אמת!</p>
+        </div>
+      </div>
+
+      {/* Webhook URL */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          כתובת ה-Webhook שלך:
+        </label>
+        <div className="flex gap-2">
+          <div className="flex-1 flex items-center gap-2 px-4 py-3 bg-gray-100 rounded-lg font-mono text-sm break-all min-h-[48px]">
+            {webhookUrl || <span className="text-gray-400">טוען...</span>}
+          </div>
+          <button
+            onClick={handleCopy}
+            disabled={!webhookUrl}
+            className={`px-4 py-3 rounded-lg transition-colors flex items-center gap-2 ${
+              copied 
+                ? 'bg-green-100 text-green-700' 
+                : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+            } disabled:opacity-50`}
+          >
+            {copied ? <Check className="w-5 h-5" /> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}
+            <span>{copied ? 'הועתק!' : 'העתק'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Setup Instructions */}
+      <div className="space-y-4">
+        <h3 className="font-semibold text-gray-800 text-lg">הוראות הגדרה ב-WooCommerce:</h3>
+        
+        <ol className="space-y-4 text-sm text-gray-700">
+          <li className="flex gap-3">
+            <span className="flex-shrink-0 w-7 h-7 bg-emerald-600 text-white rounded-full flex items-center justify-center text-sm font-bold">1</span>
+            <div className="pt-0.5">
+              <p>היכנס לפאנל הניהול של WordPress</p>
+            </div>
+          </li>
+          <li className="flex gap-3">
+            <span className="flex-shrink-0 w-7 h-7 bg-emerald-600 text-white rounded-full flex items-center justify-center text-sm font-bold">2</span>
+            <div className="pt-0.5">
+              <p>לך ל-<strong>WooCommerce → הגדרות → מתקדם → Webhooks</strong></p>
+            </div>
+          </li>
+          <li className="flex gap-3">
+            <span className="flex-shrink-0 w-7 h-7 bg-emerald-600 text-white rounded-full flex items-center justify-center text-sm font-bold">3</span>
+            <div className="pt-0.5">
+              <p>לחץ על <strong>"הוסף webhook"</strong></p>
+            </div>
+          </li>
+          <li className="flex gap-3">
+            <span className="flex-shrink-0 w-7 h-7 bg-emerald-600 text-white rounded-full flex items-center justify-center text-sm font-bold">4</span>
+            <div className="pt-0.5">
+              <p>מלא את הפרטים הבאים:</p>
+              <div className="mt-3 p-4 bg-gray-50 rounded-lg border space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-gray-600 w-32">שם:</span>
+                  <code className="px-2 py-1 bg-white rounded border text-emerald-700">CRM Order Sync</code>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-gray-600 w-32">סטטוס:</span>
+                  <code className="px-2 py-1 bg-green-100 rounded border border-green-200 text-green-700">פעיל</code>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-gray-600 w-32">נושא (Topic):</span>
+                  <code className="px-2 py-1 bg-white rounded border text-emerald-700">Order updated</code>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="font-medium text-gray-600 w-32 pt-1">כתובת URL:</span>
+                  <code className="px-2 py-1 bg-white rounded border text-emerald-700 text-xs break-all">{webhookUrl}</code>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-gray-600 w-32">API Version:</span>
+                  <code className="px-2 py-1 bg-white rounded border text-emerald-700">WP REST API v3</code>
+                </div>
+              </div>
+            </div>
+          </li>
+          <li className="flex gap-3">
+            <span className="flex-shrink-0 w-7 h-7 bg-emerald-600 text-white rounded-full flex items-center justify-center text-sm font-bold">5</span>
+            <div className="pt-0.5">
+              <p>לחץ על <strong>"שמור webhook"</strong></p>
+            </div>
+          </li>
+        </ol>
+      </div>
+
+      {/* Recommended Webhooks */}
+      <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+        <p className="text-sm text-emerald-800 font-medium mb-3">
+          ✅ מומלץ ליצור 3 webhooks (כולם עם אותה כתובת URL):
+        </p>
+        <div className="grid gap-3">
+          <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
+            <span className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">1</span>
+            <div>
+              <p className="font-medium text-gray-800">Order created</p>
+              <p className="text-xs text-gray-500">התראה על הזמנה חדשה</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
+            <span className="w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center text-sm font-bold">2</span>
+            <div>
+              <p className="font-medium text-gray-800">Order updated</p>
+              <p className="text-xs text-gray-500">התראה על שינוי בהזמנה (סטטוס, סכום, פריטים)</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
+            <span className="w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center text-sm font-bold">3</span>
+            <div>
+              <p className="font-medium text-gray-800">Order deleted</p>
+              <p className="text-xs text-gray-500">התראה על מחיקת הזמנה</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* What changes are tracked */}
+      <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+        <p className="text-sm text-purple-800 font-medium mb-2">
+          🔔 המערכת תתריע לך על השינויים הבאים:
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-3">
+          <div className="flex items-center gap-2 text-sm text-purple-700">
+            <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+            שינוי סטטוס
+          </div>
+          <div className="flex items-center gap-2 text-sm text-purple-700">
+            <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+            שינוי סכום
+          </div>
+          <div className="flex items-center gap-2 text-sm text-purple-700">
+            <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+            שינוי פריטים
+          </div>
+          <div className="flex items-center gap-2 text-sm text-purple-700">
+            <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+            שינוי משלוח
+          </div>
+          <div className="flex items-center gap-2 text-sm text-purple-700">
+            <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+            שינוי לקוח
+          </div>
+          <div className="flex items-center gap-2 text-sm text-purple-700">
+            <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+            הערות חדשות
+          </div>
+        </div>
+      </div>
+
+      {/* Supported statuses */}
+      <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+        <p className="text-sm text-gray-800 font-medium mb-2">
+          📊 סטטוסים שנספרים כהכנסה בתזרים:
+        </p>
+        <div className="flex flex-wrap gap-2 mt-2">
+          <span className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm font-medium">✓ Completed</span>
+          <span className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium">✓ Processing</span>
+          <span className="px-3 py-1.5 bg-yellow-100 text-yellow-700 rounded-lg text-sm font-medium">✓ On-hold</span>
+        </div>
+        <p className="text-xs text-gray-500 mt-3">
+          💡 הזמנות עם סטטוס Cancelled, Refunded, Failed או Pending לא נספרות כהכנסה
+        </p>
       </div>
     </div>
   );
