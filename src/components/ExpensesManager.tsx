@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Plus, Trash2, Loader2, Receipt, Globe, Check, X, Copy, Users, RotateCcw } from 'lucide-react';
+import React, { useState, useEffect, useRef, KeyboardEvent } from 'react';
+import { Plus, Trash2, Loader2, Receipt, Globe, Copy, Users, RotateCcw, Zap, Pencil, Check, X } from 'lucide-react';
 import { formatCurrency } from '@/lib/calculations';
 import EmployeesManager from './EmployeesManager';
 import RefundsManager from './RefundsManager';
@@ -31,10 +31,26 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
   const [noVatExpenses, setNoVatExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'vat' | 'noVat' | 'employees' | 'refunds'>('vat');
-  const [showAddForm, setShowAddForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copying, setCopying] = useState(false);
-  const [vatRate, setVatRate] = useState(18); // Default 18%
+  const [vatRate, setVatRate] = useState(18);
+  const [lastAdded, setLastAdded] = useState<number | null>(null);
+  
+  // Editing state
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editData, setEditData] = useState({
+    expense_date: '',
+    description: '',
+    amount: '',
+    supplier_name: '',
+  });
+  
+  // Refs for quick navigation
+  const dateRef = useRef<HTMLInputElement>(null);
+  const descRef = useRef<HTMLInputElement>(null);
+  const supplierRef = useRef<HTMLInputElement>(null);
+  const amountRef = useRef<HTMLInputElement>(null);
+  
   const [newExpense, setNewExpense] = useState({
     expense_date: '',
     description: '',
@@ -61,10 +77,8 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
       const res = await fetch(`/api/settings?${params.toString()}`);
       const json = await res.json();
       if (json.data) {
-        const settings = json.data.reduce((acc: any, s: any) => {
-          acc[s.key] = s.value;
-          return acc;
-        }, {});
+        // json.data is already an object with key-value pairs
+        const settings = json.data;
         if (settings.vatRate) {
           setVatRate(parseFloat(settings.vatRate) || 18);
         }
@@ -96,7 +110,8 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
     return totalAmount * (vatRate / (100 + vatRate));
   };
 
-  const handleAdd = async () => {
+  const handleAdd = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!newExpense.description || !newExpense.amount || !newExpense.expense_date) return;
     
     setSaving(true);
@@ -118,22 +133,41 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
       });
 
       if (res.ok) {
+        const result = await res.json();
         await loadExpenses();
+        // Keep the date for next entry (common pattern)
+        const savedDate = newExpense.expense_date;
         setNewExpense({
-          expense_date: '',
+          expense_date: savedDate,
           description: '',
           amount: '',
           supplier_name: '',
           is_recurring: false,
           category: '',
         });
-        setShowAddForm(false);
+        setLastAdded(result.id);
+        setTimeout(() => setLastAdded(null), 2000);
         onUpdate?.();
+        // Focus on description for quick next entry
+        descRef.current?.focus();
       }
     } catch (error) {
       console.error('Error adding expense:', error);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Handle Enter key for quick add
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>, nextRef?: React.RefObject<HTMLInputElement | null>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (e.currentTarget === amountRef.current) {
+        // On Enter in amount field, submit
+        handleAdd();
+      } else if (nextRef?.current) {
+        nextRef.current.focus();
+      }
     }
   };
 
@@ -153,6 +187,60 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
       }
     } catch (error) {
       console.error('Error deleting expense:', error);
+    }
+  };
+
+  // Start editing an expense
+  const handleStartEdit = (expense: Expense) => {
+    setEditingId(expense.id);
+    setEditData({
+      expense_date: expense.expense_date,
+      description: expense.description,
+      amount: String(expense.amount),
+      supplier_name: expense.supplier_name || '',
+    });
+  };
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditData({ expense_date: '', description: '', amount: '', supplier_name: '' });
+  };
+
+  // Save edited expense
+  const handleSaveEdit = async (id: number, type: 'vat' | 'noVat') => {
+    if (!editData.description || !editData.amount || !editData.expense_date) return;
+    
+    setSaving(true);
+    const amount = parseFloat(editData.amount) || 0;
+    const vatAmount = type === 'vat' ? calculateVatFromTotal(amount) : 0;
+    
+    try {
+      const res = await fetch('/api/expenses', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          type,
+          expense_date: editData.expense_date,
+          description: editData.description,
+          amount: amount,
+          vat_amount: vatAmount,
+          supplier_name: editData.supplier_name,
+          businessId: currentBusiness?.id,
+        }),
+      });
+
+      if (res.ok) {
+        await loadExpenses();
+        setEditingId(null);
+        setEditData({ expense_date: '', description: '', amount: '', supplier_name: '' });
+        onUpdate?.();
+      }
+    } catch (error) {
+      console.error('Error updating expense:', error);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -216,253 +304,337 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-32">
-        <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+      <div className="flex items-center justify-center h-48">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-4" dir="rtl">
-      {/* Tabs */}
-      <div className="flex border-b">
-        <button
-          onClick={() => setActiveTab('vat')}
-          className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors border-b-2 ${
-            activeTab === 'vat'
-              ? 'border-green-600 text-green-600 bg-green-50'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <Receipt className="w-4 h-4" />
-          <span>מוכר ({vatExpenses.length})</span>
-          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-            {formatCurrency(vatTotal)}
-          </span>
-        </button>
-        <button
-          onClick={() => setActiveTab('noVat')}
-          className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors border-b-2 ${
-            activeTab === 'noVat'
-              ? 'border-blue-600 text-blue-600 bg-blue-50'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <Globe className="w-4 h-4" />
-          <span>חו"ל ({noVatExpenses.length})</span>
-          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-            {formatCurrency(noVatTotal)}
-          </span>
-        </button>
-        <button
-          onClick={() => setActiveTab('employees')}
-          className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors border-b-2 ${
-            activeTab === 'employees'
-              ? 'border-indigo-600 text-indigo-600 bg-indigo-50'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          <span>עובדים</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('refunds')}
-          className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors border-b-2 ${
-            activeTab === 'refunds'
-              ? 'border-red-600 text-red-600 bg-red-50'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <RotateCcw className="w-4 h-4" />
-          <span>זיכויים</span>
-        </button>
-      </div>
-
-      {/* Employees Tab */}
-      {activeTab === 'employees' ? (
-        <EmployeesManager month={month} year={year} />
-      ) : activeTab === 'refunds' ? (
-        <RefundsManager month={month} year={year} onUpdate={onUpdate} />
-      ) : (
-        <>
-          {/* Add Button */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowAddForm(!showAddForm)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-            >
-              <Plus className="w-4 h-4" />
-              הוסף הוצאה
-            </button>
-            
+    <div className="h-full flex flex-col" dir="rtl">
+      {/* Compact Header with Tabs */}
+      <div className="flex items-center justify-between border-b bg-white">
+        <div className="flex">
+          <button
+            onClick={() => setActiveTab('vat')}
+            className={`px-4 py-3 font-medium text-sm transition-colors border-b-2 ${
+              activeTab === 'vat'
+                ? 'border-green-500 text-green-600 bg-green-50/50'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <span className="flex items-center gap-1.5">
+              <Receipt className="w-4 h-4" />
+              מוכרות
+              <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-xs font-semibold">
+                {vatExpenses.length}
+              </span>
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab('noVat')}
+            className={`px-4 py-3 font-medium text-sm transition-colors border-b-2 ${
+              activeTab === 'noVat'
+                ? 'border-blue-500 text-blue-600 bg-blue-50/50'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <span className="flex items-center gap-1.5">
+              <Globe className="w-4 h-4" />
+              חו"ל
+              <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-xs font-semibold">
+                {noVatExpenses.length}
+              </span>
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab('employees')}
+            className={`px-4 py-3 font-medium text-sm transition-colors border-b-2 ${
+              activeTab === 'employees'
+                ? 'border-indigo-500 text-indigo-600 bg-indigo-50/50'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <span className="flex items-center gap-1.5">
+              <Users className="w-4 h-4" />
+              עובדים
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab('refunds')}
+            className={`px-4 py-3 font-medium text-sm transition-colors border-b-2 ${
+              activeTab === 'refunds'
+                ? 'border-red-500 text-red-600 bg-red-50/50'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <span className="flex items-center gap-1.5">
+              <RotateCcw className="w-4 h-4" />
+              זיכויים
+            </span>
+          </button>
+        </div>
+        
+        {/* Summary in header */}
+        <div className="flex items-center gap-4 px-4 text-sm">
+          <span className="text-green-600 font-semibold">{formatCurrency(vatTotal)}</span>
+          <span className="text-gray-300">|</span>
+          <span className="text-blue-600 font-semibold">{formatCurrency(noVatTotal)}</span>
+          {(activeTab === 'vat' || activeTab === 'noVat') && (
             <button
               onClick={handleCopyFromPreviousMonth}
               disabled={copying}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm disabled:opacity-50"
-              title="העתק הוצאות מהחודש הקודם"
+              className="flex items-center gap-1 px-2 py-1 text-purple-600 hover:bg-purple-50 rounded text-xs"
+              title="העתק מחודש קודם"
             >
-              {copying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
-              העתק מחודש קודם
+              {copying ? <Loader2 className="w-3 h-3 animate-spin" /> : <Copy className="w-3 h-3" />}
+              העתק
             </button>
-          </div>
-
-      {/* Add Form */}
-      {showAddForm && (
-        <div className="bg-gray-50 border rounded-lg p-4 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">תאריך</label>
-              <input
-                type="date"
-                value={newExpense.expense_date}
-                onChange={(e) => setNewExpense({ ...newExpense, expense_date: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">סכום</label>
-              <input
-                type="number"
-                value={newExpense.amount}
-                onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
-                placeholder="₪"
-                className="w-full px-3 py-2 border rounded-lg text-sm"
-              />
-            </div>
-          </div>
-          
-          <div>
-            <label className="block text-xs text-gray-600 mb-1">תיאור</label>
-            <input
-              type="text"
-              value={newExpense.description}
-              onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
-              placeholder="למה ההוצאה?"
-              className="w-full px-3 py-2 border rounded-lg text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs text-gray-600 mb-1">ספק</label>
-            <input
-              type="text"
-              value={newExpense.supplier_name}
-              onChange={(e) => setNewExpense({ ...newExpense, supplier_name: e.target.value })}
-              placeholder="שם הספק"
-              className="w-full px-3 py-2 border rounded-lg text-sm"
-            />
-          </div>
-          
-          {activeTab === 'vat' && newExpense.amount && (
-            <div className="text-xs text-green-600 bg-green-50 p-2 rounded">
-              מע"מ לקיזוז (חישוב אוטומטי {vatRate}%): {formatCurrency(calculateVatFromTotal(parseFloat(newExpense.amount) || 0))}
-            </div>
           )}
-
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="recurring"
-              checked={newExpense.is_recurring}
-              onChange={(e) => setNewExpense({ ...newExpense, is_recurring: e.target.checked })}
-              className="rounded"
-            />
-            <label htmlFor="recurring" className="text-sm text-gray-600">הוצאה קבועה (חודשית)</label>
-          </div>
-
-          <div className="flex gap-2 pt-2">
-            <button
-              onClick={handleAdd}
-              disabled={saving || !newExpense.description || !newExpense.amount || !newExpense.expense_date}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              שמור
-            </button>
-            <button
-              onClick={() => setShowAddForm(false)}
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm"
-            >
-              ביטול
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Expenses List */}
-      {currentExpenses.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          <Receipt className="w-10 h-10 mx-auto mb-2 text-gray-300" />
-          <p>אין הוצאות לחודש זה</p>
-        </div>
-      ) : (
-        <div className="border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-3 py-2 text-right text-gray-600">תאריך</th>
-                <th className="px-3 py-2 text-right text-gray-600">תיאור</th>
-                <th className="px-3 py-2 text-right text-gray-600">ספק</th>
-                <th className="px-3 py-2 text-center text-gray-600">סכום</th>
-                {activeTab === 'vat' && <th className="px-3 py-2 text-center text-gray-600">מע"מ</th>}
-                <th className="px-3 py-2 text-center text-gray-600 w-10"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {currentExpenses.map((expense) => (
-                <tr key={expense.id} className="hover:bg-gray-50">
-                  <td className="px-3 py-2 text-gray-600">{formatDate(expense.expense_date)}</td>
-                  <td className="px-3 py-2">
-                    <span className="font-medium">{expense.description}</span>
-                    {expense.is_recurring && (
-                      <span className="mr-2 text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">קבועה</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-gray-500">{expense.supplier_name || '-'}</td>
-                  <td className="px-3 py-2 text-center font-medium">{formatCurrency(expense.amount)}</td>
-                  {activeTab === 'vat' && (
-                    <td className="px-3 py-2 text-center text-green-600">{formatCurrency(expense.vat_amount || 0)}</td>
-                  )}
-                  <td className="px-3 py-2 text-center">
-                    <button
-                      onClick={() => handleDelete(expense.id, activeTab === 'vat' ? 'vat' : 'noVat')}
-                      className="p-1 text-red-500 hover:bg-red-50 rounded"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot className="bg-gray-50 font-medium">
-              <tr>
-                <td colSpan={3} className="px-3 py-2 text-gray-600">סה"כ</td>
-                <td className="px-3 py-2 text-center">{formatCurrency(activeTab === 'vat' ? vatTotal : noVatTotal)}</td>
-                {activeTab === 'vat' && <td className="px-3 py-2 text-center text-green-600">{formatCurrency(vatVatTotal)}</td>}
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
-
-      {/* Summary */}
-      <div className="bg-gray-50 rounded-lg p-4 grid grid-cols-3 gap-4 text-center">
-        <div>
-          <p className="text-xs text-gray-500">הוצאות מוכרות</p>
-          <p className="font-bold text-green-600">{formatCurrency(vatTotal)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-500">הוצאות חו"ל</p>
-          <p className="font-bold text-blue-600">{formatCurrency(noVatTotal)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-500">מע"מ לקיזוז</p>
-          <p className="font-bold text-purple-600">{formatCurrency(vatVatTotal)}</p>
         </div>
       </div>
-        </>
-      )}
+
+      {/* Content */}
+      <div className="flex-1 overflow-auto">
+        {activeTab === 'employees' ? (
+          <div className="p-4">
+            <EmployeesManager month={month} year={year} />
+          </div>
+        ) : activeTab === 'refunds' ? (
+          <div className="p-4">
+            <RefundsManager month={month} year={year} onUpdate={onUpdate} />
+          </div>
+        ) : (
+          <div className="p-3">
+            {/* Quick Add - Excel-like inline form in table */}
+            <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50 border-b text-xs font-medium text-gray-500 uppercase">
+                    <th className="px-3 py-2.5 text-right w-28">תאריך</th>
+                    <th className="px-3 py-2.5 text-right">תיאור</th>
+                    <th className="px-3 py-2.5 text-right w-32">ספק</th>
+                    <th className="px-3 py-2.5 text-center w-24">סכום</th>
+                    {activeTab === 'vat' && <th className="px-3 py-2.5 text-center w-20">מע"מ</th>}
+                    <th className="px-3 py-2.5 w-10"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Quick Add Row - Always at top */}
+                  <tr className="bg-blue-50/50 border-b-2 border-blue-200">
+                    <td className="px-2 py-1.5">
+                      <input
+                        ref={dateRef}
+                        type="date"
+                        value={newExpense.expense_date}
+                        onChange={(e) => setNewExpense({ ...newExpense, expense_date: e.target.value })}
+                        onKeyDown={(e) => handleKeyDown(e, descRef)}
+                        className="w-full px-2 py-1.5 border rounded text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                      />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <input
+                        ref={descRef}
+                        type="text"
+                        value={newExpense.description}
+                        onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
+                        onKeyDown={(e) => handleKeyDown(e, supplierRef)}
+                        placeholder="תיאור ההוצאה..."
+                        className="w-full px-2 py-1.5 border rounded text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                      />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <input
+                        ref={supplierRef}
+                        type="text"
+                        value={newExpense.supplier_name}
+                        onChange={(e) => setNewExpense({ ...newExpense, supplier_name: e.target.value })}
+                        onKeyDown={(e) => handleKeyDown(e, amountRef)}
+                        placeholder="ספק"
+                        className="w-full px-2 py-1.5 border rounded text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                      />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <input
+                        ref={amountRef}
+                        type="number"
+                        value={newExpense.amount}
+                        onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+                        onKeyDown={(e) => handleKeyDown(e)}
+                        placeholder="₪"
+                        className="w-full px-2 py-1.5 border rounded text-sm text-center focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white font-medium"
+                      />
+                    </td>
+                    {activeTab === 'vat' && (
+                      <td className="px-2 py-1.5 text-center text-xs text-green-600 font-medium">
+                        {newExpense.amount ? formatCurrency(calculateVatFromTotal(parseFloat(newExpense.amount) || 0)) : '-'}
+                      </td>
+                    )}
+                    <td className="px-2 py-1.5">
+                      <button
+                        onClick={() => handleAdd()}
+                        disabled={saving || !newExpense.description || !newExpense.amount || !newExpense.expense_date}
+                        className="p-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        title="הוסף (Enter)"
+                      >
+                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                      </button>
+                    </td>
+                  </tr>
+                  
+                  {/* Hint row */}
+                  <tr className="bg-gray-50/50 border-b">
+                    <td colSpan={activeTab === 'vat' ? 6 : 5} className="px-3 py-1 text-[10px] text-gray-400 flex items-center gap-1">
+                      <Zap className="w-3 h-3" />
+                      Tab לעבור בין שדות, Enter להוסיף • התאריך נשמר אוטומטית להוצאה הבאה
+                    </td>
+                  </tr>
+                  
+                  {/* Expense rows */}
+                  {currentExpenses.length === 0 ? (
+                    <tr>
+                      <td colSpan={activeTab === 'vat' ? 6 : 5} className="text-center py-12 text-gray-400">
+                        <Receipt className="w-10 h-10 mx-auto mb-2 text-gray-200" />
+                        <p className="text-sm">אין הוצאות לחודש זה</p>
+                        <p className="text-xs mt-1">הזן את ההוצאה הראשונה למעלה</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    currentExpenses.map((expense, index) => (
+                      <React.Fragment key={expense.id}>
+                        <tr 
+                          className={`hover:bg-blue-50/50 transition-all duration-300 ${
+                            index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                          } ${lastAdded === expense.id ? 'bg-green-100 animate-pulse' : ''}`}
+                        >
+                        {editingId === expense.id ? (
+                          <>
+                            <td className="px-2 py-1.5">
+                              <input
+                                type="date"
+                                value={editData.expense_date}
+                                onChange={(e) => setEditData({ ...editData, expense_date: e.target.value })}
+                                className="w-full px-2 py-1 border rounded text-sm"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <input
+                                type="text"
+                                value={editData.description}
+                                onChange={(e) => setEditData({ ...editData, description: e.target.value })}
+                                className="w-full px-2 py-1 border rounded text-sm"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <input
+                                type="text"
+                                value={editData.supplier_name}
+                                onChange={(e) => setEditData({ ...editData, supplier_name: e.target.value })}
+                                className="w-full px-2 py-1 border rounded text-sm"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <input
+                                type="number"
+                                value={editData.amount}
+                                onChange={(e) => setEditData({ ...editData, amount: e.target.value })}
+                                className="w-full px-2 py-1 border rounded text-sm text-center"
+                              />
+                            </td>
+                            {activeTab === 'vat' && (
+                              <td className="px-2 py-1.5 text-center text-xs text-green-600">
+                                {editData.amount ? formatCurrency(calculateVatFromTotal(parseFloat(editData.amount) || 0)) : '-'}
+                              </td>
+                            )}
+                            <td className="px-2 py-1.5">
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => handleSaveEdit(expense.id, activeTab === 'vat' ? 'vat' : 'noVat')}
+                                  disabled={saving}
+                                  className="p-1 text-green-600 hover:bg-green-50 rounded"
+                                >
+                                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                </button>
+                                <button
+                                  onClick={handleCancelEdit}
+                                  className="p-1 text-red-500 hover:bg-red-50 rounded"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-3 py-2 text-sm text-gray-500">
+                              {formatDate(expense.expense_date)}
+                            </td>
+                            <td className="px-3 py-2">
+                              <span className="text-sm font-medium text-gray-900">{expense.description}</span>
+                              {expense.is_recurring && (
+                                <span className="mr-2 text-[10px] bg-purple-100 text-purple-600 px-1 py-0.5 rounded">
+                                  קבועה
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-sm text-gray-500">
+                              {expense.supplier_name || '-'}
+                            </td>
+                            <td className="px-3 py-2 text-center text-sm font-semibold text-gray-900">
+                              {formatCurrency(expense.amount)}
+                            </td>
+                            {activeTab === 'vat' && (
+                              <td className="px-3 py-2 text-center text-sm font-medium text-green-600">
+                                {formatCurrency(expense.vat_amount || 0)}
+                              </td>
+                            )}
+                            <td className="px-2 py-2 text-center">
+                              <div className="flex gap-1 justify-center">
+                                <button
+                                  onClick={() => handleStartEdit(expense)}
+                                  className="p-1 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded transition-colors"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(expense.id, activeTab === 'vat' ? 'vat' : 'noVat')}
+                                  className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                      {/* Separator line */}
+                      <tr>
+                        <td colSpan={activeTab === 'vat' ? 6 : 5} className="p-0">
+                          <div className="h-[3px] bg-gray-300"></div>
+                        </td>
+                      </tr>
+                      </React.Fragment>
+                    ))
+                  )}
+                </tbody>
+              </table>
+              
+              {/* Table Footer */}
+              {currentExpenses.length > 0 && (
+                <div className="bg-gray-50 border-t px-4 py-2 flex justify-between items-center text-sm">
+                  <span className="text-gray-500">{currentExpenses.length} הוצאות</span>
+                  <div className="flex gap-4 font-semibold">
+                    <span className="text-gray-900">{formatCurrency(activeTab === 'vat' ? vatTotal : noVatTotal)}</span>
+                    {activeTab === 'vat' && (
+                      <span className="text-green-600">מע"מ: {formatCurrency(vatVatTotal)}</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

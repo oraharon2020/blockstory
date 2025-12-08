@@ -12,6 +12,7 @@ interface SettingsFormData {
   consumerSecret: string;
   vatRate: number;
   creditCardRate: number;
+  creditFeeMode: 'percentage' | 'manual';
   shippingCost: number;
   materialsRate: number;
   validOrderStatuses: string[];
@@ -31,6 +32,7 @@ export default function SettingsPage() {
     consumerSecret: '',
     vatRate: 18,
     creditCardRate: 2.5,
+    creditFeeMode: 'percentage',
     shippingCost: 0,
     materialsRate: 30,
     validOrderStatuses: ['completed', 'processing'],
@@ -68,6 +70,7 @@ export default function SettingsPage() {
           consumerSecret: json.data.consumerSecret || '',
           vatRate: parseFloat(json.data.vatRate) || 18,
           creditCardRate: parseFloat(json.data.creditCardRate) || 2.5,
+          creditFeeMode: json.data.creditFeeMode || 'percentage',
           shippingCost: parseFloat(json.data.shippingCost) || 0,
           materialsRate: parseFloat(json.data.materialsRate) || 30,
           validOrderStatuses: json.data.validOrderStatuses || ['completed', 'processing'],
@@ -398,17 +401,33 @@ export default function SettingsPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     עמלת אשראי
                   </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={settings.creditCardRate}
-                      onChange={(e) => setSettings({ ...settings, creditCardRate: parseFloat(e.target.value) || 0 })}
-                      className="w-24 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-center text-lg font-semibold"
-                    />
-                    <span className="text-gray-500 text-lg">%</span>
+                  <div className="mb-3">
+                    <select
+                      value={settings.creditFeeMode}
+                      onChange={(e) => setSettings({ ...settings, creditFeeMode: e.target.value as 'percentage' | 'manual' })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+                    >
+                      <option value="percentage">אחוז מההכנסה (אוטומטי)</option>
+                      <option value="manual">מילוי ידני בטבלה</option>
+                    </select>
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">עמלה שגובה חברת האשראי</p>
+                  {settings.creditFeeMode === 'percentage' && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={settings.creditCardRate}
+                        onChange={(e) => setSettings({ ...settings, creditCardRate: parseFloat(e.target.value) || 0 })}
+                        className="w-24 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-center text-lg font-semibold"
+                      />
+                      <span className="text-gray-500 text-lg">%</span>
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500 mt-2">
+                    {settings.creditFeeMode === 'percentage' 
+                      ? 'יחושב אוטומטית מסך ההכנסה' 
+                      : 'תוכל לערוך ידנית בטבלת התזרים'}
+                  </p>
                 </div>
 
                 <div className="bg-gray-50 rounded-xl p-5">

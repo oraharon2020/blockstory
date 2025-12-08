@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
       consumer_secret: settings.consumerSecret?.trim(),
       vat_rate: settings.vatRate,
       credit_card_rate: settings.creditCardRate,
+      credit_fee_mode: settings.creditFeeMode || 'percentage',
       shipping_cost: settings.shippingCost,
       materials_rate: settings.materialsRate,
       valid_order_statuses: settings.validOrderStatuses || ['completed', 'processing'],

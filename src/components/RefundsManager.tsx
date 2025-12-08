@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, KeyboardEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   RotateCcw, 
@@ -8,7 +8,11 @@ import {
   Trash2, 
   Loader2, 
   AlertCircle,
-  Search
+  Search,
+  Zap,
+  Pencil,
+  Check,
+  X
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/calculations';
 
@@ -43,9 +47,24 @@ export default function RefundsManager({ month, year, onUpdate }: RefundsManager
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastAdded, setLastAdded] = useState<string | null>(null);
+  
+  // Editing state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editData, setEditData] = useState({
+    refund_date: '',
+    description: '',
+    amount: '',
+    customer_name: '',
+  });
+  
+  // Refs for quick navigation
+  const dateRef = useRef<HTMLInputElement>(null);
+  const descRef = useRef<HTMLInputElement>(null);
+  const customerRef = useRef<HTMLInputElement>(null);
+  const amountRef = useRef<HTMLInputElement>(null);
   
   // New refund form
-  const [showAddForm, setShowAddForm] = useState(false);
   const [newRefund, setNewRefund] = useState({ 
     refund_date: '',
     description: '', 
@@ -101,7 +120,8 @@ export default function RefundsManager({ month, year, onUpdate }: RefundsManager
     }
   };
 
-  const handleAddRefund = async () => {
+  const handleAddRefund = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!newRefund.description || !newRefund.amount || !newRefund.refund_date || !currentBusiness?.id) return;
     
     setSaving(true);
@@ -128,21 +148,39 @@ export default function RefundsManager({ month, year, onUpdate }: RefundsManager
         throw new Error(json.error || 'Failed to add refund');
       }
       
+      // Keep the date for next entry
+      const savedDate = newRefund.refund_date;
       setNewRefund({ 
-        refund_date: '',
+        refund_date: savedDate,
         description: '', 
         amount: '',
         order_id: '',
         customer_name: '',
         reason: ''
       });
-      setShowAddForm(false);
+      setLastAdded(json.id);
+      setTimeout(() => setLastAdded(null), 2000);
       fetchRefunds();
       onUpdate?.();
+      // Focus on description for quick next entry
+      descRef.current?.focus();
     } catch (err: any) {
       setError(err.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Handle Enter key for quick add
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>, nextRef?: React.RefObject<HTMLInputElement | null>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (e.currentTarget === amountRef.current) {
+        // On Enter in amount field, submit
+        handleAddRefund();
+      } else if (nextRef?.current) {
+        nextRef.current.focus();
+      }
     }
   };
 
@@ -164,6 +202,60 @@ export default function RefundsManager({ month, year, onUpdate }: RefundsManager
       onUpdate?.();
     } catch (err: any) {
       setError(err.message);
+    }
+  };
+
+  // Start editing a refund
+  const handleStartEdit = (refund: Refund) => {
+    setEditingId(refund.id);
+    setEditData({
+      refund_date: refund.refund_date,
+      description: refund.description,
+      amount: String(refund.amount),
+      customer_name: refund.customer_name || '',
+    });
+  };
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditData({ refund_date: '', description: '', amount: '', customer_name: '' });
+  };
+
+  // Save edited refund
+  const handleSaveEdit = async (id: string) => {
+    if (!editData.description || !editData.amount || !editData.refund_date || !currentBusiness?.id) return;
+    
+    setSaving(true);
+    setError(null);
+    
+    try {
+      const res = await fetch('/api/refunds', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          refund_date: editData.refund_date,
+          description: editData.description,
+          amount: parseFloat(editData.amount),
+          customer_name: editData.customer_name,
+          businessId: currentBusiness.id,
+        }),
+      });
+
+      if (res.ok) {
+        fetchRefunds();
+        setEditingId(null);
+        setEditData({ refund_date: '', description: '', amount: '', customer_name: '' });
+        onUpdate?.();
+      } else {
+        const json = await res.json();
+        throw new Error(json.error || 'Failed to update refund');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -189,197 +281,223 @@ export default function RefundsManager({ month, year, onUpdate }: RefundsManager
   }
 
   return (
-    <div className="space-y-4" dir="rtl">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="p-2 bg-red-100 rounded-lg">
-            <RotateCcw className="w-5 h-5 text-red-600" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-gray-800">זיכויי לקוחות</h3>
-            <p className="text-sm text-gray-500">
-              {monthNames[month]} {year}
-            </p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
-          >
-            <Plus className="w-4 h-4" />
-            הוסף זיכוי
-          </button>
-        </div>
-      </div>
-
+    <div dir="rtl">
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-2 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
+        <div className="flex items-center gap-2 p-2 mb-3 bg-red-50 text-red-700 rounded-lg text-sm">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           {error}
         </div>
       )}
 
-      {/* Add Form */}
-      {showAddForm && (
-        <div className="bg-red-50 border border-red-100 rounded-lg p-4 space-y-3">
-          <h4 className="font-medium text-gray-800 mb-3">זיכוי חדש</h4>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">תאריך *</label>
-              <input
-                type="date"
-                value={newRefund.refund_date}
-                onChange={(e) => setNewRefund({ ...newRefund, refund_date: e.target.value })}
-                min={startDate}
-                max={endDate}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">סכום *</label>
-              <input
-                type="number"
-                step="0.01"
-                placeholder="סכום הזיכוי"
-                value={newRefund.amount}
-                onChange={(e) => setNewRefund({ ...newRefund, amount: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
-              />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-xs text-gray-600 mb-1">תיאור *</label>
-              <input
-                type="text"
-                placeholder="תיאור הזיכוי"
-                value={newRefund.description}
-                onChange={(e) => setNewRefund({ ...newRefund, description: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">מספר הזמנה</label>
-              <input
-                type="text"
-                placeholder="מספר הזמנה (אופציונלי)"
-                value={newRefund.order_id}
-                onChange={(e) => setNewRefund({ ...newRefund, order_id: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-600 mb-1">שם לקוח</label>
-              <input
-                type="text"
-                placeholder="שם הלקוח (אופציונלי)"
-                value={newRefund.customer_name}
-                onChange={(e) => setNewRefund({ ...newRefund, customer_name: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
-              />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-xs text-gray-600 mb-1">סיבת הזיכוי</label>
-              <input
-                type="text"
-                placeholder="סיבה (אופציונלי)"
-                value={newRefund.reason}
-                onChange={(e) => setNewRefund({ ...newRefund, reason: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
-              />
-            </div>
-          </div>
-          <div className="flex gap-2 pt-2">
-            <button
-              onClick={handleAddRefund}
-              disabled={saving || !newRefund.description || !newRefund.amount || !newRefund.refund_date}
-              className="flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm disabled:opacity-50"
-            >
-              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              הוסף
-            </button>
-            <button
-              onClick={() => setShowAddForm(false)}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm"
-            >
-              ביטול
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Refunds List */}
-      {refunds.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          <RotateCcw className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-          <p>אין זיכויים לחודש זה</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {refunds.map((refund) => (
-            <div
-              key={refund.id}
-              className="flex items-center justify-between p-3 bg-white border border-red-100 rounded-lg hover:shadow-sm transition-shadow"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-red-50 rounded-lg">
-                  <RotateCcw className="w-4 h-4 text-red-600" />
-                </div>
-                <div>
-                  <div className="font-medium text-gray-800">{refund.description}</div>
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <span>{formatDate(refund.refund_date)}</span>
-                    {refund.customer_name && (
-                      <>
-                        <span>•</span>
-                        <span>{refund.customer_name}</span>
-                      </>
-                    )}
-                    {refund.order_id && (
-                      <>
-                        <span>•</span>
-                        <span className="flex items-center gap-1">
-                          <Search className="w-3 h-3" />
-                          #{refund.order_id}
-                        </span>
-                      </>
-                    )}
-                    {refund.reason && (
-                      <>
-                        <span>•</span>
-                        <span className="text-red-500">{refund.reason}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                <span className="font-bold text-red-600">
-                  {formatCurrency(refund.amount)}
-                </span>
+      {/* Quick Add Table */}
+      <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="bg-gray-50 border-b text-xs font-medium text-gray-500 uppercase">
+              <th className="px-3 py-2.5 text-right w-28">תאריך</th>
+              <th className="px-3 py-2.5 text-right">תיאור</th>
+              <th className="px-3 py-2.5 text-right w-28">לקוח</th>
+              <th className="px-3 py-2.5 text-center w-24">סכום</th>
+              <th className="px-3 py-2.5 w-10"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {/* Quick Add Row */}
+            <tr className="bg-red-50/50 border-b-2 border-red-200">
+              <td className="px-2 py-1.5">
+                <input
+                  ref={dateRef}
+                  type="date"
+                  value={newRefund.refund_date}
+                  onChange={(e) => setNewRefund({ ...newRefund, refund_date: e.target.value })}
+                  onKeyDown={(e) => handleKeyDown(e, descRef)}
+                  min={startDate}
+                  max={endDate}
+                  className="w-full px-2 py-1.5 border rounded text-sm focus:ring-2 focus:ring-red-400 focus:border-transparent bg-white"
+                />
+              </td>
+              <td className="px-2 py-1.5">
+                <input
+                  ref={descRef}
+                  type="text"
+                  value={newRefund.description}
+                  onChange={(e) => setNewRefund({ ...newRefund, description: e.target.value })}
+                  onKeyDown={(e) => handleKeyDown(e, customerRef)}
+                  placeholder="תיאור הזיכוי..."
+                  className="w-full px-2 py-1.5 border rounded text-sm focus:ring-2 focus:ring-red-400 focus:border-transparent bg-white"
+                />
+              </td>
+              <td className="px-2 py-1.5">
+                <input
+                  ref={customerRef}
+                  type="text"
+                  value={newRefund.customer_name}
+                  onChange={(e) => setNewRefund({ ...newRefund, customer_name: e.target.value })}
+                  onKeyDown={(e) => handleKeyDown(e, amountRef)}
+                  placeholder="לקוח"
+                  className="w-full px-2 py-1.5 border rounded text-sm focus:ring-2 focus:ring-red-400 focus:border-transparent bg-white"
+                />
+              </td>
+              <td className="px-2 py-1.5">
+                <input
+                  ref={amountRef}
+                  type="number"
+                  step="0.01"
+                  value={newRefund.amount}
+                  onChange={(e) => setNewRefund({ ...newRefund, amount: e.target.value })}
+                  onKeyDown={(e) => handleKeyDown(e)}
+                  placeholder="₪"
+                  className="w-full px-2 py-1.5 border rounded text-sm text-center focus:ring-2 focus:ring-red-400 focus:border-transparent bg-white font-medium"
+                />
+              </td>
+              <td className="px-2 py-1.5">
                 <button
-                  onClick={() => handleDeleteRefund(refund.id)}
-                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                  title="מחק זיכוי"
+                  onClick={() => handleAddRefund()}
+                  disabled={saving || !newRefund.description || !newRefund.amount || !newRefund.refund_date}
+                  className="p-1.5 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="הוסף (Enter)"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Total */}
-      <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg border border-red-100">
-        <div className="flex items-center gap-2">
-          <RotateCcw className="w-5 h-5 text-red-600" />
-          <span className="font-semibold text-gray-800">סה"כ זיכויים</span>
-        </div>
-        <span className="text-xl font-bold text-red-600">{formatCurrency(totalRefunds)}</span>
+              </td>
+            </tr>
+            
+            {/* Hint row */}
+            <tr className="bg-gray-50/50 border-b">
+              <td colSpan={5} className="px-3 py-1 text-[10px] text-gray-400 flex items-center gap-1">
+                <Zap className="w-3 h-3" />
+                Tab לעבור בין שדות, Enter להוסיף • התאריך נשמר אוטומטית לזיכוי הבא
+              </td>
+            </tr>
+            
+            {/* Refund rows */}
+            {refunds.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="text-center py-12 text-gray-400">
+                  <RotateCcw className="w-10 h-10 mx-auto mb-2 text-gray-200" />
+                  <p className="text-sm">אין זיכויים לחודש זה</p>
+                  <p className="text-xs mt-1">הזן את הזיכוי הראשון למעלה</p>
+                </td>
+              </tr>
+            ) : (
+              refunds.map((refund, index) => (
+                <React.Fragment key={refund.id}>
+                  <tr 
+                    className={`hover:bg-red-50/50 transition-all duration-300 ${
+                      index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'
+                    } ${lastAdded === refund.id ? 'bg-green-100 animate-pulse' : ''}`}
+                  >
+                    {editingId === refund.id ? (
+                      <>
+                        <td className="px-2 py-1.5">
+                          <input
+                            type="date"
+                            value={editData.refund_date}
+                            onChange={(e) => setEditData({ ...editData, refund_date: e.target.value })}
+                            className="w-full px-2 py-1 border rounded text-sm"
+                          />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <input
+                            type="text"
+                            value={editData.description}
+                            onChange={(e) => setEditData({ ...editData, description: e.target.value })}
+                            className="w-full px-2 py-1 border rounded text-sm"
+                          />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <input
+                            type="text"
+                            value={editData.customer_name}
+                            onChange={(e) => setEditData({ ...editData, customer_name: e.target.value })}
+                            className="w-full px-2 py-1 border rounded text-sm"
+                          />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <input
+                            type="number"
+                            value={editData.amount}
+                            onChange={(e) => setEditData({ ...editData, amount: e.target.value })}
+                            className="w-full px-2 py-1 border rounded text-sm text-center"
+                          />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => handleSaveEdit(refund.id)}
+                              disabled={saving}
+                              className="p-1 text-green-600 hover:bg-green-50 rounded"
+                            >
+                              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                            </button>
+                            <button
+                              onClick={handleCancelEdit}
+                              className="p-1 text-red-500 hover:bg-red-50 rounded"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-3 py-2 text-sm text-gray-500">
+                          {formatDate(refund.refund_date)}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className="text-sm font-medium text-gray-900">{refund.description}</span>
+                          {refund.order_id && (
+                            <span className="mr-2 text-[10px] bg-gray-100 text-gray-600 px-1 py-0.5 rounded flex items-center gap-0.5 inline-flex">
+                              <Search className="w-2.5 h-2.5" />
+                              #{refund.order_id}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-sm text-gray-500">
+                          {refund.customer_name || '-'}
+                        </td>
+                        <td className="px-3 py-2 text-center text-sm font-semibold text-red-600">
+                          {formatCurrency(refund.amount)}
+                        </td>
+                        <td className="px-2 py-2 text-center">
+                          <div className="flex gap-1 justify-center">
+                            <button
+                              onClick={() => handleStartEdit(refund)}
+                              className="p-1 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded transition-colors"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteRefund(refund.id)}
+                              className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                  {/* Separator line */}
+                  <tr>
+                    <td colSpan={5} className="p-0">
+                      <div className="h-[3px] bg-gray-300"></div>
+                    </td>
+                  </tr>
+                </React.Fragment>
+              ))
+            )}
+          </tbody>
+        </table>
+        
+        {/* Table Footer */}
+        {refunds.length > 0 && (
+          <div className="bg-red-50 border-t px-4 py-2 flex justify-between items-center text-sm">
+            <span className="text-gray-500">{refunds.length} זיכויים</span>
+            <span className="font-bold text-red-600">{formatCurrency(totalRefunds)}</span>
+          </div>
+        )}
       </div>
     </div>
   );

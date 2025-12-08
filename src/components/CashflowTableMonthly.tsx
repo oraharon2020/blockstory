@@ -208,6 +208,7 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
       // Get credit fee mode from business settings
       const businessCreditFeeMode = settingsJson.data?.creditFeeMode || 'percentage';
       setCreditFeeMode(businessCreditFeeMode);
+      console.log('Credit Fee Mode:', businessCreditFeeMode, 'Raw:', settingsJson.data?.creditFeeMode);
       
       // Get employee daily cost
       const dailyEmpCost = employeesJson.dailyCost || 0;
@@ -397,7 +398,11 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
 
   const handleCellClick = (date: string, field: keyof DailyData, value: number) => {
     // materialsCost is now calculated automatically from order item costs
+    // creditCardFees is editable only when creditFeeMode is 'manual'
     const editableFields: (keyof DailyData)[] = ['googleAdsCost', 'facebookAdsCost', 'tiktokAdsCost'];
+    if (creditFeeMode === 'manual') {
+      editableFields.push('creditCardFees');
+    }
     if (!editableFields.includes(field)) return;
     
     setEditingCell({ date, field });
@@ -802,7 +807,7 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
                 <tr 
                   key={row.date}
                   data-date={row.date}
-                  onClick={() => setHighlightedRow(highlightedRow === row.date ? null : row.date)}
+                  onDoubleClick={() => setHighlightedRow(highlightedRow === row.date ? null : row.date)}
                   className={`
                     border-b-2 cursor-pointer transition-all duration-150
                     ${highlightedRow === row.date 
@@ -863,7 +868,7 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
                     </td>
                   )}
                   {isColumnVisible('creditCardFees') && (
-                    <td className="px-1.5 py-2 text-gray-700">
+                    <td className="px-1.5 py-2 text-gray-700 group">
                       {creditFeeMode === 'manual' 
                         ? renderEditableCell(row, 'creditCardFees', row.creditCardFees)
                         : formatCurrency(row.creditCardFees)
@@ -964,8 +969,8 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
       {/* Expenses Manager Modal */}
       {showExpensesManager && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col">
+            <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between flex-shrink-0">
               <h2 className="text-xl font-bold text-gray-900">ניהול הוצאות</h2>
               <button
                 onClick={() => {
@@ -977,7 +982,7 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-6">
+            <div className="flex-1 overflow-y-auto">
               <ExpensesManager
                 month={month}
                 year={year}

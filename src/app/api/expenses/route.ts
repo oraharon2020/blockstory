@@ -154,3 +154,46 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+// PUT - Update expense
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { id, type, expense_date, description, amount, vat_amount, supplier_name, businessId } = body;
+
+    if (!id || !type || !expense_date || !description || amount === undefined) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    const table = type === 'vat' ? TABLES.EXPENSES_VAT : TABLES.EXPENSES_NO_VAT;
+    
+    const updateData: any = {
+      expense_date,
+      description,
+      amount: parseFloat(amount) || 0,
+      supplier_name: supplier_name || null,
+    };
+
+    // Only add vat_amount for VAT expenses
+    if (type === 'vat') {
+      updateData.vat_amount = parseFloat(vat_amount) || 0;
+    }
+
+    const { data, error } = await supabase
+      .from(table)
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating expense:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ data, updated: true });
+  } catch (error: any) {
+    console.error('Error in expenses PUT:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}

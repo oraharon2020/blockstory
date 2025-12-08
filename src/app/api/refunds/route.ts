@@ -120,3 +120,39 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+// PUT - Update a refund
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { id, refund_date, description, amount, customer_name, businessId } = body;
+
+    if (!id || !refund_date || !amount) {
+      return NextResponse.json({ error: 'ID, date and amount are required' }, { status: 400 });
+    }
+
+    const updateData: Record<string, any> = {
+      refund_date,
+      description: description || '',
+      amount: parseFloat(amount),
+      customer_name: customer_name || null,
+    };
+
+    const { data, error } = await supabase
+      .from('customer_refunds')
+      .update(updateData)
+      .eq('id', parseInt(id))
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating refund:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ data, updated: true });
+  } catch (error: any) {
+    console.error('Error in refunds PUT:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
