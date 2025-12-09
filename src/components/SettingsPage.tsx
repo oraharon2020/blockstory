@@ -868,6 +868,9 @@ function GoogleAdsSetupTab({ businessId }: { businessId?: string }) {
   const [isConnected, setIsConnected] = useState(false);
   const [connectedAccount, setConnectedAccount] = useState<string | null>(null);
   const [connectingApi, setConnectingApi] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(null);
+  const [syncCounts, setSyncCounts] = useState<{ campaigns: number; keywords: number; searchTerms: number; ads: number } | null>(null);
 
   const webhookUrl = typeof window !== 'undefined' 
     ? `${window.location.origin}/api/webhook/google-ads`
@@ -892,6 +895,8 @@ function GoogleAdsSetupTab({ businessId }: { businessId?: string }) {
           setIsConnected(true);
           setConnectedAccount(json.data.googleAdsCustomerId || 'מחובר');
           setConnectionMethod('api');
+          // Load sync status
+          loadSyncStatus();
         }
       } else {
         setWebhookSecret(generateSecret());
@@ -901,6 +906,21 @@ function GoogleAdsSetupTab({ businessId }: { businessId?: string }) {
       setWebhookSecret(generateSecret());
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadSyncStatus = async () => {
+    try {
+      const res = await fetch(`/api/google-ads/sync?businessId=${businessId}`);
+      const json = await res.json();
+      if (json.lastSync) {
+        setLastSync(json.lastSync);
+      }
+      if (json.counts) {
+        setSyncCounts(json.counts);
+      }
+    } catch (error) {
+      console.error('Error loading sync status:', error);
     }
   };
 
@@ -965,8 +985,36 @@ function GoogleAdsSetupTab({ businessId }: { businessId?: string }) {
       });
       setIsConnected(false);
       setConnectedAccount(null);
+      setLastSync(null);
+      setSyncCounts(null);
     } catch (error) {
       console.error('Error disconnecting Google Ads:', error);
+    }
+  };
+
+  const handleSyncNow = async () => {
+    if (!businessId || syncing) return;
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/google-ads/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessId,
+          // Last 30 days by default
+        }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        alert(`סנכרון הושלם בהצלחה!\n\nקמפיינים: ${result.campaigns}\nמודעות: ${result.ads}\nמילות מפתח: ${result.keywords}\nתנאי חיפוש: ${result.searchTerms}`);
+        loadSyncStatus();
+      } else {
+        alert(`שגיאה בסנכרון: ${result.errors?.join(', ') || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      alert(`שגיאה: ${error.message}`);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -1033,10 +1081,66 @@ function GoogleAdsSetupTab({ businessId }: { businessId?: string }) {
                   נתק חשבון
                 </button>
               </div>
+
+              {/* Sync Section */}
+              <div className="mt-4 p-4 bg-white rounded-lg border border-green-200">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h5 className="font-medium text-gray-900">סנכרון נתונים</h5>
+                    {lastSync && (
+                      <p className="text-xs text-gray-500">
+                        סנכרון אחרון: {new Date(lastSync).toLocaleString('he-IL')}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={handleSyncNow}
+                    disabled={syncing}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
+                  >
+                    {syncing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        מסנכרן...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        סנכרן עכשיו
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Sync Stats */}
+                {syncCounts && (
+                  <div className="grid grid-cols-4 gap-3 text-center">
+                    <div className="p-2 bg-gray-50 rounded">
+                      <div className="text-lg font-semibold text-gray-900">{syncCounts.campaigns}</div>
+                      <div className="text-xs text-gray-500">קמפיינים</div>
+                    </div>
+                    <div className="p-2 bg-gray-50 rounded">
+                      <div className="text-lg font-semibold text-gray-900">{syncCounts.ads}</div>
+                      <div className="text-xs text-gray-500">מודעות</div>
+                    </div>
+                    <div className="p-2 bg-gray-50 rounded">
+                      <div className="text-lg font-semibold text-gray-900">{syncCounts.keywords}</div>
+                      <div className="text-xs text-gray-500">מילות מפתח</div>
+                    </div>
+                    <div className="p-2 bg-gray-50 rounded">
+                      <div className="text-lg font-semibold text-gray-900">{syncCounts.searchTerms}</div>
+                      <div className="text-xs text-gray-500">תנאי חיפוש</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="mt-4 p-3 bg-green-100 rounded-lg">
                 <p className="text-sm text-green-700">
-                  ✅ הנתונים יסונכרנו אוטומטית כל שעה<br/>
-                  ✅ ה-AI יקבל גישה לתוכן המודעות, קהלים ומילות מפתח
+                  ✅ ה-AI יקבל גישה לתוכן המודעות, קהלים ומילות מפתח<br/>
+                  💡 לחץ "סנכרן עכשיו" לעדכון הנתונים
                 </p>
               </div>
             </div>
