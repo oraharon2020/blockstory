@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, KeyboardEvent, useMemo, useCallback } from 'react';
-import { Plus, Trash2, Loader2, Receipt, Globe, Copy, Users, RotateCcw, Pencil, Check, X, Pin, PinOff, Search, Maximize2, Minimize2 } from 'lucide-react';
+import { Plus, Trash2, Loader2, Receipt, Globe, Copy, Users, RotateCcw, Pencil, Check, X, Pin, PinOff, Search, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
 import { formatCurrency } from '@/lib/calculations';
 import EmployeesManager from './EmployeesManager';
 import RefundsManager from './RefundsManager';
@@ -25,9 +25,12 @@ interface ExpensesManagerProps {
   year: number;
   onUpdate?: () => void;
   onClose?: () => void;
+  isExpanded?: boolean;
+  onExpandChange?: (expanded: boolean) => void;
+  isFullPage?: boolean;
 }
 
-export default function ExpensesManager({ month, year, onUpdate, onClose }: ExpensesManagerProps) {
+export default function ExpensesManager({ month, year, onUpdate, onClose, isExpanded: externalExpanded, onExpandChange, isFullPage = false }: ExpensesManagerProps) {
   const { currentBusiness } = useAuth();
   const [vatExpenses, setVatExpenses] = useState<Expense[]>([]);
   const [noVatExpenses, setNoVatExpenses] = useState<Expense[]>([]);
@@ -38,8 +41,25 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
   const [vatRate, setVatRate] = useState(18);
   const [lastAdded, setLastAdded] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [internalExpanded, setInternalExpanded] = useState(false);
   const [highlightedIds, setHighlightedIds] = useState<Set<number>>(new Set());
+  
+  // Use external expanded state if provided, otherwise use internal
+  const isExpanded = externalExpanded !== undefined ? externalExpanded : internalExpanded;
+  const handleExpandToggle = () => {
+    // If not in full page mode, open in new tab
+    if (!isFullPage) {
+      window.open(`/expenses?month=${month}&year=${year}`, '_blank');
+      return;
+    }
+    // Otherwise toggle expand state
+    const newValue = !isExpanded;
+    if (onExpandChange) {
+      onExpandChange(newValue);
+    } else {
+      setInternalExpanded(newValue);
+    }
+  };
   
   // Editing state
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -472,13 +492,15 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
               >
                 {copying ? <Loader2 className="w-3 h-3 animate-spin" /> : <Copy className="w-3 h-3" />}
               </button>
-              <button
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="p-1 text-gray-500 hover:bg-gray-100 rounded"
-                title={isExpanded ? 'הקטן' : 'הגדל'}
-              >
-                {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-              </button>
+              {!isFullPage && (
+                <button
+                  onClick={handleExpandToggle}
+                  className="p-1 text-gray-500 hover:bg-gray-100 rounded"
+                  title="פתח בחלון חדש"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </button>
+              )}
             </>
           )}
         </div>

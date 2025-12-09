@@ -99,6 +99,7 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
   const [autoSync, setAutoSync] = useState(true); // Auto sync from WooCommerce
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [showExpensesManager, setShowExpensesManager] = useState(false);
+  const [expensesModalExpanded, setExpensesModalExpanded] = useState(false);
   const [showColumnSettings, setShowColumnSettings] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_VISIBLE_COLUMNS);
   const columnSettingsRef = useRef<HTMLDivElement>(null);
@@ -302,7 +303,8 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
           if (existing) {
             // Recalculate totals with real materials cost and expenses
             // VAT calculation: revenue VAT - deductible VAT from all sources
-            const revenueVat = existing.vat || 0;
+            // Revenue includes VAT, so we extract it: revenue * (vatRate / (100 + vatRate))
+            const revenueVat = (existing.revenue || 0) * (businessVatRate / (100 + businessVatRate));
             
             // If we have manual shipping from order_item_costs, use it (stored without VAT, add VAT)
             // Manual shipping is entered without VAT, so we add VAT here
@@ -1056,12 +1058,15 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
       {/* Expenses Manager Modal */}
       {showExpensesManager && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col">
+          <div className={`bg-white rounded-xl shadow-2xl w-full flex flex-col transition-all duration-300 ${
+            expensesModalExpanded ? 'max-w-[95vw] h-[95vh]' : 'max-w-6xl h-[90vh]'
+          }`}>
             <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between flex-shrink-0">
               <h2 className="text-xl font-bold text-gray-900">ניהול הוצאות</h2>
               <button
                 onClick={() => {
                   setShowExpensesManager(false);
+                  setExpensesModalExpanded(false);
                   fetchData(false);
                 }}
                 className="p-2 hover:bg-gray-100 rounded-lg"
@@ -1075,8 +1080,10 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
                 year={year}
                 onClose={() => {
                   setShowExpensesManager(false);
+                  setExpensesModalExpanded(false);
                   fetchData(false);
                 }}
+                onExpandChange={setExpensesModalExpanded}
               />
             </div>
           </div>
