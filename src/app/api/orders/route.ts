@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
     let wooUrl: string | undefined;
     let consumerKey: string | undefined;
     let consumerSecret: string | undefined;
+    let validOrderStatuses: string[] = ['completed', 'processing']; // Default statuses
 
     // Check for business-specific settings first
     if (businessId) {
@@ -34,7 +35,11 @@ export async function GET(request: NextRequest) {
         wooUrl = businessSettings.woo_url?.trim();
         consumerKey = businessSettings.consumer_key?.trim();
         consumerSecret = businessSettings.consumer_secret?.trim();
-        console.log(`✅ Found business settings, wooUrl: ${wooUrl}`);
+        // Get valid order statuses from settings
+        if (businessSettings.valid_order_statuses && Array.isArray(businessSettings.valid_order_statuses)) {
+          validOrderStatuses = businessSettings.valid_order_statuses;
+        }
+        console.log(`✅ Found business settings, wooUrl: ${wooUrl}, validStatuses: ${validOrderStatuses.join(', ')}`);
       }
     }
 
@@ -80,6 +85,7 @@ export async function GET(request: NextRequest) {
       orderby: 'date',
       order: 'desc',
       dates_are_gmt: false,
+      status: validOrderStatuses.join(','), // Filter by valid statuses from settings
     });
 
     return NextResponse.json({ orders: response.data });
