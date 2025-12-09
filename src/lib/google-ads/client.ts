@@ -86,6 +86,9 @@ export async function googleAdsRequest<T>(
 export async function listAccessibleCustomers(refreshToken: string): Promise<string[]> {
   const accessToken = await getAccessToken(refreshToken);
 
+  console.log('Listing accessible customers...');
+  console.log('Developer token (first 10 chars):', DEVELOPER_TOKEN.substring(0, 10));
+
   const response = await fetch(
     'https://googleads.googleapis.com/v15/customers:listAccessibleCustomers',
     {
@@ -96,6 +99,14 @@ export async function listAccessibleCustomers(refreshToken: string): Promise<str
       },
     }
   );
+
+  // Check if response is HTML (error page) instead of JSON
+  const contentType = response.headers.get('content-type');
+  if (contentType && !contentType.includes('application/json')) {
+    const text = await response.text();
+    console.error('Non-JSON response:', text.substring(0, 500));
+    throw new Error(`Google API returned non-JSON response (${response.status}): ${text.substring(0, 200)}`);
+  }
 
   if (!response.ok) {
     const error = await response.json();

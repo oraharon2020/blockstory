@@ -46,9 +46,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Calculate date range (default: last 30 days)
+    // Calculate date range (default: last 90 days)
     const end = endDate || new Date().toISOString().split('T')[0];
-    const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const start = startDate || new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     // Run sync
     const result = await syncGoogleAdsData({
