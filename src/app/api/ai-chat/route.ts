@@ -35,6 +35,18 @@ const tools: Anthropic.Tool[] = [
     - product_costs: id, product_id, sku, product_name, unit_cost (=עלות יחידה), supplier_name, business_id, updated_at
     (עלויות מוצרים - unit_cost היא עלות המוצר)
     
+    - google_ads_campaigns: campaign_id, campaign_name, campaign_type (SEARCH/PERFORMANCE_MAX/SHOPPING/DISPLAY/VIDEO), status (enabled/paused), date, cost, clicks, impressions, conversions, conversion_value, ctr, avg_cpc, cost_per_conversion, conversion_rate, impression_share, business_id
+    (ביצועי קמפיינים Google Ads - נתונים יומיים לכל קמפיין)
+    
+    - google_ads_keywords: campaign_id, ad_group_id, keyword, match_type (Exact/Phrase/Broad), quality_score (1-10), date, cost, clicks, impressions, conversions, ctr, avg_cpc, business_id
+    (מילות מפתח Google Ads - נתונים יומיים)
+    
+    - google_ads_search_terms: campaign_id, query (ביטוי החיפוש שהמשתמש הקליד), date, cost, clicks, impressions, conversions, business_id
+    (ביטויי חיפוש בפועל שגרמו לקליקים)
+    
+    - google_ads_ad_groups: campaign_id, ad_group_id, ad_group_name, status, date, cost, clicks, impressions, conversions, ctr, avg_cpc, business_id
+    (קבוצות מודעות)
+    
     - businesses: id, name, logo_url, is_active, created_at, created_by
     (פרטי העסק)
     
@@ -155,7 +167,7 @@ async function processToolCall(
 }
 
 // System prompt
-const SYSTEM_PROMPT = `אתה יועץ עסקי מנוסה עם גישה מלאה לנתוני העסק.
+const SYSTEM_PROMPT = `אתה יועץ עסקי מנוסה עם גישה מלאה לנתוני העסק כולל Google Ads.
 
 הגישה שלך:
 - ישיר ותכליתי. לא חנפן, לא מחמיא סתם
@@ -187,6 +199,7 @@ daily_cashflow - תזרים יומי:
 
 order_item_costs - מוצרים שנמכרו:
   order_id, order_date, product_name, quantity, item_cost, shipping_cost, supplier_name
+  (משם אפשר לחשב מכירות ורווחיות לפי מוצר!)
 
 expenses_vat - הוצאות מוכרות:
   expense_date, description, amount, vat_amount, category, supplier_name
@@ -203,9 +216,39 @@ employees - עובדים:
 product_costs - עלויות מוצרים:
   product_name, sku, unit_cost, supplier_name
 
+google_ads_campaigns - קמפיינים Google Ads:
+  campaign_id, campaign_name, campaign_type (SEARCH/PERFORMANCE_MAX/SHOPPING/DISPLAY/VIDEO),
+  status, date, cost, clicks, impressions, conversions, conversion_value,
+  ctr, avg_cpc, cost_per_conversion, conversion_rate, impression_share
+
+google_ads_keywords - מילות מפתח:
+  keyword, match_type (Exact/Phrase/Broad), quality_score (1-10),
+  date, cost, clicks, impressions, conversions, ctr, avg_cpc
+
+google_ads_search_terms - ביטויי חיפוש:
+  query (מה אנשים הקלידו), date, cost, clicks, impressions, conversions
+
+google_ads_ad_groups - קבוצות מודעות:
+  ad_group_name, campaign_id, date, cost, clicks, impressions, conversions
+
 סינון תאריכים: {"date_gte": "2025-12-01", "date_lte": "2025-12-31"}
 
-אם צריך נתונים - השתמש בכלי query_database.`;
+יכולות ניתוח Google Ads:
+- ROAS = conversion_value / cost (יעד: מעל 3)
+- עלות להמרה = cost / conversions
+- CTR = clicks / impressions (יעד: מעל 2% בחיפוש)
+- Quality Score מעל 7 = טוב, מתחת ל-5 = בעייתי
+
+טיפים לניתוח:
+1. כדי למצוא מוצרים רווחיים - בדוק order_item_costs וחשב מכירות-עלויות
+2. כדי להמליץ על קמפיין - בדוק ROAS ועלות להמרה
+3. כדי למצוא מילות מפתח בעייתיות - חפש quality_score נמוך + cost גבוה
+4. כדי להמליץ מה לקדם - שלב נתוני מכירות עם נתוני פרסום
+
+אם שואלים "מה כדאי לקדם" או "איזה מוצר הכי משתלם":
+1. קודם בדוק מכירות ורווחיות מ-order_item_costs
+2. אם יש נתוני Google Ads - בדוק גם ROAS לפי קמפיין
+3. המלץ על מוצרים עם: מכירות גבוהות + מרווח טוב + ROAS טוב (אם יש)`;
 
 interface ChatRequest {
   message: string;
