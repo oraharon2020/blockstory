@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useRef, KeyboardEvent } from 'react';
-import { Plus, Trash2, Loader2, Receipt, Globe, Copy, Users, RotateCcw, Zap, Pencil, Check, X } from 'lucide-react';
+import React, { useState, useEffect, useRef, KeyboardEvent, useMemo } from 'react';
+import { Plus, Trash2, Loader2, Receipt, Globe, Copy, Users, RotateCcw, Zap, Pencil, Check, X, Pin, PinOff } from 'lucide-react';
 import { formatCurrency } from '@/lib/calculations';
 import EmployeesManager from './EmployeesManager';
 import RefundsManager from './RefundsManager';
@@ -251,6 +251,29 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
     }
   };
 
+  // Toggle recurring status
+  const handleToggleRecurring = async (id: number, type: 'vat' | 'noVat', isRecurring: boolean) => {
+    try {
+      const res = await fetch('/api/expenses', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          type,
+          is_recurring: isRecurring,
+          businessId: currentBusiness?.id,
+        }),
+      });
+
+      if (res.ok) {
+        await loadExpenses();
+        onUpdate?.();
+      }
+    } catch (error) {
+      console.error('Error toggling recurring:', error);
+    }
+  };
+
   const handleCopyFromPreviousMonth = async () => {
     // Calculate previous month
     let prevMonth = month - 1;
@@ -307,7 +330,20 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
   const vatVatTotal = vatExpenses.reduce((sum, e) => sum + (parseFloat(String(e.vat_amount)) || 0), 0);
   const noVatTotal = noVatExpenses.reduce((sum, e) => sum + (parseFloat(String(e.amount)) || 0), 0);
 
-  const currentExpenses = activeTab === 'vat' ? vatExpenses : noVatExpenses;
+  // Sort expenses: recurring (pinned) first, then by date descending
+  const sortedExpenses = useMemo(() => {
+    const expenses = activeTab === 'vat' ? vatExpenses : noVatExpenses;
+    return [...expenses].sort((a, b) => {
+      // Recurring expenses first
+      if (a.is_recurring && !b.is_recurring) return -1;
+      if (!a.is_recurring && b.is_recurring) return 1;
+      // Then by date descending
+      return new Date(b.expense_date).getTime() - new Date(a.expense_date).getTime();
+    });
+  }, [activeTab, vatExpenses, noVatExpenses]);
+
+  const currentExpenses = sortedExpenses;
+  const recurringCount = currentExpenses.filter(e => e.is_recurring).length;
 
   if (loading) {
     return (
@@ -418,6 +454,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-50 border-b text-xs font-medium text-gray-500 uppercase">
+                    <th className="px-2 py-2.5 w-8"></th>
                     <th className="px-3 py-2.5 text-right w-28">תאריך</th>
                     <th className="px-3 py-2.5 text-right">תיאור</th>
                     <th className="px-3 py-2.5 text-right w-28">ספק</th>
@@ -430,6 +467,15 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                 <tbody>
                   {/* Quick Add Row - Always at top */}
                   <tr className="bg-blue-50/50 border-b-2 border-blue-200">
+                    <td className="px-2 py-1.5">
+                      <button
+                        onClick={() => setNewExpense({ ...newExpense, is_recurring: !newExpense.is_recurring })}
+                        className={`p-1 rounded transition-colors ${newExpense.is_recurring ? 'text-purple-600 bg-purple-100' : 'text-gray-300 hover:text-purple-400'}`}
+                        title={newExpense.is_recurring ? 'הסר הצמדה' : 'הצמד כהוצאה קבועה'}
+                      >
+                        {newExpense.is_recurring ? <Pin className="w-4 h-4" /> : <PinOff className="w-4 h-4" />}
+                      </button>
+                    </td>
                     <td className="px-2 py-1.5">
                       <input
                         ref={dateRef}
@@ -503,31 +549,55 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                   
                   {/* Hint row */}
                   <tr className="bg-gray-50/50 border-b">
-                    <td colSpan={activeTab === 'vat' ? 7 : 6} className="px-3 py-1 text-[10px] text-gray-400 flex items-center gap-1">
+                    <td colSpan={activeTab === 'vat' ? 8 : 7} className="px-3 py-1 text-[10px] text-gray-400 flex items-center gap-1">
                       <Zap className="w-3 h-3" />
-                      Tab לעבור בין שדות, Enter להוסיף • התאריך נשמר אוטומטית להוצאה הבאה
+                      Tab לעבור בין שדות, Enter להוסיף • <Pin className="w-3 h-3 inline" /> הוצאות קבועות מוצמדות למעלה
                     </td>
                   </tr>
+                  
+                  {/* Recurring expenses separator */}
+                  {recurringCount > 0 && (
+                    <tr className="bg-purple-50">
+                      <td colSpan={activeTab === 'vat' ? 8 : 7} className="px-3 py-1.5 text-xs font-medium text-purple-700 flex items-center gap-1">
+                        <Pin className="w-3 h-3" />
+                        הוצאות קבועות ({recurringCount})
+                      </td>
+                    </tr>
+                  )}
                   
                   {/* Expense rows */}
                   {currentExpenses.length === 0 ? (
                     <tr>
-                      <td colSpan={activeTab === 'vat' ? 7 : 6} className="text-center py-12 text-gray-400">
+                      <td colSpan={activeTab === 'vat' ? 8 : 7} className="text-center py-12 text-gray-400">
                         <Receipt className="w-10 h-10 mx-auto mb-2 text-gray-200" />
                         <p className="text-sm">אין הוצאות לחודש זה</p>
                         <p className="text-xs mt-1">הזן את ההוצאה הראשונה למעלה</p>
                       </td>
                     </tr>
                   ) : (
-                    currentExpenses.map((expense, index) => (
+                    currentExpenses.map((expense, index) => {
+                      // Show separator before first non-recurring if there were recurring ones
+                      const showSeparator = recurringCount > 0 && index === recurringCount;
+                      
+                      return (
                       <React.Fragment key={expense.id}>
+                        {showSeparator && (
+                          <tr className="bg-gray-100">
+                            <td colSpan={activeTab === 'vat' ? 8 : 7} className="px-3 py-1.5 text-xs font-medium text-gray-500">
+                              הוצאות רגילות ({currentExpenses.length - recurringCount})
+                            </td>
+                          </tr>
+                        )}
                         <tr 
                           className={`hover:bg-blue-50/50 transition-all duration-300 ${
-                            index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                            expense.is_recurring 
+                              ? 'bg-purple-50/70 border-r-4 border-r-purple-400' 
+                              : index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                           } ${lastAdded === expense.id ? 'bg-green-100 animate-pulse' : ''}`}
                         >
                         {editingId === expense.id ? (
                           <>
+                            <td className="px-2 py-1.5"></td>
                             <td className="px-2 py-1.5">
                               <input
                                 type="date"
@@ -596,16 +666,20 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                           </>
                         ) : (
                           <>
+                            <td className="px-2 py-2">
+                              <button
+                                onClick={() => handleToggleRecurring(expense.id, activeTab === 'vat' ? 'vat' : 'noVat', !expense.is_recurring)}
+                                className={`p-1 rounded transition-colors ${expense.is_recurring ? 'text-purple-600 hover:text-purple-800' : 'text-gray-300 hover:text-purple-400'}`}
+                                title={expense.is_recurring ? 'הסר מהוצאות קבועות' : 'הפוך להוצאה קבועה'}
+                              >
+                                {expense.is_recurring ? <Pin className="w-4 h-4" /> : <PinOff className="w-4 h-4" />}
+                              </button>
+                            </td>
                             <td className="px-3 py-2 text-sm text-gray-500">
                               {formatDate(expense.expense_date)}
                             </td>
                             <td className="px-3 py-2">
                               <span className="text-sm font-medium text-gray-900">{expense.description}</span>
-                              {expense.is_recurring && (
-                                <span className="mr-2 text-[10px] bg-purple-100 text-purple-600 px-1 py-0.5 rounded">
-                                  קבועה
-                                </span>
-                              )}
                             </td>
                             <td className="px-3 py-2 text-sm text-gray-500">
                               {expense.supplier_name || '-'}
@@ -642,12 +716,12 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                       </tr>
                       {/* Separator line */}
                       <tr>
-                        <td colSpan={activeTab === 'vat' ? 7 : 6} className="p-0">
-                          <div className="h-[3px] bg-gray-300"></div>
+                        <td colSpan={activeTab === 'vat' ? 8 : 7} className="p-0">
+                          <div className="h-px bg-gray-200"></div>
                         </td>
                       </tr>
                       </React.Fragment>
-                    ))
+                    )})
                   )}
                 </tbody>
               </table>

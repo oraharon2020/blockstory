@@ -160,25 +160,32 @@ export async function DELETE(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, type, expense_date, description, amount, vat_amount, supplier_name, businessId, payment_method } = body;
+    const { id, type, expense_date, description, amount, vat_amount, supplier_name, businessId, payment_method, is_recurring } = body;
 
-    if (!id || !type || !expense_date || !description || amount === undefined) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    if (!id || !type) {
+      return NextResponse.json({ error: 'Missing id or type' }, { status: 400 });
     }
 
     const table = type === 'vat' ? TABLES.EXPENSES_VAT : TABLES.EXPENSES_NO_VAT;
     
-    const updateData: any = {
-      expense_date,
-      description,
-      amount: parseFloat(amount) || 0,
-      supplier_name: supplier_name || null,
-      payment_method: payment_method || 'credit',
-    };
+    // Build update data - only include provided fields
+    const updateData: any = {};
+    
+    if (expense_date !== undefined) updateData.expense_date = expense_date;
+    if (description !== undefined) updateData.description = description;
+    if (amount !== undefined) updateData.amount = parseFloat(amount) || 0;
+    if (supplier_name !== undefined) updateData.supplier_name = supplier_name || null;
+    if (payment_method !== undefined) updateData.payment_method = payment_method || 'credit';
+    if (is_recurring !== undefined) updateData.is_recurring = is_recurring;
 
     // Only add vat_amount for VAT expenses
-    if (type === 'vat') {
+    if (type === 'vat' && vat_amount !== undefined) {
       updateData.vat_amount = parseFloat(vat_amount) || 0;
+    }
+
+    // If no fields to update
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
     }
 
     const { data, error } = await supabase
