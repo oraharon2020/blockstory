@@ -86,6 +86,7 @@ export async function POST(request: NextRequest) {
       google_ads_webhook_secret: settings.googleAdsWebhookSecret,
       google_ads_auto_sync: settings.googleAdsAutoSync,
       google_ads_customer_id: settings.googleAdsCustomerId,
+      google_ads_refresh_token: settings.googleAdsRefreshToken,
       updated_at: new Date().toISOString(),
     };
 

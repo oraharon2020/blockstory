@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings, Save, Loader2, Eye, EyeOff, TestTube, Check, X, Store, Calculator, Package, HelpCircle, ListChecks, Truck, Webhook, BarChart3, Copy } from 'lucide-react';
+import { Settings, Save, Loader2, Eye, EyeOff, TestTube, Check, X, Store, Calculator, Package, HelpCircle, ListChecks, Truck, Webhook, BarChart3, Copy, ExternalLink } from 'lucide-react';
 import ProductCostsManager from './ProductCostsManager';
 import OrderStatusSelector from './OrderStatusSelector';
 import { useAuth } from '@/contexts/AuthContext';
@@ -862,6 +862,12 @@ function GoogleAdsSetupTab({ businessId }: { businessId?: string }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [connectionMethod, setConnectionMethod] = useState<'script' | 'api'>('script');
+  
+  // API Connection state
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectedAccount, setConnectedAccount] = useState<string | null>(null);
+  const [connectingApi, setConnectingApi] = useState(false);
 
   const webhookUrl = typeof window !== 'undefined' 
     ? `${window.location.origin}/api/webhook/google-ads`
@@ -880,6 +886,12 @@ function GoogleAdsSetupTab({ businessId }: { businessId?: string }) {
       if (json.data) {
         setWebhookSecret(json.data.googleAdsWebhookSecret || generateSecret());
         setAutoSync(json.data.googleAdsAutoSync ?? false);
+        // Check if API is connected
+        if (json.data.googleAdsRefreshToken && json.data.googleAdsCustomerId) {
+          setIsConnected(true);
+          setConnectedAccount(json.data.googleAdsCustomerId);
+          setConnectionMethod('api');
+        }
       } else {
         setWebhookSecret(generateSecret());
       }
@@ -929,6 +941,34 @@ function GoogleAdsSetupTab({ businessId }: { businessId?: string }) {
     setWebhookSecret(generateSecret());
   };
 
+  const handleConnectGoogleAds = () => {
+    if (!businessId) return;
+    setConnectingApi(true);
+    // Redirect to OAuth flow
+    window.location.href = `/api/google-ads/auth?businessId=${businessId}`;
+  };
+
+  const handleDisconnectGoogleAds = async () => {
+    if (!businessId) return;
+    if (!confirm('האם אתה בטוח שברצונך לנתק את חשבון Google Ads?')) return;
+    
+    try {
+      await fetch('/api/business-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessId,
+          googleAdsRefreshToken: null,
+          googleAdsCustomerId: null,
+        }),
+      });
+      setIsConnected(false);
+      setConnectedAccount(null);
+    } catch (error) {
+      console.error('Error disconnecting Google Ads:', error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -948,56 +988,141 @@ function GoogleAdsSetupTab({ businessId }: { businessId?: string }) {
         </div>
       </div>
 
-      {/* Auto Sync Toggle */}
-      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-        <div>
-          <h4 className="font-medium text-gray-900">סנכרון אוטומטי</h4>
-          <p className="text-sm text-gray-500">עדכן את עמודת גוגל אדס אוטומטית מהנתונים שמתקבלים</p>
-        </div>
+      {/* Connection Method Tabs */}
+      <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
         <button
-          onClick={() => setAutoSync(!autoSync)}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-            autoSync ? 'bg-blue-600' : 'bg-gray-300'
+          onClick={() => setConnectionMethod('api')}
+          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+            connectionMethod === 'api' 
+              ? 'bg-white shadow text-blue-600' 
+              : 'text-gray-600 hover:text-gray-900'
           }`}
         >
-          <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-              autoSync ? 'translate-x-6' : 'translate-x-1'
-            }`}
-          />
+          🔗 חיבור ישיר (מומלץ)
+        </button>
+        <button
+          onClick={() => setConnectionMethod('script')}
+          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+            connectionMethod === 'script' 
+              ? 'bg-white shadow text-blue-600' 
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          📜 דרך Script
         </button>
       </div>
 
-      {/* Setup Instructions */}
-      <div className="border rounded-lg p-4">
-        <h4 className="font-semibold text-gray-900 mb-4">הוראות הגדרה:</h4>
-        
+      {/* API Connection Method */}
+      {connectionMethod === 'api' && (
         <div className="space-y-4">
-          <div className="flex gap-3">
-            <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-medium">1</span>
-            <div>
-              <p className="font-medium text-gray-800">פתח את Google Ads</p>
-              <p className="text-sm text-gray-500">Tools & Settings → Scripts</p>
+          {isConnected ? (
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                  <Check className="w-6 h-6 text-green-600" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-green-800">מחובר ל-Google Ads</h4>
+                  <p className="text-sm text-green-600">חשבון: {connectedAccount}</p>
+                </div>
+                <button
+                  onClick={handleDisconnectGoogleAds}
+                  className="px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  נתק חשבון
+                </button>
+              </div>
+              <div className="mt-4 p-3 bg-green-100 rounded-lg">
+                <p className="text-sm text-green-700">
+                  ✅ הנתונים יסונכרנו אוטומטית כל שעה<br/>
+                  ✅ ה-AI יקבל גישה לתוכן המודעות, קהלים ומילות מפתח
+                </p>
+              </div>
             </div>
-          </div>
-
-          <div className="flex gap-3">
-            <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-medium">2</span>
-            <div>
-              <p className="font-medium text-gray-800">צור Script חדש</p>
-              <p className="text-sm text-gray-500">לחץ על + ליצירת script חדש</p>
-            </div>
-          </div>
-
-          <div className="flex gap-3">
-            <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-medium">3</span>
-            <div>
-              <p className="font-medium text-gray-800">העתק את הקוד</p>
-              <a 
-                href="/google-ads-script.js" 
-                target="_blank"
-                className="text-sm text-blue-600 hover:underline"
+          ) : (
+            <div className="p-6 border-2 border-dashed border-gray-300 rounded-lg text-center">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+              </div>
+              <h4 className="font-semibold text-gray-900 mb-2">חבר את חשבון Google Ads שלך</h4>
+              <p className="text-sm text-gray-500 mb-4">
+                חיבור ישיר מאפשר סנכרון אוטומטי וגישה מלאה לנתונים כולל תוכן מודעות
+              </p>
+              <button
+                onClick={handleConnectGoogleAds}
+                disabled={connectingApi}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
+                {connectingApi ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <ExternalLink className="w-5 h-5" />
+                )}
+                התחבר עם Google
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Script Method */}
+      {connectionMethod === 'script' && (
+        <>
+          {/* Auto Sync Toggle */}
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div>
+              <h4 className="font-medium text-gray-900">סנכרון אוטומטי</h4>
+              <p className="text-sm text-gray-500">עדכן את עמודת גוגל אדס אוטומטית מהנתונים שמתקבלים</p>
+            </div>
+            <button
+              onClick={() => setAutoSync(!autoSync)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                autoSync ? 'bg-blue-600' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  autoSync ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Setup Instructions */}
+          <div className="border rounded-lg p-4">
+            <h4 className="font-semibold text-gray-900 mb-4">הוראות הגדרה:</h4>
+            
+            <div className="space-y-4">
+              <div className="flex gap-3">
+                <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-medium">1</span>
+                <div>
+                  <p className="font-medium text-gray-800">פתח את Google Ads</p>
+                  <p className="text-sm text-gray-500">Tools & Settings → Scripts</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-medium">2</span>
+                <div>
+                  <p className="font-medium text-gray-800">צור Script חדש</p>
+                  <p className="text-sm text-gray-500">לחץ על + ליצירת script חדש</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-medium">3</span>
+                <div>
+                  <p className="font-medium text-gray-800">העתק את הקוד</p>
+                  <a 
+                    href="/google-ads-script.js" 
+                    target="_blank"
+                    className="text-sm text-blue-600 hover:underline"
+                  >
                 לחץ כאן להורדת הקוד →
               </a>
             </div>
@@ -1074,17 +1199,19 @@ function GoogleAdsSetupTab({ businessId }: { businessId?: string }) {
         </div>
       </div>
 
-      {/* Save Button */}
-      <div className="flex justify-end">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-        >
-          {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-          שמירה
-        </button>
-      </div>
+          {/* Save Button */}
+          <div className="flex justify-end">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+              שמירה
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
