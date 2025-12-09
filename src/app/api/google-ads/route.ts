@@ -30,49 +30,58 @@ export async function GET(request: NextRequest) {
     // Parse query params
     const searchParams = request.nextUrl.searchParams;
     const businessId = searchParams.get('businessId');
-    const startDate = searchParams.get('startDate') || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const endDate = searchParams.get('endDate') || new Date().toISOString().split('T')[0];
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
 
     if (!businessId) {
       return NextResponse.json({ error: 'Missing businessId' }, { status: 400 });
     }
 
-    // Fetch campaigns
-    const { data: campaigns, error: campaignsError } = await supabase
+    // Build campaigns query
+    let campaignsQuery = supabase
       .from('google_ads_campaigns')
       .select('*')
       .eq('business_id', businessId)
-      .gte('date', startDate)
-      .lte('date', endDate)
       .order('date', { ascending: false });
+    
+    if (startDate) campaignsQuery = campaignsQuery.gte('date', startDate);
+    if (endDate) campaignsQuery = campaignsQuery.lte('date', endDate);
+    
+    const { data: campaigns, error: campaignsError } = await campaignsQuery;
 
     if (campaignsError) {
       console.error('Error fetching campaigns:', campaignsError);
     }
 
-    // Fetch keywords
-    const { data: keywords, error: keywordsError } = await supabase
+    // Build keywords query
+    let keywordsQuery = supabase
       .from('google_ads_keywords')
       .select('*')
       .eq('business_id', businessId)
-      .gte('date', startDate)
-      .lte('date', endDate)
       .order('cost', { ascending: false })
       .limit(500);
+    
+    if (startDate) keywordsQuery = keywordsQuery.gte('date', startDate);
+    if (endDate) keywordsQuery = keywordsQuery.lte('date', endDate);
+    
+    const { data: keywords, error: keywordsError } = await keywordsQuery;
 
     if (keywordsError) {
       console.error('Error fetching keywords:', keywordsError);
     }
 
-    // Fetch search terms
-    const { data: searchTerms, error: searchTermsError } = await supabase
+    // Build search terms query
+    let searchTermsQuery = supabase
       .from('google_ads_search_terms')
       .select('*')
       .eq('business_id', businessId)
-      .gte('date', startDate)
-      .lte('date', endDate)
       .order('cost', { ascending: false })
       .limit(500);
+    
+    if (startDate) searchTermsQuery = searchTermsQuery.gte('date', startDate);
+    if (endDate) searchTermsQuery = searchTermsQuery.lte('date', endDate);
+    
+    const { data: searchTerms, error: searchTermsError } = await searchTermsQuery;
 
     if (searchTermsError) {
       console.error('Error fetching search terms:', searchTermsError);

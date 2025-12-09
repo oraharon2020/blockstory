@@ -71,13 +71,13 @@ export default function GoogleAdsPage() {
   const { user, loading, currentBusiness } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'overview' | 'campaigns' | 'keywords' | 'search-terms'>('overview');
-  const [dateRange, setDateRange] = useState('30');
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [searchTerms, setSearchTerms] = useState<SearchTerm[]>([]);
   const [dailyData, setDailyData] = useState<DailySummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [availableDays, setAvailableDays] = useState(0);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -89,7 +89,7 @@ export default function GoogleAdsPage() {
     if (currentBusiness) {
       fetchData();
     }
-  }, [currentBusiness, dateRange]);
+  }, [currentBusiness]);
 
   const fetchData = async () => {
     if (!currentBusiness) return;
@@ -98,12 +98,9 @@ export default function GoogleAdsPage() {
     setError(null);
 
     try {
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - parseInt(dateRange));
-
+      // Fetch all available data (no date filter - get everything)
       const response = await fetch(
-        `/api/google-ads?businessId=${currentBusiness.id}&startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}`
+        `/api/google-ads?businessId=${currentBusiness.id}`
       );
 
       if (!response.ok) {
@@ -115,6 +112,11 @@ export default function GoogleAdsPage() {
       setKeywords(data.keywords || []);
       setSearchTerms(data.searchTerms || []);
       setDailyData(data.dailySummary || []);
+      
+      // Calculate available days from data
+      if (data.dailySummary && data.dailySummary.length > 0) {
+        setAvailableDays(data.dailySummary.length);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'שגיאה בטעינת הנתונים');
     } finally {
@@ -222,17 +224,11 @@ export default function GoogleAdsPage() {
             </button>
           </div>
 
-          <select
-            value={dateRange}
-            onChange={(e) => setDateRange(e.target.value)}
-            className="px-4 py-2 rounded-lg border bg-white"
-          >
-            <option value="7">7 ימים אחרונים</option>
-            <option value="14">14 ימים אחרונים</option>
-            <option value="30">30 ימים אחרונים</option>
-            <option value="60">60 ימים אחרונים</option>
-            <option value="90">90 ימים אחרונים</option>
-          </select>
+          {availableDays > 0 && (
+            <div className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm">
+              מציג נתונים מ-{availableDays} ימים
+            </div>
+          )}
         </div>
 
         {isLoading ? (
