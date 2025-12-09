@@ -80,6 +80,99 @@ const tools: Anthropic.Tool[] = [
       },
       required: ['table', 'select']
     }
+  },
+  {
+    name: 'add_expense',
+    description: `הוספת הוצאה חדשה למערכת. 
+    השתמש בזה כשהמשתמש מבקש להוסיף/לרשום הוצאה.
+    
+    סוגי הוצאות:
+    - vat: הוצאה מוכרת (ישראל) - כולל מע"מ
+    - no_vat: הוצאה לא מוכרת (חו"ל/ללא מע"מ)
+    
+    קטגוריות נפוצות: פרסום, שיווק, תוכנה, שרתים, ציוד, משלוחים, שירותים, אחר
+    
+    דוגמאות:
+    - "תוסיף הוצאה של 500 ש"ח על פרסום פייסבוק" → type: vat, amount: 500, category: פרסום
+    - "הוסף הוצאה חו"ל 200 דולר שרת" → type: no_vat, amount: 200, category: שרתים`,
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['vat', 'no_vat'],
+          description: 'סוג ההוצאה: vat = מוכרת (ישראל), no_vat = לא מוכרת (חו"ל)'
+        },
+        amount: {
+          type: 'number',
+          description: 'סכום ההוצאה (ללא מע"מ)'
+        },
+        description: {
+          type: 'string',
+          description: 'תיאור ההוצאה'
+        },
+        expense_date: {
+          type: 'string',
+          description: 'תאריך ההוצאה בפורמט YYYY-MM-DD. אם לא צוין, השתמש בתאריך היום'
+        },
+        category: {
+          type: 'string',
+          description: 'קטגוריה: פרסום, שיווק, תוכנה, שרתים, ציוד, משלוחים, שירותים, אחר'
+        },
+        supplier_name: {
+          type: 'string',
+          description: 'שם הספק (אופציונלי)'
+        },
+        vat_amount: {
+          type: 'number',
+          description: 'סכום המע"מ (רק עבור הוצאות מוכרות). אם לא צוין, יחושב אוטומטית לפי 17%'
+        },
+        is_recurring: {
+          type: 'boolean',
+          description: 'האם זו הוצאה חוזרת/קבועה'
+        }
+      },
+      required: ['type', 'amount', 'description']
+    }
+  },
+  {
+    name: 'add_refund',
+    description: `הוספת זיכוי/החזר ללקוח.
+    השתמש בזה כשהמשתמש מבקש להוסיף זיכוי או החזר.
+    
+    דוגמאות:
+    - "תוסיף זיכוי של 150 ש"ח ללקוח יוסי על מוצר פגום"
+    - "הוסף החזר 200 ש"ח"`,
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        amount: {
+          type: 'number',
+          description: 'סכום הזיכוי'
+        },
+        description: {
+          type: 'string',
+          description: 'תיאור הזיכוי'
+        },
+        refund_date: {
+          type: 'string',
+          description: 'תאריך הזיכוי בפורמט YYYY-MM-DD. אם לא צוין, השתמש בתאריך היום'
+        },
+        customer_name: {
+          type: 'string',
+          description: 'שם הלקוח (אופציונלי)'
+        },
+        order_id: {
+          type: 'string',
+          description: 'מספר הזמנה (אופציונלי)'
+        },
+        reason: {
+          type: 'string',
+          description: 'סיבת הזיכוי'
+        }
+      },
+      required: ['amount', 'description']
+    }
   }
 ];
 
@@ -151,6 +244,101 @@ async function executeQuery(
   }
 }
 
+// Add expense to database
+async function addExpense(
+  businessId: string,
+  type: 'vat' | 'no_vat',
+  amount: number,
+  description: string,
+  expense_date?: string,
+  category?: string,
+  supplier_name?: string,
+  vat_amount?: number,
+  is_recurring?: boolean
+): Promise<any> {
+  try {
+    const table = type === 'vat' ? 'expenses_vat' : 'expenses_no_vat';
+    const today = new Date().toISOString().split('T')[0];
+    
+    const insertData: any = {
+      business_id: businessId,
+      expense_date: expense_date || today,
+      description,
+      amount,
+      category: category || 'אחר',
+      supplier_name: supplier_name || null,
+      is_recurring: is_recurring || false,
+      payment_method: 'credit'
+    };
+
+    // Add VAT amount for Israeli expenses (17%)
+    if (type === 'vat') {
+      insertData.vat_amount = vat_amount ?? Math.round(amount * 0.17 * 100) / 100;
+    }
+
+    const { data, error } = await supabase
+      .from(table)
+      .insert(insertData)
+      .select()
+      .single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { 
+      success: true, 
+      data,
+      message: `הוצאה נוספה בהצלחה: ${description} - ${amount} ש"ח`
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+// Add refund to database
+async function addRefund(
+  businessId: string,
+  amount: number,
+  description: string,
+  refund_date?: string,
+  customer_name?: string,
+  order_id?: string,
+  reason?: string
+): Promise<any> {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    const insertData: any = {
+      business_id: businessId,
+      refund_date: refund_date || today,
+      description,
+      amount,
+      customer_name: customer_name || null,
+      order_id: order_id || null,
+      reason: reason || description
+    };
+
+    const { data, error } = await supabase
+      .from('customer_refunds')
+      .insert(insertData)
+      .select()
+      .single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { 
+      success: true, 
+      data,
+      message: `זיכוי נוסף בהצלחה: ${description} - ${amount} ש"ח`
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 // Process tool calls
 async function processToolCall(
   toolName: string,
@@ -163,11 +351,42 @@ async function processToolCall(
     return JSON.stringify(result, null, 2);
   }
   
+  if (toolName === 'add_expense') {
+    const { type, amount, description, expense_date, category, supplier_name, vat_amount, is_recurring } = toolInput;
+    const result = await addExpense(
+      businessId,
+      type,
+      amount,
+      description,
+      expense_date,
+      category,
+      supplier_name,
+      vat_amount,
+      is_recurring
+    );
+    return JSON.stringify(result, null, 2);
+  }
+  
+  if (toolName === 'add_refund') {
+    const { amount, description, refund_date, customer_name, order_id, reason } = toolInput;
+    const result = await addRefund(
+      businessId,
+      amount,
+      description,
+      refund_date,
+      customer_name,
+      order_id,
+      reason
+    );
+    return JSON.stringify(result, null, 2);
+  }
+  
   return JSON.stringify({ error: 'Unknown tool' });
 }
 
 // System prompt
 const SYSTEM_PROMPT = `אתה יועץ עסקי מנוסה עם גישה מלאה לנתוני העסק כולל Google Ads.
+אתה יכול גם להוסיף הוצאות וזיכויים למערכת כשהמשתמש מבקש.
 
 הגישה שלך:
 - ישיר ותכליתי. לא חנפן, לא מחמיא סתם
@@ -182,6 +401,19 @@ const SYSTEM_PROMPT = `אתה יועץ עסקי מנוסה עם גישה מלא�
 - אם יש בעיה - הצע פתרון או שאל שאלה שתוביל לפתרון
 - השווה לתקופות קודמות כשרלוונטי
 - תן תובנות אקשנביליות, לא רק סטטיסטיקות
+
+הוספת הוצאות וזיכויים:
+- כשהמשתמש מבקש להוסיף הוצאה, השתמש ב-add_expense
+- סוגי הוצאות: vat (מוכרת/ישראל) או no_vat (חו"ל/לא מוכרת)
+- אם לא צוין תאריך - השתמש בתאריך היום
+- אם צוין "אתמול" או "שלשום" - חשב את התאריך המתאים
+- אחרי שמוסיפים הוצאה - אשר בקצרה: "נוסף: [תיאור] - [סכום] ש"ח"
+- כשמבקשים זיכוי/החזר - השתמש ב-add_refund
+
+דוגמאות למשפטים שמחייבים הוספת הוצאה:
+- "תוסיף הוצאה 500 על פרסום" → add_expense(vat, 500, "פרסום")
+- "הוסף 200 דולר שרת חו"ל" → add_expense(no_vat, 200, "שרת")
+- "תרשום הוצאה של 1000 ש"ח על ציוד" → add_expense(vat, 1000, "ציוד")
 
 מה לא לעשות:
 - לא להגיד "מעולה!" או "יופי!" על כל דבר
