@@ -883,13 +883,14 @@ function GoogleAdsSetupTab({ businessId }: { businessId?: string }) {
     try {
       const res = await fetch(`/api/business-settings?businessId=${businessId}`);
       const json = await res.json();
+      console.log('Google Ads settings loaded:', json.data);
       if (json.data) {
         setWebhookSecret(json.data.googleAdsWebhookSecret || generateSecret());
         setAutoSync(json.data.googleAdsAutoSync ?? false);
-        // Check if API is connected
-        if (json.data.googleAdsRefreshToken && json.data.googleAdsCustomerId) {
+        // Check if API is connected (only need refresh token)
+        if (json.data.googleAdsRefreshToken) {
           setIsConnected(true);
-          setConnectedAccount(json.data.googleAdsCustomerId);
+          setConnectedAccount(json.data.googleAdsCustomerId || 'מחובר');
           setConnectionMethod('api');
         }
       } else {

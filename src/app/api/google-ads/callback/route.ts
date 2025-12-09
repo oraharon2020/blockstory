@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
     });
 
     const tokens = await tokenResponse.json();
+    console.log('Token response:', { ok: tokenResponse.ok, hasRefreshToken: !!tokens.refresh_token });
 
     if (!tokenResponse.ok) {
       console.error('Token exchange error:', tokens);
@@ -56,13 +57,24 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    if (!tokens.refresh_token) {
+      console.error('No refresh token received! tokens:', tokens);
+      return NextResponse.redirect(
+        `${BASE_URL}/settings?tab=googleads&error=no_refresh_token`
+      );
+    }
+
     // Save refresh token to database
-    const { error: dbError } = await supabase
+    console.log('Saving refresh token for business:', businessId);
+    const { data: updateData, error: dbError } = await supabase
       .from('business_settings')
       .update({
         google_ads_refresh_token: tokens.refresh_token,
       })
-      .eq('business_id', businessId);
+      .eq('business_id', businessId)
+      .select();
+
+    console.log('DB update result:', { data: updateData, error: dbError });
 
     if (dbError) {
       console.error('DB error:', dbError);
