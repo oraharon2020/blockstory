@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { type, expense_date, description, amount, vat_amount, supplier_name, is_recurring, category, businessId, payment_method } = body;
+    const { type, expense_date, description, amount, vat_amount, supplier_name, is_recurring, category, businessId, payment_method, invoice_number } = body;
 
     if (!expense_date || !description || amount === undefined) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -96,6 +96,7 @@ export async function POST(request: NextRequest) {
       is_recurring: is_recurring || false,
       category: category || null,
       payment_method: payment_method || 'credit',
+      invoice_number: invoice_number || null,
     };
 
     // Add business_id if provided
@@ -160,7 +161,7 @@ export async function DELETE(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, type, expense_date, description, amount, vat_amount, supplier_name, businessId, payment_method, is_recurring } = body;
+    const { id, type, expense_date, description, amount, vat_amount, supplier_name, businessId, payment_method, is_recurring, invoice_number } = body;
 
     if (!id || !type) {
       return NextResponse.json({ error: 'Missing id or type' }, { status: 400 });
@@ -177,6 +178,7 @@ export async function PUT(request: NextRequest) {
     if (supplier_name !== undefined) updateData.supplier_name = supplier_name || null;
     if (payment_method !== undefined) updateData.payment_method = payment_method || 'credit';
     if (is_recurring !== undefined) updateData.is_recurring = is_recurring;
+    if (invoice_number !== undefined) updateData.invoice_number = invoice_number || null;
 
     // Only add vat_amount for VAT expenses
     if (type === 'vat' && vat_amount !== undefined) {

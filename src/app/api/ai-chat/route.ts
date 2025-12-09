@@ -20,10 +20,10 @@ const tools: Anthropic.Tool[] = [
     - order_item_costs: id, order_id, line_item_id, product_id, product_name, item_cost, quantity, adjusted_cost, shipping_cost, order_date, supplier_name, supplier_id, variation_key, variation_attributes, is_ready, notes, business_id, updated_at
     (פרטי כל פריט שנמכר - שים לב: אין item_price, יש item_cost שזה עלות המוצר)
     
-    - expenses_vat: id, expense_date, description, amount, vat_amount, category, supplier_name, payment_method, is_recurring, business_id, created_at
+    - expenses_vat: id, expense_date, description, amount, vat_amount, category, supplier_name, payment_method, is_recurring, invoice_number, business_id, created_at
     (הוצאות מוכרות עם מע"מ)
     
-    - expenses_no_vat: id, expense_date, description, amount, category, supplier_name, payment_method, is_recurring, business_id, created_at
+    - expenses_no_vat: id, expense_date, description, amount, category, supplier_name, payment_method, is_recurring, invoice_number, business_id, created_at
     (הוצאות חו"ל/לא מוכרות)
     
     - customer_refunds: id, refund_date, description, amount, order_id, customer_name, reason, business_id, created_at, updated_at
@@ -130,6 +130,10 @@ const tools: Anthropic.Tool[] = [
         is_recurring: {
           type: 'boolean',
           description: 'האם זו הוצאה חוזרת/קבועה'
+        },
+        invoice_number: {
+          type: 'string',
+          description: 'מספר חשבונית (אופציונלי)'
         }
       },
       required: ['type', 'amount', 'description']
@@ -254,7 +258,8 @@ async function addExpense(
   category?: string,
   supplier_name?: string,
   vat_amount?: number,
-  is_recurring?: boolean
+  is_recurring?: boolean,
+  invoice_number?: string
 ): Promise<any> {
   try {
     const table = type === 'vat' ? 'expenses_vat' : 'expenses_no_vat';
@@ -268,7 +273,8 @@ async function addExpense(
       category: category || 'אחר',
       supplier_name: supplier_name || null,
       is_recurring: is_recurring || false,
-      payment_method: 'credit'
+      payment_method: 'credit',
+      invoice_number: invoice_number || null
     };
 
     // Add VAT amount for Israeli expenses (17%)
@@ -352,7 +358,7 @@ async function processToolCall(
   }
   
   if (toolName === 'add_expense') {
-    const { type, amount, description, expense_date, category, supplier_name, vat_amount, is_recurring } = toolInput;
+    const { type, amount, description, expense_date, category, supplier_name, vat_amount, is_recurring, invoice_number } = toolInput;
     const result = await addExpense(
       businessId,
       type,
@@ -362,7 +368,8 @@ async function processToolCall(
       category,
       supplier_name,
       vat_amount,
-      is_recurring
+      is_recurring,
+      invoice_number
     );
     return JSON.stringify(result, null, 2);
   }

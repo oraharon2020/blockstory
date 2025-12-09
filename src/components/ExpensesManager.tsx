@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useRef, KeyboardEvent, useMemo } from 'react';
-import { Plus, Trash2, Loader2, Receipt, Globe, Copy, Users, RotateCcw, Zap, Pencil, Check, X, Pin, PinOff } from 'lucide-react';
+import React, { useState, useEffect, useRef, KeyboardEvent, useMemo, useCallback } from 'react';
+import { Plus, Trash2, Loader2, Receipt, Globe, Copy, Users, RotateCcw, Pencil, Check, X, Pin, PinOff, Search, Maximize2, Minimize2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/calculations';
 import EmployeesManager from './EmployeesManager';
 import RefundsManager from './RefundsManager';
@@ -17,6 +17,7 @@ interface Expense {
   is_recurring: boolean;
   category?: string;
   payment_method?: 'credit' | 'bank_transfer' | 'check';
+  invoice_number?: string;
 }
 
 interface ExpensesManagerProps {
@@ -36,6 +37,9 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
   const [copying, setCopying] = useState(false);
   const [vatRate, setVatRate] = useState(18);
   const [lastAdded, setLastAdded] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [highlightedIds, setHighlightedIds] = useState<Set<number>>(new Set());
   
   // Editing state
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -45,12 +49,14 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
     amount: '',
     supplier_name: '',
     payment_method: 'credit' as 'credit' | 'bank_transfer' | 'check',
+    invoice_number: '',
   });
   
   // Refs for quick navigation
   const dateRef = useRef<HTMLInputElement>(null);
   const descRef = useRef<HTMLInputElement>(null);
   const supplierRef = useRef<HTMLInputElement>(null);
+  const invoiceRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
   
   const [newExpense, setNewExpense] = useState({
@@ -61,6 +67,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
     is_recurring: false,
     category: '',
     payment_method: 'credit' as 'credit' | 'bank_transfer' | 'check',
+    invoice_number: '',
   });
 
   // Date range for the month
@@ -149,6 +156,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
           is_recurring: false,
           category: '',
           payment_method: 'credit',
+          invoice_number: '',
         });
         setLastAdded(result.id);
         setTimeout(() => setLastAdded(null), 2000);
@@ -204,13 +212,14 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
       amount: String(expense.amount),
       supplier_name: expense.supplier_name || '',
       payment_method: expense.payment_method || 'credit',
+      invoice_number: expense.invoice_number || '',
     });
   };
 
   // Cancel editing
   const handleCancelEdit = () => {
     setEditingId(null);
-    setEditData({ expense_date: '', description: '', amount: '', supplier_name: '', payment_method: 'credit' });
+    setEditData({ expense_date: '', description: '', amount: '', supplier_name: '', payment_method: 'credit', invoice_number: '' });
   };
 
   // Save edited expense
@@ -234,6 +243,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
           vat_amount: vatAmount,
           supplier_name: editData.supplier_name,
           payment_method: editData.payment_method,
+          invoice_number: editData.invoice_number,
           businessId: currentBusiness?.id,
         }),
       });
@@ -241,7 +251,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
       if (res.ok) {
         await loadExpenses();
         setEditingId(null);
-        setEditData({ expense_date: '', description: '', amount: '', supplier_name: '', payment_method: 'credit' });
+        setEditData({ expense_date: '', description: '', amount: '', supplier_name: '', payment_method: 'credit', invoice_number: '' });
         onUpdate?.();
       }
     } catch (error) {
@@ -250,6 +260,24 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
       setSaving(false);
     }
   };
+
+  // Toggle highlight on double-click
+  const handleDoubleClick = useCallback((id: number) => {
+    setHighlightedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // Clear all highlights
+  const clearHighlights = useCallback(() => {
+    setHighlightedIds(new Set());
+  }, []);
 
   // Toggle recurring status
   const handleToggleRecurring = async (id: number, type: 'vat' | 'noVat', isRecurring: boolean) => {
@@ -330,17 +358,28 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
   const vatVatTotal = vatExpenses.reduce((sum, e) => sum + (parseFloat(String(e.vat_amount)) || 0), 0);
   const noVatTotal = noVatExpenses.reduce((sum, e) => sum + (parseFloat(String(e.amount)) || 0), 0);
 
-  // Sort expenses: recurring (pinned) first, then by date descending
+  // Sort and filter expenses: recurring (pinned) first, then by date descending, with search
   const sortedExpenses = useMemo(() => {
     const expenses = activeTab === 'vat' ? vatExpenses : noVatExpenses;
-    return [...expenses].sort((a, b) => {
+    
+    // Filter by search query
+    const filtered = searchQuery 
+      ? expenses.filter(e => 
+          e.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          e.supplier_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          e.invoice_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          String(e.amount).includes(searchQuery)
+        )
+      : expenses;
+    
+    return [...filtered].sort((a, b) => {
       // Recurring expenses first
       if (a.is_recurring && !b.is_recurring) return -1;
       if (!a.is_recurring && b.is_recurring) return 1;
       // Then by date descending
       return new Date(b.expense_date).getTime() - new Date(a.expense_date).getTime();
     });
-  }, [activeTab, vatExpenses, noVatExpenses]);
+  }, [activeTab, vatExpenses, noVatExpenses, searchQuery]);
 
   const currentExpenses = sortedExpenses;
   const recurringCount = currentExpenses.filter(e => e.is_recurring).length;
@@ -419,23 +458,55 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
         </div>
         
         {/* Summary in header */}
-        <div className="flex items-center gap-4 px-4 text-sm">
+        <div className="flex items-center gap-3 px-4 text-sm">
           <span className="text-green-600 font-semibold">{formatCurrency(vatTotal)}</span>
           <span className="text-gray-300">|</span>
           <span className="text-blue-600 font-semibold">{formatCurrency(noVatTotal)}</span>
           {(activeTab === 'vat' || activeTab === 'noVat') && (
-            <button
-              onClick={handleCopyFromPreviousMonth}
-              disabled={copying}
-              className="flex items-center gap-1 px-2 py-1 text-purple-600 hover:bg-purple-50 rounded text-xs"
-              title="העתק מחודש קודם"
-            >
-              {copying ? <Loader2 className="w-3 h-3 animate-spin" /> : <Copy className="w-3 h-3" />}
-              העתק
-            </button>
+            <>
+              <button
+                onClick={handleCopyFromPreviousMonth}
+                disabled={copying}
+                className="flex items-center gap-1 px-2 py-1 text-purple-600 hover:bg-purple-50 rounded text-xs"
+                title="העתק מחודש קודם"
+              >
+                {copying ? <Loader2 className="w-3 h-3 animate-spin" /> : <Copy className="w-3 h-3" />}
+              </button>
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="p-1 text-gray-500 hover:bg-gray-100 rounded"
+                title={isExpanded ? 'הקטן' : 'הגדל'}
+              >
+                {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </button>
+            </>
           )}
         </div>
       </div>
+
+      {/* Search bar - only for expenses tabs */}
+      {(activeTab === 'vat' || activeTab === 'noVat') && (
+        <div className="px-3 py-2 bg-gray-50 border-b flex items-center gap-2">
+          <div className="relative flex-1 max-w-xs">
+            <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="חיפוש..."
+              className="w-full pr-8 pl-3 py-1.5 border rounded text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+            />
+          </div>
+          {highlightedIds.size > 0 && (
+            <button
+              onClick={clearHighlights}
+              className="text-xs text-orange-600 hover:bg-orange-50 px-2 py-1 rounded"
+            >
+              נקה סימונים ({highlightedIds.size})
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
@@ -455,13 +526,14 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                 <thead>
                   <tr className="bg-gray-50 border-b text-xs font-medium text-gray-500 uppercase">
                     <th className="px-2 py-2.5 w-8"></th>
-                    <th className="px-3 py-2.5 text-right w-28">תאריך</th>
-                    <th className="px-3 py-2.5 text-right">תיאור</th>
-                    <th className="px-3 py-2.5 text-right w-28">ספק</th>
-                    <th className="px-3 py-2.5 text-center w-24">סכום</th>
-                    <th className="px-3 py-2.5 text-center w-24">תשלום</th>
-                    {activeTab === 'vat' && <th className="px-3 py-2.5 text-center w-20">מע"מ</th>}
-                    <th className="px-3 py-2.5 w-16"></th>
+                    <th className="px-2 py-2.5 text-right w-24">תאריך</th>
+                    <th className="px-2 py-2.5 text-right">תיאור</th>
+                    <th className="px-2 py-2.5 text-right w-24">ספק</th>
+                    <th className="px-2 py-2.5 text-center w-20">חשבונית</th>
+                    <th className="px-2 py-2.5 text-center w-20">סכום</th>
+                    <th className="px-2 py-2.5 text-center w-20">תשלום</th>
+                    {activeTab === 'vat' && <th className="px-2 py-2.5 text-center w-16">מע"מ</th>}
+                    <th className="px-2 py-2.5 w-14"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -503,9 +575,20 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                         type="text"
                         value={newExpense.supplier_name}
                         onChange={(e) => setNewExpense({ ...newExpense, supplier_name: e.target.value })}
-                        onKeyDown={(e) => handleKeyDown(e, amountRef)}
+                        onKeyDown={(e) => handleKeyDown(e, invoiceRef)}
                         placeholder="ספק"
                         className="w-full px-2 py-1.5 border rounded text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                      />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <input
+                        ref={invoiceRef}
+                        type="text"
+                        value={newExpense.invoice_number}
+                        onChange={(e) => setNewExpense({ ...newExpense, invoice_number: e.target.value })}
+                        onKeyDown={(e) => handleKeyDown(e, amountRef)}
+                        placeholder="#"
+                        className="w-full px-2 py-1.5 border rounded text-sm text-center focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
                       />
                     </td>
                     <td className="px-2 py-1.5">
@@ -547,18 +630,10 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                     </td>
                   </tr>
                   
-                  {/* Hint row */}
-                  <tr className="bg-gray-50/50 border-b">
-                    <td colSpan={activeTab === 'vat' ? 8 : 7} className="px-3 py-1 text-[10px] text-gray-400 flex items-center gap-1">
-                      <Zap className="w-3 h-3" />
-                      Tab לעבור בין שדות, Enter להוסיף • <Pin className="w-3 h-3 inline" /> הוצאות קבועות מוצמדות למעלה
-                    </td>
-                  </tr>
-                  
                   {/* Recurring expenses separator */}
                   {recurringCount > 0 && (
                     <tr className="bg-purple-50">
-                      <td colSpan={activeTab === 'vat' ? 8 : 7} className="px-3 py-1.5 text-xs font-medium text-purple-700 flex items-center gap-1">
+                      <td colSpan={activeTab === 'vat' ? 9 : 8} className="px-3 py-1.5 text-xs font-medium text-purple-700 flex items-center gap-1">
                         <Pin className="w-3 h-3" />
                         הוצאות קבועות ({recurringCount})
                       </td>
@@ -568,7 +643,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                   {/* Expense rows */}
                   {currentExpenses.length === 0 ? (
                     <tr>
-                      <td colSpan={activeTab === 'vat' ? 8 : 7} className="text-center py-12 text-gray-400">
+                      <td colSpan={activeTab === 'vat' ? 9 : 8} className="text-center py-12 text-gray-400">
                         <Receipt className="w-10 h-10 mx-auto mb-2 text-gray-200" />
                         <p className="text-sm">אין הוצאות לחודש זה</p>
                         <p className="text-xs mt-1">הזן את ההוצאה הראשונה למעלה</p>
@@ -583,16 +658,19 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                       <React.Fragment key={expense.id}>
                         {showSeparator && (
                           <tr className="bg-gray-100">
-                            <td colSpan={activeTab === 'vat' ? 8 : 7} className="px-3 py-1.5 text-xs font-medium text-gray-500">
+                            <td colSpan={activeTab === 'vat' ? 9 : 8} className="px-3 py-1.5 text-xs font-medium text-gray-500">
                               הוצאות רגילות ({currentExpenses.length - recurringCount})
                             </td>
                           </tr>
                         )}
                         <tr 
-                          className={`hover:bg-blue-50/50 transition-all duration-300 ${
-                            expense.is_recurring 
-                              ? 'bg-purple-50/70 border-r-4 border-r-purple-400' 
-                              : index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                          onDoubleClick={() => handleDoubleClick(expense.id)}
+                          className={`hover:bg-blue-50/50 transition-all duration-300 cursor-pointer select-none ${
+                            highlightedIds.has(expense.id)
+                              ? 'bg-orange-100 border-r-4 border-r-orange-400'
+                              : expense.is_recurring 
+                                ? 'bg-purple-50/70 border-r-4 border-r-purple-400' 
+                                : index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                           } ${lastAdded === expense.id ? 'bg-green-100 animate-pulse' : ''}`}
                         >
                         {editingId === expense.id ? (
@@ -603,7 +681,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                                 type="date"
                                 value={editData.expense_date}
                                 onChange={(e) => setEditData({ ...editData, expense_date: e.target.value })}
-                                className="w-full px-2 py-1 border rounded text-sm"
+                                className="w-full px-1 py-1 border rounded text-sm"
                               />
                             </td>
                             <td className="px-2 py-1.5">
@@ -611,7 +689,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                                 type="text"
                                 value={editData.description}
                                 onChange={(e) => setEditData({ ...editData, description: e.target.value })}
-                                className="w-full px-2 py-1 border rounded text-sm"
+                                className="w-full px-1 py-1 border rounded text-sm"
                               />
                             </td>
                             <td className="px-2 py-1.5">
@@ -619,7 +697,16 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                                 type="text"
                                 value={editData.supplier_name}
                                 onChange={(e) => setEditData({ ...editData, supplier_name: e.target.value })}
-                                className="w-full px-2 py-1 border rounded text-sm"
+                                className="w-full px-1 py-1 border rounded text-sm"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <input
+                                type="text"
+                                value={editData.invoice_number}
+                                onChange={(e) => setEditData({ ...editData, invoice_number: e.target.value })}
+                                placeholder="#"
+                                className="w-full px-1 py-1 border rounded text-sm text-center"
                               />
                             </td>
                             <td className="px-2 py-1.5">
@@ -627,7 +714,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                                 type="number"
                                 value={editData.amount}
                                 onChange={(e) => setEditData({ ...editData, amount: e.target.value })}
-                                className="w-full px-2 py-1 border rounded text-sm text-center"
+                                className="w-full px-1 py-1 border rounded text-sm text-center"
                               />
                             </td>
                             <td className="px-2 py-1.5">
@@ -675,23 +762,26 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                                 {expense.is_recurring ? <Pin className="w-4 h-4" /> : <PinOff className="w-4 h-4" />}
                               </button>
                             </td>
-                            <td className="px-3 py-2 text-sm text-gray-500">
+                            <td className="px-2 py-2 text-sm text-gray-500">
                               {formatDate(expense.expense_date)}
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-2 py-2">
                               <span className="text-sm font-medium text-gray-900">{expense.description}</span>
                             </td>
-                            <td className="px-3 py-2 text-sm text-gray-500">
+                            <td className="px-2 py-2 text-sm text-gray-500">
                               {expense.supplier_name || '-'}
                             </td>
-                            <td className="px-3 py-2 text-center text-sm font-semibold text-gray-900">
+                            <td className="px-2 py-2 text-center text-xs text-gray-400">
+                              {expense.invoice_number || '-'}
+                            </td>
+                            <td className="px-2 py-2 text-center text-sm font-semibold text-gray-900">
                               {formatCurrency(expense.amount)}
                             </td>
-                            <td className="px-3 py-2 text-center text-xs text-gray-500">
+                            <td className="px-2 py-2 text-center text-xs text-gray-500">
                               {expense.payment_method === 'bank_transfer' ? 'העברה' : expense.payment_method === 'check' ? "צ'ק" : 'אשראי'}
                             </td>
                             {activeTab === 'vat' && (
-                              <td className="px-3 py-2 text-center text-sm font-medium text-green-600">
+                              <td className="px-2 py-2 text-center text-sm font-medium text-green-600">
                                 {formatCurrency(expense.vat_amount || 0)}
                               </td>
                             )}
@@ -716,7 +806,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose }: Expe
                       </tr>
                       {/* Separator line */}
                       <tr>
-                        <td colSpan={activeTab === 'vat' ? 8 : 7} className="p-0">
+                        <td colSpan={activeTab === 'vat' ? 9 : 8} className="p-0">
                           <div className="h-px bg-gray-200"></div>
                         </td>
                       </tr>
