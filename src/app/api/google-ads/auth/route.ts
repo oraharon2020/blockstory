@@ -31,5 +31,6 @@ export async function GET(request: NextRequest) {
   authUrl.searchParams.set('prompt', 'consent');
   authUrl.searchParams.set('state', businessId); // Pass businessId through state
 
-  return NextResponse.json({ authUrl: authUrl.toString() });
+  // Redirect directly to Google OAuth
+  return NextResponse.redirect(authUrl.toString());
 }
