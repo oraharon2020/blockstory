@@ -125,6 +125,7 @@ export async function POST(request: NextRequest) {
             business_id: businessId,
             campaign_id: campaign.id,
             campaign_name: campaign.name,
+            campaign_type: campaign.type || null,
             status: campaign.status,
             date,
             cost: campaign.cost || 0,

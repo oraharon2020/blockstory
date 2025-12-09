@@ -41,12 +41,13 @@ function main() {
   
   Logger.log('Syncing data from ' + formatDate(startDate) + ' to ' + formatDate(endDate));
   
-  // Get campaign performance data with all metrics
+  // Get campaign performance data with all metrics including type
   var campaignReport = AdsApp.report(
     'SELECT ' +
     'CampaignId, ' +
     'CampaignName, ' +
     'CampaignStatus, ' +
+    'AdvertisingChannelType, ' +
     'Cost, ' +
     'Clicks, ' +
     'Impressions, ' +
@@ -151,6 +152,7 @@ function main() {
     dataByDate[date].campaigns.push({
       id: row['CampaignId'],
       name: row['CampaignName'],
+      type: row['AdvertisingChannelType'] || '',
       status: row['CampaignStatus'],
       cost: cost,
       clicks: parseInt(row['Clicks'].replace(/,/g, '')) || 0,

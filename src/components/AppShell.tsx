@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,11 +8,18 @@ import LoginPage from '@/components/LoginPage';
 import BusinessSelector from '@/components/BusinessSelector';
 import BusinessManager from '@/components/BusinessManager';
 import UserManager from '@/components/UserManager';
-import { Loader2, Plus, Store, LayoutDashboard, Package, Settings, BarChart3, Truck } from 'lucide-react';
+import { Loader2, Plus, Store, LayoutDashboard, Package, Settings, BarChart3, Truck, ChevronDown } from 'lucide-react';
 import OrderNotifications from '@/components/OrderNotifications';
 
 interface AppShellProps {
   children: React.ReactNode;
+}
+
+interface NavItem {
+  name: string;
+  href?: string;
+  icon: React.ElementType;
+  children?: { name: string; href: string }[];
 }
 
 export default function AppShell({ children }: AppShellProps) {
@@ -20,10 +27,30 @@ export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const [showBusinessManager, setShowBusinessManager] = useState(false);
   const [showUserManager, setShowUserManager] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const navigation = [
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setOpenDropdown(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const navigation: NavItem[] = [
     { name: 'דשבורד', href: '/', icon: LayoutDashboard },
-    { name: 'סטטיסטיקות', href: '/statistics', icon: BarChart3 },
+    { 
+      name: 'סטטיסטיקות', 
+      icon: BarChart3,
+      children: [
+        { name: 'סקירה כללית', href: '/statistics' },
+        { name: 'Google Ads', href: '/google-ads' },
+      ]
+    },
     { name: 'עלויות מוצרים', href: '/products', icon: Package },
     { name: 'הזמנות לספקים', href: '/supplier-orders', icon: Truck },
     { name: 'הגדרות', href: '/settings', icon: Settings },
@@ -90,13 +117,55 @@ export default function AppShell({ children }: AppShellProps) {
           </div>
           
           {/* Navigation Links */}
-          <nav className="flex items-center gap-1">
+          <nav className="flex items-center gap-1" ref={dropdownRef}>
             {navigation.map((item) => {
-              const isActive = pathname === item.href;
+              // Check if this item or any child is active
+              const isActive = item.href ? pathname === item.href : 
+                item.children?.some(child => pathname === child.href);
+              const hasChildren = item.children && item.children.length > 0;
+
+              if (hasChildren) {
+                return (
+                  <div key={item.name} className="relative">
+                    <button
+                      onClick={() => setOpenDropdown(openDropdown === item.name ? null : item.name)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                        isActive
+                          ? 'bg-white/20 text-white font-medium'
+                          : 'text-white/80 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      <item.icon className="w-4 h-4" />
+                      <span className="text-sm">{item.name}</span>
+                      <ChevronDown className={`w-3 h-3 transition-transform ${openDropdown === item.name ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {openDropdown === item.name && item.children && (
+                      <div className="absolute top-full right-0 mt-1 bg-white rounded-lg shadow-lg py-1 min-w-[160px] z-50">
+                        {item.children.map((child) => (
+                          <Link
+                            key={child.href}
+                            href={child.href}
+                            onClick={() => setOpenDropdown(null)}
+                            className={`block px-4 py-2 text-sm transition-colors ${
+                              pathname === child.href
+                                ? 'bg-blue-50 text-blue-600 font-medium'
+                                : 'text-gray-700 hover:bg-gray-50'
+                            }`}
+                          >
+                            {child.name}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
               return (
                 <Link
                   key={item.href}
-                  href={item.href}
+                  href={item.href!}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
                     isActive
                       ? 'bg-white/20 text-white font-medium'
