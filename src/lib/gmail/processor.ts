@@ -52,70 +52,122 @@ async function extractInvoiceData(
   mimeType: string,
   filename: string
 ): Promise<ScannedInvoice['extractedData']> {
-  const isPdf = mimeType === 'application/pdf';
   
-  const content: any[] = [
-    {
-      type: isPdf ? 'document' : 'image',
+  console.log(`Processing file: ${filename}, type: ${mimeType}, data length: ${base64Data.length}`);
+  
+  // Build the content array based on file type
+  const content: any[] = [];
+  
+  // For PDFs, use document type with proper format
+  if (mimeType === 'application/pdf') {
+    content.push({
+      type: 'document',
       source: {
         type: 'base64',
-        media_type: mimeType as any,
+        media_type: 'application/pdf',
         data: base64Data,
       },
-    } as any,
-    {
-      type: 'text',
-      text: `אנא קרא את החשבונית/קבלה הזו וחלץ את המידע הבא בפורמט JSON בלבד:
+    });
+  } else {
+    // For images (jpg, png, etc.)
+    content.push({
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: mimeType,
+        data: base64Data,
+      },
+    });
+  }
+  
+  // Add the prompt
+  content.push({
+    type: 'text',
+    text: `אתה מומחה בקריאת חשבוניות וקבלות ישראליות.
+נא לנתח את המסמך המצורף ולחלץ את הפרטים הבאים.
+
+חפש בקפידה:
+1. שם הספק/העסק - בדרך כלל מופיע בראש המסמך בגדול
+2. סכום סופי לתשלום - חפש "סה"כ", "לתשלום", "Total", המספר הכי גדול בסוף
+3. מע"מ - חפש "מע"מ", "VAT", לפעמים 17% מהסכום
+4. מספר חשבונית/קבלה - חפש "חשבונית מס", "קבלה", "מס'", "#"
+5. תאריך - חפש תאריך בפורמט DD/MM/YYYY או YYYY-MM-DD
+6. תיאור - מה נרכש או שירות שניתן
+
+החזר JSON בלבד בפורמט הזה (בלי טקסט נוסף לפני או אחרי):
 {
-  "supplier_name": "שם הספק/עסק",
-  "amount": 0.00,
-  "vat_amount": 0.00,
-  "invoice_number": "מספר חשבונית",
-  "invoice_date": "YYYY-MM-DD",
-  "description": "תיאור קצר של השירות/מוצר",
-  "has_vat": true/false,
-  "confidence": "high/medium/low"
+  "supplier_name": "שם הספק",
+  "amount": 123.45,
+  "vat_amount": 17.90,
+  "invoice_number": "12345",
+  "invoice_date": "2024-12-01",
+  "description": "תיאור קצר",
+  "has_vat": true,
+  "confidence": "high"
 }
 
-הערות:
-- amount הוא הסכום הכולל כולל מע"מ
-- vat_amount הוא סכום המע"מ בלבד (אם מצוין)
-- אם אין מע"מ, שים has_vat: false ו-vat_amount: 0
-- confidence: high אם כל הנתונים ברורים, medium אם חלק לא ברור, low אם הרבה לא ברור
-- החזר JSON בלבד, בלי טקסט נוסף`,
-    },
-  ];
-
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5-20250929',
-    max_tokens: 1000,
-    messages: [{ role: 'user', content }],
+שים לב:
+- amount = הסכום הסופי כולל מע"מ (מספר בלבד, בלי ₪)
+- vat_amount = רק המע"מ (אם לא מצוין, חשב 17/117 מהסכום)
+- confidence: "high" אם ברור, "medium" אם לא בטוח, "low" אם מנחש
+- אם לא מצאת ערך, השתמש ב: supplier_name="לא ידוע", amount=0, invoice_number=""`,
   });
 
-  // Parse response
-  const textContent = response.content.find(c => c.type === 'text');
-  if (!textContent || textContent.type !== 'text') {
-    return getDefaultExtractedData();
-  }
-
   try {
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 1500,
+      messages: [{ role: 'user', content }],
+    });
+
+    // Parse response
+    const textContent = response.content.find(c => c.type === 'text');
+    if (!textContent || textContent.type !== 'text') {
+      console.error('No text response from Claude');
+      return getDefaultExtractedData();
+    }
+
+    console.log('Claude response:', textContent.text.substring(0, 500));
+
     // Extract JSON from response
-    const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
+    const jsonMatch = textContent.text.match(/\{[\s\S]*?\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
-      return {
+      
+      // Parse amount - handle string with commas or currency symbols
+      let amount = 0;
+      if (parsed.amount) {
+        const amountStr = String(parsed.amount).replace(/[₪,\s]/g, '');
+        amount = parseFloat(amountStr) || 0;
+      }
+      
+      let vatAmount = 0;
+      if (parsed.vat_amount) {
+        const vatStr = String(parsed.vat_amount).replace(/[₪,\s]/g, '');
+        vatAmount = parseFloat(vatStr) || 0;
+      }
+      
+      // If no VAT specified but has_vat is true, calculate it
+      if (vatAmount === 0 && parsed.has_vat && amount > 0) {
+        vatAmount = Math.round((amount * 17 / 117) * 100) / 100;
+      }
+      
+      const result = {
         supplier_name: parsed.supplier_name || 'לא ידוע',
-        amount: parseFloat(parsed.amount) || 0,
-        vat_amount: parseFloat(parsed.vat_amount) || 0,
-        invoice_number: parsed.invoice_number || '',
+        amount: amount,
+        vat_amount: vatAmount,
+        invoice_number: String(parsed.invoice_number || ''),
         invoice_date: parsed.invoice_date || new Date().toISOString().split('T')[0],
         description: parsed.description || filename,
         has_vat: parsed.has_vat ?? true,
         confidence: parsed.confidence || 'medium',
       };
+      
+      console.log('Extracted data:', result);
+      return result;
     }
   } catch (e) {
-    console.error('Error parsing invoice data:', e);
+    console.error('Error processing invoice with Claude:', e);
   }
 
   return getDefaultExtractedData();
