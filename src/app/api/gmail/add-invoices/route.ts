@@ -7,6 +7,51 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase, TABLES } from '@/lib/supabase';
 import { ScannedInvoice } from '@/lib/gmail';
 
+// Helper to check for duplicate invoices
+async function checkDuplicate(
+  businessId: string,
+  supplierName: string,
+  invoiceNumber: string,
+  amount: number,
+  hasVat: boolean
+): Promise<boolean> {
+  const table = hasVat ? TABLES.EXPENSES_VAT : TABLES.EXPENSES_NO_VAT;
+  
+  // Check by invoice number + supplier (most accurate)
+  if (invoiceNumber) {
+    const { data } = await supabase
+      .from(table)
+      .select('id')
+      .eq('business_id', businessId)
+      .eq('invoice_number', invoiceNumber)
+      .eq('supplier_name', supplierName)
+      .limit(1);
+    
+    if (data && data.length > 0) {
+      return true;
+    }
+  }
+  
+  // Also check by supplier + amount + recent date (within 7 days)
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  
+  const { data: recentData } = await supabase
+    .from(table)
+    .select('id')
+    .eq('business_id', businessId)
+    .eq('supplier_name', supplierName)
+    .eq('amount', amount)
+    .gte('expense_date', weekAgo.toISOString().split('T')[0])
+    .limit(1);
+  
+  if (recentData && recentData.length > 0) {
+    return true;
+  }
+  
+  return false;
+}
+
 // Helper to upload file to Supabase Storage
 async function uploadInvoiceFile(
   businessId: string,
@@ -76,6 +121,22 @@ export async function POST(request: NextRequest) {
       const { extractedData, fileData, mimeType, filename } = invoice;
       
       try {
+        // Check for duplicate invoice
+        const isDuplicate = await checkDuplicate(
+          businessId,
+          extractedData.supplier_name,
+          extractedData.invoice_number,
+          extractedData.amount,
+          extractedData.has_vat
+        );
+        
+        if (isDuplicate) {
+          console.log(`Skipping duplicate: ${extractedData.supplier_name} - ${extractedData.invoice_number}`);
+          results.skipped++;
+          results.errors.push(`${filename}: חשבונית כפולה - כבר קיימת במערכת`);
+          continue;
+        }
+        
         // Upload file to Storage if we have the data
         let fileUrl: string | null = null;
         if (fileData && mimeType) {
@@ -111,6 +172,7 @@ export async function POST(request: NextRequest) {
           results.errors.push(`${filename}: ${error.message}`);
         } else {
           results.added++;
+          console.log(`Added invoice: ${extractedData.supplier_name} - ${extractedData.amount}₪`);
         }
       } catch (err: any) {
         results.errors.push(`${filename}: ${err.message}`);
