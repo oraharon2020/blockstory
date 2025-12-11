@@ -22,19 +22,33 @@ export async function searchInvoiceEmails(
   const validTokens = await ensureValidTokens(tokens);
   const gmail = getGmailClient(validTokens);
   
-  // Limit to 15 for performance
-  const { maxResults = 15, afterDate, beforeDate } = options;
+  // No limit on results
+  const { maxResults = 100, afterDate, beforeDate } = options;
   
   // Build search query - look for invoice-related keywords
-  // Hebrew: חשבונית, קבלה, חשבון, מס קבלה, חשבונית מס
-  // English: invoice, receipt, bill, payment
+  // Hebrew keywords for invoices/receipts
   const invoiceKeywords = [
+    // Hebrew
     'חשבונית',
     'קבלה', 
     'חשבון',
+    'מס קבלה',
+    'חשבונית מס',
+    'חשבונית עסקה',
+    'אישור תשלום',
+    'אישור הזמנה',
+    'הזמנה',
+    'תשלום',
+    'סיכום הזמנה',
+    // English
     'invoice',
     'receipt',
     'bill',
+    'payment',
+    'order confirmation',
+    'purchase',
+    'transaction',
+    'statement',
   ].join(' OR ');
   
   let query = `has:attachment (${invoiceKeywords})`;
@@ -193,6 +207,6 @@ export async function getMonthlyEmails(
   return searchInvoiceEmails(tokens, {
     afterDate: startDate,
     beforeDate: endDate,
-    maxResults: 15, // Only emails with invoice keywords
+    maxResults: 100,
   });
 }

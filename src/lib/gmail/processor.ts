@@ -37,9 +37,12 @@ export async function processInvoiceAttachment(
     emailId: email.id,
     attachmentId: attachment.id,
     filename: attachment.filename,
+    mimeType: attachment.mimeType,
+    fileData: attachmentData, // Keep base64 for later upload
     extractedData,
     isDuplicate: duplicateCheck.isDuplicate,
     duplicateOf: duplicateCheck.matchedExpenseId,
+    matchReason: duplicateCheck.matchReason,
     status: 'pending',
   };
 }
@@ -276,21 +279,20 @@ export async function processInvoiceBatch(
     }
   }
   
-  // Limit to 10 attachments max for performance
-  const maxAttachments = 10;
-  const toProcess = allAttachments.slice(0, maxAttachments);
+  // Process all attachments (no limit)
+  const toProcess = allAttachments;
   const totalAttachments = toProcess.length;
   
-  console.log(`Processing ${totalAttachments} attachments (limited from ${allAttachments.length})`);
+  console.log(`Processing ${totalAttachments} attachments`);
   
-  // Process 2 at a time in parallel
-  const batchSize = 2;
+  // Process 3 at a time in parallel for speed
+  const batchSize = 3;
   
   for (let i = 0; i < toProcess.length; i += batchSize) {
     const batch = toProcess.slice(i, i + batchSize);
     
     const batchResults = await Promise.all(
-      batch.map(async ({ email, attachment }) => {
+      batch.map(async ({ email, attachment }): Promise<ScannedInvoice> => {
         try {
           const attachmentData = await getAttachmentData(email.id, attachment.id);
           return await processInvoiceAttachment(email, attachment, attachmentData, businessId);
@@ -301,9 +303,10 @@ export async function processInvoiceBatch(
             emailId: email.id,
             attachmentId: attachment.id,
             filename: attachment.filename,
+            mimeType: attachment.mimeType,
             extractedData: getDefaultExtractedData(),
             isDuplicate: false,
-            status: 'rejected' as const,
+            status: 'rejected',
           };
         }
       })

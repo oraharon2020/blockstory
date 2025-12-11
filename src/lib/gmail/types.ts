@@ -38,6 +38,8 @@ export interface ScannedInvoice {
   emailId: string;
   attachmentId: string;
   filename: string;
+  mimeType: string;
+  fileData?: string; // Base64 encoded file data (for upload)
   fileUrl?: string;
   extractedData: {
     supplier_name: string;
@@ -52,6 +54,7 @@ export interface ScannedInvoice {
   isDuplicate: boolean;
   duplicateOf?: number; // ID of existing expense
   status: 'pending' | 'approved' | 'rejected' | 'added';
+  matchReason?: string;
 }
 
 // Duplicate check result
