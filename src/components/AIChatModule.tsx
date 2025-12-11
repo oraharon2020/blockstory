@@ -15,7 +15,11 @@ import {
   Minimize2,
   Maximize2,
   RotateCcw,
-  Bot
+  Bot,
+  Camera,
+  Paperclip,
+  FileText,
+  Image as ImageIcon
 } from 'lucide-react';
 
 interface Message {
@@ -23,6 +27,8 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  fileUrl?: string;
+  fileName?: string;
 }
 
 interface QuickQuestion {
@@ -49,8 +55,13 @@ export default function AIChatModule({ className = '', defaultMinimized = true }
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -87,19 +98,65 @@ export default function AIChatModule({ className = '', defaultMinimized = true }
     e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
   };
 
+  // Handle file upload
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentBusiness?.id) return;
+
+    setUploading(true);
+    setUploadedFile(file);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('businessId', currentBusiness.id);
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setUploadedFileUrl(data.fileUrl);
+      } else {
+        console.error('Upload error:', data.error);
+        setUploadedFile(null);
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      setUploadedFile(null);
+    } finally {
+      setUploading(false);
+      // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
+    }
+  };
+
+  // Clear uploaded file
+  const clearUploadedFile = () => {
+    setUploadedFile(null);
+    setUploadedFileUrl(null);
+  };
+
   const handleSend = async (text?: string) => {
     const messageText = text || input.trim();
-    if (!messageText || loading || !currentBusiness?.id) return;
+    if ((!messageText && !uploadedFileUrl) || loading || !currentBusiness?.id) return;
 
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: messageText,
-      timestamp: new Date()
+      content: messageText || '📎 צירפתי קובץ',
+      timestamp: new Date(),
+      fileUrl: uploadedFileUrl || undefined,
+      fileName: uploadedFile?.name
     };
 
     setMessages(prev => [...prev, userMessage]);
     setInput('');
+    const fileUrlToSend = uploadedFileUrl;
+    clearUploadedFile();
     if (inputRef.current) {
       inputRef.current.style.height = 'auto';
     }
@@ -117,7 +174,8 @@ export default function AIChatModule({ className = '', defaultMinimized = true }
           message: messageText,
           businessId: currentBusiness.id,
           conversationHistory,
-          enableWebSearch: true
+          enableWebSearch: true,
+          fileUrl: fileUrlToSend
         })
       });
 
@@ -251,6 +309,24 @@ export default function AIChatModule({ className = '', defaultMinimized = true }
                       : 'bg-gray-100 text-gray-800 rounded-bl-md'
                   }`}
                 >
+                  {/* File attachment */}
+                  {message.fileUrl && (
+                    <a
+                      href={message.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`flex items-center gap-2 mb-2 p-2 rounded-lg ${
+                        message.role === 'user' ? 'bg-white/20 hover:bg-white/30' : 'bg-white hover:bg-gray-50'
+                      }`}
+                    >
+                      {message.fileUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                        <ImageIcon className="w-4 h-4 flex-shrink-0" />
+                      ) : (
+                        <FileText className="w-4 h-4 flex-shrink-0" />
+                      )}
+                      <span className="text-xs truncate">{message.fileName || 'קובץ מצורף'}</span>
+                    </a>
+                  )}
                   {formatMessage(message.content)}
                 </div>
               </div>
@@ -291,13 +367,72 @@ export default function AIChatModule({ className = '', defaultMinimized = true }
 
           {/* Input */}
           <div className="p-3 border-t bg-gray-50 rounded-b-2xl flex-shrink-0">
+            {/* Hidden file inputs */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,.pdf"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            
+            {/* Uploaded file preview */}
+            {uploadedFile && (
+              <div className="mb-2 p-2 bg-violet-50 border border-violet-200 rounded-lg flex items-center gap-2">
+                {uploadedFile.type.startsWith('image/') ? (
+                  <ImageIcon className="w-4 h-4 text-violet-600" />
+                ) : (
+                  <FileText className="w-4 h-4 text-violet-600" />
+                )}
+                <span className="text-xs text-violet-700 flex-1 truncate">{uploadedFile.name}</span>
+                {uploading ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-violet-600" />
+                ) : (
+                  <button
+                    onClick={clearUploadedFile}
+                    className="p-1 hover:bg-violet-100 rounded"
+                  >
+                    <X className="w-3 h-3 text-violet-600" />
+                  </button>
+                )}
+              </div>
+            )}
+            
             <div className="flex gap-2 items-end">
+              {/* Attachment buttons */}
+              <div className="flex gap-1 flex-shrink-0">
+                <button
+                  onClick={() => cameraInputRef.current?.click()}
+                  disabled={loading || uploading}
+                  className="p-2.5 text-gray-500 hover:text-violet-600 hover:bg-violet-50 rounded-xl transition-colors disabled:opacity-50"
+                  title="צלם חשבונית"
+                >
+                  <Camera className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={loading || uploading}
+                  className="p-2.5 text-gray-500 hover:text-violet-600 hover:bg-violet-50 rounded-xl transition-colors disabled:opacity-50"
+                  title="העלה קובץ"
+                >
+                  <Paperclip className="w-5 h-5" />
+                </button>
+              </div>
+              
               <textarea
                 ref={inputRef}
                 value={input}
                 onChange={handleInputChange}
                 onKeyPress={handleKeyPress}
-                placeholder="שאל אותי משהו..."
+                placeholder={uploadedFile ? "תאר את ההוצאה..." : "שאל אותי משהו..."}
                 disabled={loading}
                 rows={1}
                 className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-violet-500 focus:border-transparent disabled:bg-gray-100 resize-none leading-normal"
@@ -306,14 +441,14 @@ export default function AIChatModule({ className = '', defaultMinimized = true }
               />
               <button
                 onClick={() => handleSend()}
-                disabled={loading || !input.trim()}
+                disabled={loading || (!input.trim() && !uploadedFileUrl)}
                 className="p-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
               >
                 <Send className="w-5 h-5" />
               </button>
             </div>
             <p className="text-[10px] text-gray-400 mt-2 text-center">
-              Shift+Enter לשורה חדשה • Enter לשליחה
+              📷 צלם חשבונית • 📎 העלה קובץ • Enter לשליחה
             </p>
           </div>
         </>

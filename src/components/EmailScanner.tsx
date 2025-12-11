@@ -1,0 +1,563 @@
+/**
+ * Email Scanner Component
+ * קומפוננטה לסריקת מיילים וייבוא חשבוניות
+ */
+
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import {
+  Mail,
+  Loader2,
+  Check,
+  X,
+  AlertTriangle,
+  FileText,
+  RefreshCw,
+  Link2,
+  Link2Off,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+} from 'lucide-react';
+import { formatCurrency } from '@/lib/calculations';
+import { useAuth } from '@/contexts/AuthContext';
+
+interface ScannedInvoice {
+  emailId: string;
+  attachmentId: string;
+  filename: string;
+  fileUrl?: string;
+  extractedData: {
+    supplier_name: string;
+    amount: number;
+    vat_amount: number;
+    invoice_number: string;
+    invoice_date: string;
+    description: string;
+    has_vat: boolean;
+    confidence: 'high' | 'medium' | 'low';
+  };
+  isDuplicate: boolean;
+  duplicateOf?: number;
+  status: 'pending' | 'approved' | 'rejected' | 'added';
+  matchReason?: string;
+}
+
+interface EmailScannerProps {
+  month: number;
+  year: number;
+  onInvoicesAdded?: () => void;
+  onClose?: () => void;
+}
+
+export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: EmailScannerProps) {
+  const { currentBusiness } = useAuth();
+  const [connectionStatus, setConnectionStatus] = useState<{
+    isConnected: boolean;
+    email?: string;
+    loading: boolean;
+  }>({ isConnected: false, loading: true });
+  
+  const [scanning, setScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState('');
+  const [invoices, setInvoices] = useState<ScannedInvoice[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [showDuplicates, setShowDuplicates] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Check connection status on mount
+  useEffect(() => {
+    checkConnectionStatus();
+  }, [currentBusiness?.id]);
+
+  // Check URL params for OAuth callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('gmail_connected') === 'true') {
+      checkConnectionStatus();
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    if (params.get('gmail_error')) {
+      setError(params.get('gmail_error') || 'שגיאה בחיבור');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  const checkConnectionStatus = async () => {
+    if (!currentBusiness?.id) return;
+    
+    setConnectionStatus(prev => ({ ...prev, loading: true }));
+    
+    try {
+      const res = await fetch(`/api/gmail/status?businessId=${currentBusiness.id}`);
+      const data = await res.json();
+      
+      setConnectionStatus({
+        isConnected: data.isConnected,
+        email: data.email,
+        loading: false,
+      });
+    } catch (err) {
+      setConnectionStatus({ isConnected: false, loading: false });
+    }
+  };
+
+  const handleConnect = () => {
+    if (!currentBusiness?.id) return;
+    
+    const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.href = `/api/gmail/auth?businessId=${currentBusiness.id}&returnUrl=${returnUrl}`;
+  };
+
+  const handleDisconnect = async () => {
+    if (!currentBusiness?.id) return;
+    
+    try {
+      await fetch(`/api/gmail/status?businessId=${currentBusiness.id}`, {
+        method: 'DELETE',
+      });
+      setConnectionStatus({ isConnected: false, loading: false });
+      setInvoices([]);
+    } catch (err) {
+      console.error('Disconnect error:', err);
+    }
+  };
+
+  const handleScan = async () => {
+    if (!currentBusiness?.id) return;
+    
+    setScanning(true);
+    setScanProgress('מתחבר ל-Gmail...');
+    setError(null);
+    setInvoices([]);
+    
+    try {
+      setScanProgress('סורק מיילים...');
+      
+      const res = await fetch('/api/gmail/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessId: currentBusiness.id,
+          year,
+          month,
+        }),
+      });
+      
+      const data = await res.json();
+      
+      if (data.needsAuth) {
+        setConnectionStatus({ isConnected: false, loading: false });
+        setError('נדרשת התחברות מחדש ל-Gmail');
+        return;
+      }
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      // Set all new invoices as approved by default
+      const processedInvoices = data.invoices.map((inv: ScannedInvoice) => ({
+        ...inv,
+        status: inv.isDuplicate ? 'rejected' : 'approved',
+      }));
+      
+      setInvoices(processedInvoices);
+      setScanProgress(`נמצאו ${data.summary.totalAttachments} חשבוניות`);
+    } catch (err: any) {
+      setError(err.message);
+      setScanProgress('');
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const toggleInvoiceStatus = (index: number) => {
+    setInvoices(prev => prev.map((inv, i) => {
+      if (i !== index) return inv;
+      return {
+        ...inv,
+        status: inv.status === 'approved' ? 'rejected' : 'approved',
+      };
+    }));
+  };
+
+  const approveAll = () => {
+    setInvoices(prev => prev.map(inv => ({
+      ...inv,
+      status: inv.isDuplicate ? inv.status : 'approved',
+    })));
+  };
+
+  const rejectAll = () => {
+    setInvoices(prev => prev.map(inv => ({
+      ...inv,
+      status: 'rejected',
+    })));
+  };
+
+  const handleAddInvoices = async () => {
+    if (!currentBusiness?.id) return;
+    
+    const toAdd = invoices.filter(inv => inv.status === 'approved');
+    if (toAdd.length === 0) return;
+    
+    setAdding(true);
+    
+    try {
+      const res = await fetch('/api/gmail/add-invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessId: currentBusiness.id,
+          invoices: toAdd,
+        }),
+      });
+      
+      const data = await res.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      // Update status
+      setInvoices(prev => prev.map(inv => ({
+        ...inv,
+        status: inv.status === 'approved' ? 'added' : inv.status,
+      })));
+      
+      // Callback
+      onInvoicesAdded?.();
+      
+      // Show success
+      setScanProgress(`נוספו ${data.results.added} חשבוניות בהצלחה!`);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const newInvoices = invoices.filter(inv => !inv.isDuplicate);
+  const duplicateInvoices = invoices.filter(inv => inv.isDuplicate);
+  const approvedCount = invoices.filter(inv => inv.status === 'approved').length;
+
+  const getConfidenceColor = (confidence: string) => {
+    switch (confidence) {
+      case 'high': return 'text-green-600';
+      case 'medium': return 'text-yellow-600';
+      case 'low': return 'text-red-600';
+      default: return 'text-gray-600';
+    }
+  };
+
+  const getConfidenceText = (confidence: string) => {
+    switch (confidence) {
+      case 'high': return 'גבוה';
+      case 'medium': return 'בינוני';
+      case 'low': return 'נמוך';
+      default: return confidence;
+    }
+  };
+
+  const monthNames = ['', 'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+
+  return (
+    <div className="bg-white rounded-lg shadow-lg border max-w-4xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-blue-50 to-purple-50">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-blue-100 rounded-lg">
+            <Mail className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <h2 className="font-semibold text-gray-900">סריקת מיילים</h2>
+            <p className="text-xs text-gray-500">
+              {monthNames[month]} {year}
+            </p>
+          </div>
+        </div>
+        
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="p-1 text-gray-400 hover:text-gray-600 rounded"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
+      </div>
+
+      {/* Connection Status */}
+      <div className="p-4 border-b bg-gray-50">
+        {connectionStatus.loading ? (
+          <div className="flex items-center gap-2 text-gray-500">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>בודק חיבור...</span>
+          </div>
+        ) : connectionStatus.isConnected ? (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-green-600">
+              <Link2 className="w-4 h-4" />
+              <span>מחובר ל-{connectionStatus.email}</span>
+            </div>
+            <button
+              onClick={handleDisconnect}
+              className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
+            >
+              <Link2Off className="w-3 h-3" />
+              נתק
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <span className="text-gray-500">לא מחובר ל-Gmail</span>
+            <button
+              onClick={handleConnect}
+              className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 flex items-center gap-2"
+            >
+              <Mail className="w-4 h-4" />
+              התחבר ל-Gmail
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="p-3 mx-4 mt-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          <span className="text-sm">{error}</span>
+          <button onClick={() => setError(null)} className="mr-auto">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Scan Button */}
+      {connectionStatus.isConnected && invoices.length === 0 && (
+        <div className="p-6 text-center">
+          <button
+            onClick={handleScan}
+            disabled={scanning}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 mx-auto"
+          >
+            {scanning ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                {scanProgress}
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-5 h-5" />
+                סרוק מיילים של {monthNames[month]}
+              </>
+            )}
+          </button>
+          <p className="text-xs text-gray-500 mt-2">
+            יחפש מיילים עם קבצים מצורפים (PDF, תמונות)
+          </p>
+        </div>
+      )}
+
+      {/* Results */}
+      {invoices.length > 0 && (
+        <div className="p-4">
+          {/* Summary */}
+          <div className="flex items-center justify-between mb-4 p-3 bg-blue-50 rounded-lg">
+            <div className="text-sm">
+              <span className="font-medium">{newInvoices.length}</span> חשבוניות חדשות
+              {duplicateInvoices.length > 0 && (
+                <span className="text-yellow-600 mr-2">
+                  • <span className="font-medium">{duplicateInvoices.length}</span> כפילויות
+                </span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={approveAll}
+                className="text-xs px-2 py-1 text-green-600 hover:bg-green-50 rounded"
+              >
+                אשר הכל
+              </button>
+              <button
+                onClick={rejectAll}
+                className="text-xs px-2 py-1 text-red-600 hover:bg-red-50 rounded"
+              >
+                דחה הכל
+              </button>
+            </div>
+          </div>
+
+          {/* Invoice List */}
+          <div className="space-y-2 max-h-96 overflow-auto">
+            {newInvoices.map((invoice, index) => (
+              <InvoiceRow
+                key={`${invoice.emailId}-${invoice.attachmentId}`}
+                invoice={invoice}
+                onToggle={() => toggleInvoiceStatus(invoices.indexOf(invoice))}
+                getConfidenceColor={getConfidenceColor}
+                getConfidenceText={getConfidenceText}
+              />
+            ))}
+          </div>
+
+          {/* Duplicates Section */}
+          {duplicateInvoices.length > 0 && (
+            <div className="mt-4">
+              <button
+                onClick={() => setShowDuplicates(!showDuplicates)}
+                className="flex items-center gap-2 text-sm text-yellow-600 hover:text-yellow-700"
+              >
+                {showDuplicates ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                <AlertTriangle className="w-4 h-4" />
+                {duplicateInvoices.length} כפילויות אפשריות
+              </button>
+              
+              {showDuplicates && (
+                <div className="mt-2 space-y-2">
+                  {duplicateInvoices.map((invoice, index) => (
+                    <InvoiceRow
+                      key={`dup-${invoice.emailId}-${invoice.attachmentId}`}
+                      invoice={invoice}
+                      onToggle={() => toggleInvoiceStatus(invoices.indexOf(invoice))}
+                      getConfidenceColor={getConfidenceColor}
+                      getConfidenceText={getConfidenceText}
+                      isDuplicate
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Add Button */}
+          <div className="mt-6 pt-4 border-t flex items-center justify-between">
+            <span className="text-sm text-gray-600">
+              {approvedCount} חשבוניות נבחרו להוספה
+            </span>
+            <button
+              onClick={handleAddInvoices}
+              disabled={adding || approvedCount === 0}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+            >
+              {adding ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  מוסיף...
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  הוסף {approvedCount} חשבוניות
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Success message */}
+      {scanProgress && invoices.some(inv => inv.status === 'added') && (
+        <div className="p-3 mx-4 mb-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700">
+          <Check className="w-4 h-4" />
+          <span className="text-sm">{scanProgress}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Sub-component for invoice row
+function InvoiceRow({
+  invoice,
+  onToggle,
+  getConfidenceColor,
+  getConfidenceText,
+  isDuplicate = false,
+}: {
+  invoice: ScannedInvoice;
+  onToggle: () => void;
+  getConfidenceColor: (c: string) => string;
+  getConfidenceText: (c: string) => string;
+  isDuplicate?: boolean;
+}) {
+  const isApproved = invoice.status === 'approved';
+  const isAdded = invoice.status === 'added';
+  
+  return (
+    <div
+      className={`p-3 rounded-lg border transition-colors ${
+        isAdded
+          ? 'bg-green-50 border-green-200'
+          : isApproved
+          ? 'bg-white border-green-300'
+          : 'bg-gray-50 border-gray-200 opacity-60'
+      } ${isDuplicate ? 'border-yellow-300 bg-yellow-50/50' : ''}`}
+    >
+      <div className="flex items-start gap-3">
+        {/* Checkbox */}
+        <button
+          onClick={onToggle}
+          disabled={isAdded}
+          className={`mt-1 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+            isAdded
+              ? 'bg-green-500 border-green-500 cursor-default'
+              : isApproved
+              ? 'bg-green-500 border-green-500 hover:bg-green-600'
+              : 'border-gray-300 hover:border-gray-400'
+          }`}
+        >
+          {(isApproved || isAdded) && <Check className="w-3 h-3 text-white" />}
+        </button>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-gray-900 truncate">
+              {invoice.extractedData.supplier_name}
+            </span>
+            <span className={`text-xs ${getConfidenceColor(invoice.extractedData.confidence)}`}>
+              ({getConfidenceText(invoice.extractedData.confidence)})
+            </span>
+          </div>
+          
+          <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
+            <span>{invoice.extractedData.invoice_date}</span>
+            <span>•</span>
+            <span className="truncate">{invoice.extractedData.description}</span>
+          </div>
+          
+          {isDuplicate && invoice.matchReason && (
+            <div className="text-xs text-yellow-600 mt-1 flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3" />
+              {invoice.matchReason}
+            </div>
+          )}
+          
+          <div className="text-xs text-gray-400 mt-1 truncate">
+            <FileText className="w-3 h-3 inline ml-1" />
+            {invoice.filename}
+          </div>
+        </div>
+
+        {/* Amount */}
+        <div className="text-left">
+          <div className="font-semibold text-gray-900">
+            {formatCurrency(invoice.extractedData.amount)}
+          </div>
+          {invoice.extractedData.has_vat && invoice.extractedData.vat_amount > 0 && (
+            <div className="text-xs text-green-600">
+              מע"מ: {formatCurrency(invoice.extractedData.vat_amount)}
+            </div>
+          )}
+          {!invoice.extractedData.has_vat && (
+            <div className="text-xs text-gray-400">ללא מע"מ</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

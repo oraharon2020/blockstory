@@ -17,6 +17,7 @@
     "date-fns": "^3.0.6",
     "dotenv": "^17.2.3",
     "google-ads-api": "^21.0.1",
+    "googleapis": "^168.0.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.4",
     "jspdf-autotable": "^5.0.2",

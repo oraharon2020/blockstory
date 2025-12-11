@@ -106,7 +106,7 @@ const tools: Anthropic.Tool[] = [
         },
         amount: {
           type: 'number',
-          description: 'סכום ההוצאה (ללא מע"מ)'
+          description: 'סכום ההוצאה הכולל (כולל מע"מ אם זו הוצאה מוכרת)'
         },
         description: {
           type: 'string',
@@ -126,7 +126,7 @@ const tools: Anthropic.Tool[] = [
         },
         vat_amount: {
           type: 'number',
-          description: 'סכום המע"מ (רק עבור הוצאות מוכרות). אם לא צוין, יחושב אוטומטית לפי 17%'
+          description: 'סכום המע"מ (רק עבור הוצאות מוכרות). אם לא צוין, יחולץ אוטומטית מהסכום הכולל לפי 17%'
         },
         is_recurring: {
           type: 'boolean',
@@ -135,6 +135,10 @@ const tools: Anthropic.Tool[] = [
         invoice_number: {
           type: 'string',
           description: 'מספר חשבונית (אופציונלי)'
+        },
+        file_url: {
+          type: 'string',
+          description: 'כתובת URL של קובץ חשבונית מצורף (אופציונלי)'
         }
       },
       required: ['type', 'amount', 'description']
@@ -286,7 +290,8 @@ async function addExpense(
   supplier_name?: string,
   vat_amount?: number,
   is_recurring?: boolean,
-  invoice_number?: string
+  invoice_number?: string,
+  file_url?: string
 ): Promise<any> {
   try {
     const table = type === 'vat' ? 'expenses_vat' : 'expenses_no_vat';
@@ -301,12 +306,14 @@ async function addExpense(
       supplier_name: supplier_name || null,
       is_recurring: is_recurring || false,
       payment_method: 'credit',
-      invoice_number: invoice_number || null
+      invoice_number: invoice_number || null,
+      file_url: file_url || null
     };
 
-    // Add VAT amount for Israeli expenses (17%)
+    // Extract VAT amount from total for Israeli expenses
+    // Formula: VAT = totalAmount * (vatRate / (100 + vatRate)) = amount * (17/117)
     if (type === 'vat') {
-      insertData.vat_amount = vat_amount ?? Math.round(amount * 0.17 * 100) / 100;
+      insertData.vat_amount = vat_amount ?? Math.round(amount * (17 / 117) * 100) / 100;
     }
 
     const { data, error } = await supabase
@@ -316,9 +323,11 @@ async function addExpense(
       .single();
 
     if (error) {
+      console.error('❌ Add expense error:', error.message, error);
       return { success: false, error: error.message };
     }
 
+    console.log('✅ Expense added:', data);
     return { 
       success: true, 
       data,
@@ -385,7 +394,7 @@ async function processToolCall(
   }
   
   if (toolName === 'add_expense') {
-    const { type, amount, description, expense_date, category, supplier_name, vat_amount, is_recurring, invoice_number } = toolInput;
+    const { type, amount, description, expense_date, category, supplier_name, vat_amount, is_recurring, invoice_number, file_url } = toolInput;
     const result = await addExpense(
       businessId,
       type,
@@ -396,7 +405,8 @@ async function processToolCall(
       supplier_name,
       vat_amount,
       is_recurring,
-      invoice_number
+      invoice_number,
+      file_url
     );
     return JSON.stringify(result, null, 2);
   }
@@ -611,18 +621,19 @@ interface ChatRequest {
   message: string;
   businessId: string;
   conversationHistory?: Array<{role: 'user' | 'assistant'; content: string}>;
+  fileUrl?: string;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body: ChatRequest = await request.json();
-    const { message, businessId, conversationHistory = [] } = body;
+    const { message, businessId, conversationHistory = [], fileUrl } = body;
 
     if (!businessId) {
       return NextResponse.json({ error: 'Missing businessId' }, { status: 400 });
     }
 
-    if (!message) {
+    if (!message && !fileUrl) {
       return NextResponse.json({ error: 'Missing message' }, { status: 400 });
     }
 
@@ -642,20 +653,80 @@ export async function POST(request: NextRequest) {
 
     const businessName = businessData?.name || 'העסק';
 
+    // Build user message content - with image/PDF if provided
+    let userMessageContent: Anthropic.ContentBlockParam[] = [];
+    
+    // If there's a file URL, add it for Vision analysis
+    if (fileUrl) {
+      try {
+        // Fetch the file and convert to base64
+        const fileResponse = await fetch(fileUrl);
+        const fileBuffer = await fileResponse.arrayBuffer();
+        const base64File = Buffer.from(fileBuffer).toString('base64');
+        
+        // Determine media type
+        const isPdf = fileUrl.match(/\.pdf$/i);
+        const mediaType = isPdf ? 'application/pdf' :
+                         fileUrl.match(/\.png$/i) ? 'image/png' : 
+                         fileUrl.match(/\.gif$/i) ? 'image/gif' :
+                         fileUrl.match(/\.webp$/i) ? 'image/webp' : 'image/jpeg';
+        
+        if (isPdf) {
+          // PDF document
+          userMessageContent.push({
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: 'application/pdf',
+              data: base64File
+            }
+          } as any);
+        } else {
+          // Image
+          userMessageContent.push({
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+              data: base64File
+            }
+          });
+        }
+        
+        // Add instruction to read the invoice and ADD IT
+        const textContent = message || 'זו חשבונית. קרא אותה, זהה את הפרטים (ספק, סכום כולל מע"מ, תאריך) והוסף אותה מיד כהוצאה עם add_expense. אל תשאל - פשוט תוסיף!';
+        userMessageContent.push({
+          type: 'text',
+          text: `${textContent}\n\n⚠️ חובה: השתמש ב-add_expense עם file_url: ${fileUrl}`
+        });
+      } catch (imgError) {
+        console.error('Error fetching file:', imgError);
+        userMessageContent.push({
+          type: 'text',
+          text: message || `צירפתי קובץ: ${fileUrl}`
+        });
+      }
+    } else {
+      userMessageContent.push({
+        type: 'text',
+        text: message
+      });
+    }
+
     // Build messages
     const messages: Anthropic.MessageParam[] = [
       ...conversationHistory.slice(-10).map(msg => ({
         role: msg.role as 'user' | 'assistant',
         content: msg.content
       })),
-      { role: 'user', content: message }
+      { role: 'user', content: userMessageContent }
     ];
 
     // Initial API call with tools
     let response = await anthropic.messages.create({
       model: 'claude-sonnet-4-5-20250929',
       max_tokens: 4096,
-      system: `${SYSTEM_PROMPT}\n\nשם העסק: ${businessName}\nתאריך היום: ${new Date().toISOString().split('T')[0]}`,
+      system: `${SYSTEM_PROMPT}\n\nשם העסק: ${businessName}\nתאריך היום: ${new Date().toISOString().split('T')[0]}${fileUrl ? '\n\n⚠️ המשתמש צירף קובץ חשבונית! כשאתה מוסיף הוצאה עם add_expense, תמיד תעביר את ה-file_url: ' + fileUrl : ''}`,
       tools,
       messages,
     });

@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { type, expense_date, description, amount, vat_amount, supplier_name, is_recurring, category, businessId, payment_method, invoice_number } = body;
+    const { type, expense_date, description, amount, vat_amount, supplier_name, is_recurring, category, businessId, payment_method, invoice_number, file_url } = body;
 
     if (!expense_date || !description || amount === undefined) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -97,6 +97,7 @@ export async function POST(request: NextRequest) {
       category: category || null,
       payment_method: payment_method || 'credit',
       invoice_number: invoice_number || null,
+      file_url: file_url || null,
     };
 
     // Add business_id if provided
