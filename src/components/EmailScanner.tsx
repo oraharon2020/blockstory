@@ -151,13 +151,34 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
     if (!currentBusiness?.id || accounts.length === 0) return;
     
     setScanning(true);
-    setScanProgress('מתחבר ל-Gmail...');
     setError(null);
     setInvoices([]);
     
+    // Progress messages that update during scan
+    const progressMessages = [
+      'מתחבר ל-Gmail...',
+      'מחפש מיילים עם חשבוניות...',
+      'מוריד קבצים מצורפים...',
+      'קורא חשבוניות עם AI...',
+      'מעבד חשבונית 1...',
+      'מעבד חשבונית 2...',
+      'מעבד חשבונית 3...',
+      'בודק כפילויות...',
+      'כמעט סיימנו...',
+    ];
+    
+    let messageIndex = 0;
+    setScanProgress(progressMessages[0]);
+    
+    // Update progress message every 3 seconds
+    const progressInterval = setInterval(() => {
+      messageIndex++;
+      if (messageIndex < progressMessages.length) {
+        setScanProgress(progressMessages[messageIndex]);
+      }
+    }, 3000);
+    
     try {
-      setScanProgress('סורק מיילים...');
-      
       const res = await fetch('/api/gmail/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -169,6 +190,8 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
           endDate: useDateRange ? endDate : undefined,
         }),
       });
+      
+      clearInterval(progressInterval);
       
       const data = await res.json();
       
@@ -189,8 +212,9 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
       }));
       
       setInvoices(processedInvoices);
-      setScanProgress(`נמצאו ${data.summary.totalAttachments} חשבוניות`);
+      setScanProgress(`✓ נמצאו ${data.summary.totalAttachments} חשבוניות (${data.summary.newInvoices} חדשות, ${data.summary.duplicates} כפולות)`);
     } catch (err: any) {
+      clearInterval(progressInterval);
       setError(err.message);
       setScanProgress('');
     } finally {
@@ -434,32 +458,44 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
         )}
 
         {/* Scan Button */}
-        {hasConnectedAccounts && invoices.length === 0 && (
+        {hasConnectedAccounts && invoices.length === 0 && !scanning && (
           <div className="p-6 text-center">
             <button
               onClick={handleScan}
               disabled={scanning}
               className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 mx-auto"
           >
-            {scanning ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                {scanProgress}
-              </>
-            ) : (
-              <>
-                <RefreshCw className="w-5 h-5" />
-                {useDateRange 
-                  ? `סרוק מיילים`
-                  : `סרוק מיילים של ${monthNames[month]}`
-                }
-              </>
-            )}
+              <RefreshCw className="w-5 h-5" />
+              {useDateRange 
+                ? `סרוק מיילים`
+                : `סרוק מיילים של ${monthNames[month]}`
+              }
           </button>
           <p className="text-xs text-gray-500 mt-2">
-            יחפש מיילים עם קבצים מצורפים (PDF, תמונות)
+            יחפש מיילים עם מילות מפתח: חשבונית, קבלה, invoice...
           </p>
         </div>
+        )}
+
+        {/* Scanning Progress */}
+        {scanning && (
+          <div className="p-8 text-center">
+            <div className="inline-flex flex-col items-center gap-4">
+              <div className="relative">
+                <div className="w-16 h-16 rounded-full border-4 border-blue-200 border-t-blue-600 animate-spin"></div>
+                <Mail className="w-6 h-6 text-blue-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+              </div>
+              <div className="space-y-2">
+                <p className="text-lg font-medium text-gray-900">{scanProgress}</p>
+                <p className="text-sm text-gray-500">זה יכול לקחת עד דקה</p>
+              </div>
+              <div className="flex gap-1 mt-2">
+                <span className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                <span className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                <span className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+              </div>
+            </div>
+          </div>
         )}
 
       {/* Results */}

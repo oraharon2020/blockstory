@@ -205,6 +205,7 @@ export async function checkForDuplicates(
 
 /**
  * Process multiple invoices in batch
+ * Limited to 10 attachments for performance
  */
 export async function processInvoiceBatch(
   emails: EmailMessage[],
@@ -215,31 +216,50 @@ export async function processInvoiceBatch(
   const results: ScannedInvoice[] = [];
   let processed = 0;
   
-  // Count total attachments
-  const totalAttachments = emails.reduce((sum, email) => sum + email.attachments.length, 0);
-  
+  // Flatten all attachments with their email context
+  const allAttachments: { email: EmailMessage; attachment: EmailAttachment }[] = [];
   for (const email of emails) {
     for (const attachment of email.attachments) {
-      try {
-        const attachmentData = await getAttachmentData(email.id, attachment.id);
-        const invoice = await processInvoiceAttachment(email, attachment, attachmentData, businessId);
-        results.push(invoice);
-      } catch (error) {
-        console.error(`Error processing ${attachment.filename}:`, error);
-        // Add failed invoice with error status
-        results.push({
-          emailId: email.id,
-          attachmentId: attachment.id,
-          filename: attachment.filename,
-          extractedData: getDefaultExtractedData(),
-          isDuplicate: false,
-          status: 'rejected',
-        });
-      }
-      
-      processed++;
-      onProgress?.(processed, totalAttachments);
+      allAttachments.push({ email, attachment });
     }
+  }
+  
+  // Limit to 10 attachments max for performance
+  const maxAttachments = 10;
+  const toProcess = allAttachments.slice(0, maxAttachments);
+  const totalAttachments = toProcess.length;
+  
+  console.log(`Processing ${totalAttachments} attachments (limited from ${allAttachments.length})`);
+  
+  // Process 2 at a time in parallel
+  const batchSize = 2;
+  
+  for (let i = 0; i < toProcess.length; i += batchSize) {
+    const batch = toProcess.slice(i, i + batchSize);
+    
+    const batchResults = await Promise.all(
+      batch.map(async ({ email, attachment }) => {
+        try {
+          const attachmentData = await getAttachmentData(email.id, attachment.id);
+          return await processInvoiceAttachment(email, attachment, attachmentData, businessId);
+        } catch (error) {
+          console.error(`Error processing ${attachment.filename}:`, error);
+          // Add failed invoice with error status
+          return {
+            emailId: email.id,
+            attachmentId: attachment.id,
+            filename: attachment.filename,
+            extractedData: getDefaultExtractedData(),
+            isDuplicate: false,
+            status: 'rejected' as const,
+          };
+        }
+      })
+    );
+    
+    results.push(...batchResults);
+    processed += batch.length;
+    onProgress?.(processed, totalAttachments);
   }
   
   return results;

@@ -22,16 +22,30 @@ export async function searchInvoiceEmails(
   const validTokens = await ensureValidTokens(tokens);
   const gmail = getGmailClient(validTokens);
   
-  const { maxResults = 50, afterDate, beforeDate } = options;
+  // Limit to 15 for performance
+  const { maxResults = 15, afterDate, beforeDate } = options;
   
-  // Build search query
-  let query = 'has:attachment';
+  // Build search query - look for invoice-related keywords
+  // Hebrew: חשבונית, קבלה, חשבון, מס קבלה, חשבונית מס
+  // English: invoice, receipt, bill, payment
+  const invoiceKeywords = [
+    'חשבונית',
+    'קבלה', 
+    'חשבון',
+    'invoice',
+    'receipt',
+    'bill',
+  ].join(' OR ');
+  
+  let query = `has:attachment (${invoiceKeywords})`;
   if (afterDate) {
     query += ` after:${formatDateForSearch(afterDate)}`;
   }
   if (beforeDate) {
     query += ` before:${formatDateForSearch(beforeDate)}`;
   }
+  
+  console.log('Gmail search query:', query);
   
   // Search for messages
   const response = await gmail.users.messages.list({
@@ -41,23 +55,39 @@ export async function searchInvoiceEmails(
   });
   
   const messages = response.data.messages || [];
-  const emailMessages: EmailMessage[] = [];
+  console.log(`Found ${messages.length} emails matching invoice keywords`);
   
-  // Fetch full message details
-  for (const msg of messages) {
-    if (!msg.id) continue;
+  // Fetch messages in parallel (batch of 5 at a time)
+  const emailMessages: EmailMessage[] = [];
+  const batchSize = 5;
+  
+  for (let i = 0; i < messages.length; i += batchSize) {
+    const batch = messages.slice(i, i + batchSize);
+    const results = await Promise.all(
+      batch.map(async (msg) => {
+        if (!msg.id) return null;
+        try {
+          const fullMessage = await gmail.users.messages.get({
+            userId: 'me',
+            id: msg.id,
+            format: 'full',
+          });
+          return parseEmailMessage(fullMessage.data);
+        } catch (err) {
+          console.error('Error fetching message:', msg.id, err);
+          return null;
+        }
+      })
+    );
     
-    const fullMessage = await gmail.users.messages.get({
-      userId: 'me',
-      id: msg.id,
-      format: 'full',
-    });
-    
-    const parsed = parseEmailMessage(fullMessage.data);
-    if (parsed && parsed.attachments.length > 0) {
-      emailMessages.push(parsed);
+    for (const parsed of results) {
+      if (parsed && parsed.attachments.length > 0) {
+        emailMessages.push(parsed);
+      }
     }
   }
+  
+  console.log(`Parsed ${emailMessages.length} emails with valid attachments`);
   
   return emailMessages;
 }
@@ -163,6 +193,6 @@ export async function getMonthlyEmails(
   return searchInvoiceEmails(tokens, {
     afterDate: startDate,
     beforeDate: endDate,
-    maxResults: 100,
+    maxResults: 15, // Only emails with invoice keywords
   });
 }
