@@ -291,23 +291,36 @@ async function syncData(params: {
     }
   }
 
-  // Get existing data for manual entries (ads costs) - filter by business_id if provided
-  let existingQuery = supabase
-    .from(TABLES.DAILY_DATA)
-    .select('google_ads_cost, facebook_ads_cost, tiktok_ads_cost')
-    .eq('date', date);
-  
+  // ========== Get existing manual entries (for Facebook/TikTok that are entered manually) ==========
+  let existingFacebookCost = 0;
+  let existingTiktokCost = 0;
   if (businessId) {
-    existingQuery = existingQuery.eq('business_id', businessId);
-  } else {
-    existingQuery = existingQuery.is('business_id', null);
+    const { data: existingData } = await supabase
+      .from(TABLES.DAILY_DATA)
+      .select('facebook_ads_cost, tiktok_ads_cost')
+      .eq('date', date)
+      .eq('business_id', businessId)
+      .single();
+    
+    existingFacebookCost = existingData?.facebook_ads_cost || 0;
+    existingTiktokCost = existingData?.tiktok_ads_cost || 0;
+  }
+
+  // ========== Get Google Ads cost from google_ads_campaigns table ==========
+  let googleAdsCost = 0;
+  if (businessId) {
+    const { data: googleAdsData } = await supabase
+      .from('google_ads_campaigns')
+      .select('cost')
+      .eq('business_id', businessId)
+      .eq('date', date);
+    
+    googleAdsCost = googleAdsData?.reduce((sum, c) => sum + (parseFloat(c.cost) || 0), 0) || 0;
   }
   
-  const { data: existingData } = await existingQuery.single();
-
-  const googleAdsCost = existingData?.google_ads_cost || 0;
-  const facebookAdsCost = existingData?.facebook_ads_cost || 0;
-  const tiktokAdsCost = existingData?.tiktok_ads_cost || 0;
+  // ========== Facebook & TikTok - use manual entries from daily_cashflow ==========
+  const facebookAdsCost = existingFacebookCost;
+  const tiktokAdsCost = existingTiktokCost;
 
   // Calculate TOTAL expenses including all new fields
   const totalExpenses = googleAdsCost + facebookAdsCost + tiktokAdsCost + finalShippingCost + materialsCost + creditCardFees + vat + employeeCost + refundsAmount + expensesVatAmount + expensesNoVatAmount;

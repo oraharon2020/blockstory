@@ -96,10 +96,10 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
     invoice_number: '',
   });
 
-  // Date range for the month
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-  const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
+  // Date range for the month (month is 1-12)
+  const daysInMonth = new Date(year, month, 0).getDate(); // month is already 1-12, so this gives last day of month
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
 
   useEffect(() => {
     loadExpenses();

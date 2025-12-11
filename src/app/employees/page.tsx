@@ -10,7 +10,7 @@ export default function EmployeesPage() {
   
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
-    return { month: now.getMonth(), year: now.getFullYear() };
+    return { month: now.getMonth() + 1, year: now.getFullYear() }; // 1-12
   });
 
   const monthNames = [
@@ -20,8 +20,8 @@ export default function EmployeesPage() {
 
   const goToPreviousMonth = () => {
     setSelectedMonth(prev => {
-      if (prev.month === 0) {
-        return { month: 11, year: prev.year - 1 };
+      if (prev.month === 1) {
+        return { month: 12, year: prev.year - 1 };
       }
       return { month: prev.month - 1, year: prev.year };
     });
@@ -29,8 +29,8 @@ export default function EmployeesPage() {
 
   const goToNextMonth = () => {
     setSelectedMonth(prev => {
-      if (prev.month === 11) {
-        return { month: 0, year: prev.year + 1 };
+      if (prev.month === 12) {
+        return { month: 1, year: prev.year + 1 };
       }
       return { month: prev.month + 1, year: prev.year };
     });
@@ -82,7 +82,7 @@ export default function EmployeesPage() {
                 <ChevronRight className="w-5 h-5" />
               </button>
               <span className="font-medium min-w-[120px] text-center">
-                {monthNames[selectedMonth.month]} {selectedMonth.year}
+                {monthNames[selectedMonth.month - 1]} {selectedMonth.year}
               </span>
               <button
                 onClick={goToNextMonth}

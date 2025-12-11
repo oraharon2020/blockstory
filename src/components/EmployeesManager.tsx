@@ -89,7 +89,7 @@ export default function EmployeesManager({ month, year, onTotalChange }: Employe
     
     try {
       const res = await fetch(
-        `/api/employees?businessId=${currentBusiness.id}&month=${month + 1}&year=${year}`
+        `/api/employees?businessId=${currentBusiness.id}&month=${month}&year=${year}`
       );
       const json = await res.json();
       
@@ -124,7 +124,7 @@ export default function EmployeesManager({ month, year, onTotalChange }: Employe
           name: newEmployee.name,
           role: newEmployee.role || '',
           salary: parseFloat(newEmployee.salary),
-          month: month + 1,
+          month: month,
           year,
         }),
       });
@@ -175,7 +175,7 @@ export default function EmployeesManager({ month, year, onTotalChange }: Employe
           name: editValue.name,
           role: editValue.role || '',
           salary: parseFloat(editValue.salary),
-          month: month + 1,
+          month: month,
           year,
         }),
       });
@@ -226,7 +226,7 @@ export default function EmployeesManager({ month, year, onTotalChange }: Employe
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           businessId: currentBusiness.id,
-          targetMonth: month + 1,
+          targetMonth: month,
           targetYear: year,
         }),
       });

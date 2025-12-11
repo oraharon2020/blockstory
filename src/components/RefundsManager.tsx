@@ -77,10 +77,10 @@ export default function RefundsManager({ month, year, onUpdate }: RefundsManager
   // Totals
   const [totalRefunds, setTotalRefunds] = useState(0);
 
-  // Date range for the month
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-  const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
+  // Date range for the month (month is 1-12)
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
 
   // Fetch refunds when month/year/business changes
   useEffect(() => {

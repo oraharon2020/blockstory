@@ -174,10 +174,10 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
 
   const isColumnVisible = (key: string) => visibleColumns.includes(key);
 
-  // Get date range for the month
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-  const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
+  // Get date range for the month (month is 1-12)
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
 
   // Build query params with businessId
   const buildQueryParams = useCallback((params: Record<string, string>) => {
@@ -189,6 +189,9 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
   }, [currentBusiness?.id]);
 
   const fetchData = useCallback(async (showLoading = true) => {
+    // Don't fetch if no business selected
+    if (!currentBusiness?.id) return;
+    
     try {
       if (showLoading) setLoading(true);
       
@@ -197,7 +200,7 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
         fetch(`/api/cashflow?${buildQueryParams({ start: startDate, end: endDate })}`),
         fetch(`/api/daily-costs?${buildQueryParams({ startDate, endDate })}`),
         fetch(`/api/expenses?${buildQueryParams({ startDate, endDate })}`),
-        fetch(`/api/employees?${buildQueryParams({ month: String(month + 1), year: String(year) })}`),
+        fetch(`/api/employees?${buildQueryParams({ month: String(month), year: String(year) })}`),
         fetch(`/api/refunds?${buildQueryParams({ startDate, endDate })}`),
         fetch(`/api/business-settings?${buildQueryParams({})}`),
       ]);
@@ -418,7 +421,7 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, month, year, buildQueryParams]);
+  }, [startDate, endDate, month, year, buildQueryParams, currentBusiness?.id]);
 
   useEffect(() => {
     fetchData();
@@ -436,8 +439,8 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
     
     const syncToday = async () => {
       const today = new Date().toISOString().split('T')[0];
-      // Only sync if we're viewing the current month
-      const currentMonth = new Date().getMonth();
+      // Only sync if we're viewing the current month (month is 1-12)
+      const currentMonth = new Date().getMonth() + 1; // Convert to 1-12
       const currentYear = new Date().getFullYear();
       if (month === currentMonth && year === currentYear) {
         console.log('🔄 Auto-syncing today from WooCommerce...');

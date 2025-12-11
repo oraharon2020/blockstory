@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { ChevronRight, ChevronLeft, Calendar } from 'lucide-react';
 
 interface MonthPickerProps {
-  month: number; // 0-11
+  month: number; // 1-12
   year: number;
   onChange: (month: number, year: number) => void;
 }
@@ -16,10 +16,13 @@ const MONTHS_HE = [
 
 export default function MonthPicker({ month, year, onChange }: MonthPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
+  
+  // Convert to 0-indexed for internal use
+  const monthIndex = month - 1;
 
   const handlePrevMonth = () => {
-    if (month === 0) {
-      onChange(11, year - 1);
+    if (month === 1) {
+      onChange(12, year - 1);
     } else {
       onChange(month - 1, year);
     }
@@ -28,24 +31,25 @@ export default function MonthPicker({ month, year, onChange }: MonthPickerProps)
   const handleNextMonth = () => {
     const now = new Date();
     const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
+    const currentMonth = now.getMonth() + 1; // 1-12
 
     // Don't go beyond current month
     if (year > currentYear || (year === currentYear && month >= currentMonth)) {
       return;
     }
 
-    if (month === 11) {
-      onChange(0, year + 1);
+    if (month === 12) {
+      onChange(1, year + 1);
     } else {
       onChange(month + 1, year);
     }
   };
 
-  const handleMonthSelect = (selectedMonth: number) => {
+  const handleMonthSelect = (selectedMonthIndex: number) => {
+    const selectedMonth = selectedMonthIndex + 1; // Convert to 1-12
     const now = new Date();
     const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
+    const currentMonth = now.getMonth() + 1;
 
     // Don't allow future months
     if (year > currentYear || (year === currentYear && selectedMonth > currentMonth)) {
@@ -59,13 +63,14 @@ export default function MonthPicker({ month, year, onChange }: MonthPickerProps)
   const handleYearChange = (delta: number) => {
     const newYear = year + delta;
     const now = new Date();
+    const currentMonth = now.getMonth() + 1;
     
     // Don't go into the future
     if (newYear > now.getFullYear()) return;
     
     // If going to current year, make sure month is valid
-    if (newYear === now.getFullYear() && month > now.getMonth()) {
-      onChange(now.getMonth(), newYear);
+    if (newYear === now.getFullYear() && month > currentMonth) {
+      onChange(currentMonth, newYear);
     } else {
       onChange(month, newYear);
     }
@@ -73,7 +78,8 @@ export default function MonthPicker({ month, year, onChange }: MonthPickerProps)
 
   const isNextDisabled = () => {
     const now = new Date();
-    return year > now.getFullYear() || (year === now.getFullYear() && month >= now.getMonth());
+    const currentMonth = now.getMonth() + 1;
+    return year > now.getFullYear() || (year === now.getFullYear() && month >= currentMonth);
   };
 
   return (
@@ -93,7 +99,7 @@ export default function MonthPicker({ month, year, onChange }: MonthPickerProps)
         >
           <Calendar className="w-5 h-5 text-gray-500" />
           <span className="font-medium">
-            {MONTHS_HE[month]} {year}
+            {MONTHS_HE[monthIndex]} {year}
           </span>
         </button>
 
@@ -126,9 +132,10 @@ export default function MonthPicker({ month, year, onChange }: MonthPickerProps)
               <div className="grid grid-cols-3 gap-2">
                 {MONTHS_HE.map((monthName, idx) => {
                   const now = new Date();
+                  const currentMonth = now.getMonth() + 1;
                   const isFuture = year > now.getFullYear() || 
-                    (year === now.getFullYear() && idx > now.getMonth());
-                  const isSelected = idx === month;
+                    (year === now.getFullYear() && (idx + 1) > currentMonth);
+                  const isSelected = idx === monthIndex;
 
                   return (
                     <button
@@ -165,14 +172,14 @@ export default function MonthPicker({ month, year, onChange }: MonthPickerProps)
   );
 }
 
-// Helper functions
+// Helper functions (month is 1-12)
 export function getMonthDays(month: number, year: number): string[] {
   const days: string[] = [];
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInMonth = new Date(year, month, 0).getDate(); // month 1-12, day 0 gives last day of prev month
   
   for (let day = 1; day <= daysInMonth; day++) {
     // Use local date formatting to avoid timezone issues
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     days.push(dateStr);
   }
   
@@ -180,10 +187,10 @@ export function getMonthDays(month: number, year: number): string[] {
 }
 
 export function getMonthRange(month: number, year: number): { start: string; end: string } {
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInMonth = new Date(year, month, 0).getDate();
   
   return {
-    start: `${year}-${String(month + 1).padStart(2, '0')}-01`,
-    end: `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`,
+    start: `${year}-${String(month).padStart(2, '0')}-01`,
+    end: `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`,
   };
 }
