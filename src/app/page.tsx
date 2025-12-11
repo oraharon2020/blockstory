@@ -10,7 +10,7 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
-    return { month: now.getMonth(), year: now.getFullYear() };
+    return { month: now.getMonth() + 1, year: now.getFullYear() };
   });
 
   const handleSync = useCallback(async () => {
@@ -23,14 +23,14 @@ export default function DashboardPage() {
     
     try {
       // Calculate days in month
-      const daysInMonth = new Date(selectedMonth.year, selectedMonth.month + 1, 0).getDate();
+      const daysInMonth = new Date(selectedMonth.year, selectedMonth.month, 0).getDate();
       
       const today = new Date();
       const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
       
       // Loop through all days in the month - use GET to fetch settings from DB (including valid_order_statuses)
       for (let day = 1; day <= daysInMonth; day++) {
-        const dateStr = `${selectedMonth.year}-${String(selectedMonth.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dateStr = `${selectedMonth.year}-${String(selectedMonth.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         
         // Don't sync future dates
         if (dateStr > todayStr) break;

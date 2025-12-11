@@ -19,6 +19,9 @@ import {
   ChevronDown,
   ChevronUp,
   Eye,
+  Plus,
+  Calendar,
+  Settings,
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/calculations';
 import { useAuth } from '@/contexts/AuthContext';
@@ -42,6 +45,12 @@ interface ScannedInvoice {
   duplicateOf?: number;
   status: 'pending' | 'approved' | 'rejected' | 'added';
   matchReason?: string;
+  fromEmail?: string;
+}
+
+interface GmailAccount {
+  email: string;
+  isConnected: boolean;
 }
 
 interface EmailScannerProps {
@@ -53,11 +62,8 @@ interface EmailScannerProps {
 
 export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: EmailScannerProps) {
   const { currentBusiness } = useAuth();
-  const [connectionStatus, setConnectionStatus] = useState<{
-    isConnected: boolean;
-    email?: string;
-    loading: boolean;
-  }>({ isConnected: false, loading: true });
+  const [accounts, setAccounts] = useState<GmailAccount[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
   
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState('');
@@ -65,17 +71,31 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
   const [adding, setAdding] = useState(false);
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Date range mode
+  const [useDateRange, setUseDateRange] = useState(false);
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date(year, month - 1, 1);
+    return d.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const d = new Date(year, month, 0);
+    return d.toISOString().split('T')[0];
+  });
+  
+  // Show settings panel
+  const [showSettings, setShowSettings] = useState(false);
 
-  // Check connection status on mount
+  // Load connected accounts on mount
   useEffect(() => {
-    checkConnectionStatus();
+    loadAccounts();
   }, [currentBusiness?.id]);
 
   // Check URL params for OAuth callback
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('gmail_connected') === 'true') {
-      checkConnectionStatus();
+      loadAccounts();
       // Clean URL
       window.history.replaceState({}, '', window.location.pathname);
     }
@@ -85,22 +105,24 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
     }
   }, []);
 
-  const checkConnectionStatus = async () => {
+  const loadAccounts = async () => {
     if (!currentBusiness?.id) return;
     
-    setConnectionStatus(prev => ({ ...prev, loading: true }));
+    setLoadingAccounts(true);
     
     try {
       const res = await fetch(`/api/gmail/status?businessId=${currentBusiness.id}`);
       const data = await res.json();
       
-      setConnectionStatus({
-        isConnected: data.isConnected,
-        email: data.email,
-        loading: false,
-      });
+      if (data.isConnected) {
+        setAccounts([{ email: data.email, isConnected: true }]);
+      } else {
+        setAccounts([]);
+      }
     } catch (err) {
-      setConnectionStatus({ isConnected: false, loading: false });
+      setAccounts([]);
+    } finally {
+      setLoadingAccounts(false);
     }
   };
 
@@ -111,14 +133,14 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
     window.location.href = `/api/gmail/auth?businessId=${currentBusiness.id}&returnUrl=${returnUrl}`;
   };
 
-  const handleDisconnect = async () => {
+  const handleDisconnect = async (email?: string) => {
     if (!currentBusiness?.id) return;
     
     try {
       await fetch(`/api/gmail/status?businessId=${currentBusiness.id}`, {
         method: 'DELETE',
       });
-      setConnectionStatus({ isConnected: false, loading: false });
+      setAccounts([]);
       setInvoices([]);
     } catch (err) {
       console.error('Disconnect error:', err);
@@ -126,7 +148,7 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
   };
 
   const handleScan = async () => {
-    if (!currentBusiness?.id) return;
+    if (!currentBusiness?.id || accounts.length === 0) return;
     
     setScanning(true);
     setScanProgress('מתחבר ל-Gmail...');
@@ -141,15 +163,17 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           businessId: currentBusiness.id,
-          year,
-          month,
+          year: useDateRange ? undefined : year,
+          month: useDateRange ? undefined : month,
+          startDate: useDateRange ? startDate : undefined,
+          endDate: useDateRange ? endDate : undefined,
         }),
       });
       
       const data = await res.json();
       
       if (data.needsAuth) {
-        setConnectionStatus({ isConnected: false, loading: false });
+        setAccounts([]);
         setError('נדרשת התחברות מחדש ל-Gmail');
         return;
       }
@@ -264,8 +288,10 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
 
   const monthNames = ['', 'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
+  const hasConnectedAccounts = accounts.length > 0;
+
   return (
-    <div className="bg-white rounded-lg shadow-lg border max-w-4xl mx-auto">
+    <div className="bg-white rounded-lg shadow-lg border max-w-4xl mx-auto max-h-[90vh] overflow-hidden flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-blue-50 to-purple-50">
         <div className="flex items-center gap-3">
@@ -275,48 +301,117 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
           <div>
             <h2 className="font-semibold text-gray-900">סריקת מיילים</h2>
             <p className="text-xs text-gray-500">
-              {monthNames[month]} {year}
+              {useDateRange 
+                ? `${startDate} - ${endDate}`
+                : `${monthNames[month]} ${year}`
+              }
             </p>
           </div>
         </div>
         
-        {onClose && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={onClose}
-            className="p-1 text-gray-400 hover:text-gray-600 rounded"
+            onClick={() => setShowSettings(!showSettings)}
+            className={`p-2 rounded-lg transition-colors ${showSettings ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+            title="הגדרות"
           >
-            <X className="w-5 h-5" />
+            <Settings className="w-5 h-5" />
           </button>
-        )}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Connection Status */}
-      <div className="p-4 border-b bg-gray-50">
-        {connectionStatus.loading ? (
-          <div className="flex items-center gap-2 text-gray-500">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            <span>בודק חיבור...</span>
-          </div>
-        ) : connectionStatus.isConnected ? (
+      {/* Settings Panel */}
+      {showSettings && (
+        <div className="p-4 border-b bg-blue-50/50 space-y-4">
+          {/* Date Range Toggle */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-green-600">
-              <Link2 className="w-4 h-4" />
-              <span>מחובר ל-{connectionStatus.email}</span>
-            </div>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <Calendar className="w-4 h-4" />
+              טווח תאריכים מותאם אישית
+            </label>
             <button
-              onClick={handleDisconnect}
-              className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
+              onClick={() => setUseDateRange(!useDateRange)}
+              className={`relative w-11 h-6 rounded-full transition-colors ${useDateRange ? 'bg-blue-600' : 'bg-gray-300'}`}
             >
-              <Link2Off className="w-3 h-3" />
-              נתק
+              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${useDateRange ? 'right-1' : 'right-6'}`} />
             </button>
           </div>
+          
+          {useDateRange && (
+            <div className="flex gap-3 items-center">
+              <div className="flex-1">
+                <label className="text-xs text-gray-500 block mb-1">מתאריך</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="text-xs text-gray-500 block mb-1">עד תאריך</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Connected Accounts */}
+      <div className="p-4 border-b bg-gray-50">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-medium text-gray-700">חשבונות מחוברים</span>
+          <button
+            onClick={handleConnect}
+            className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
+          >
+            <Plus className="w-3 h-3" />
+            הוסף חשבון
+          </button>
+        </div>
+        
+        {loadingAccounts ? (
+          <div className="flex items-center gap-2 text-gray-500 text-sm">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>טוען...</span>
+          </div>
+        ) : accounts.length > 0 ? (
+          <div className="space-y-2">
+            {accounts.map((account) => (
+              <div key={account.email} className="flex items-center justify-between bg-white p-2 rounded-lg border">
+                <div className="flex items-center gap-2 text-green-600">
+                  <Link2 className="w-4 h-4" />
+                  <span className="text-sm">{account.email}</span>
+                </div>
+                <button
+                  onClick={() => handleDisconnect(account.email)}
+                  className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
+                >
+                  <Link2Off className="w-3 h-3" />
+                  נתק
+                </button>
+              </div>
+            ))}
+          </div>
         ) : (
-          <div className="flex items-center justify-between">
-            <span className="text-gray-500">לא מחובר ל-Gmail</span>
+          <div className="text-center py-4">
+            <p className="text-gray-500 text-sm mb-3">לא מחוברים חשבונות Gmail</p>
             <button
               onClick={handleConnect}
-              className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 flex items-center gap-2"
+              className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 flex items-center gap-2 mx-auto"
             >
               <Mail className="w-4 h-4" />
               התחבר ל-Gmail
@@ -325,24 +420,26 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
         )}
       </div>
 
-      {/* Error */}
-      {error && (
-        <div className="p-3 mx-4 mt-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
-          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-          <span className="text-sm">{error}</span>
-          <button onClick={() => setError(null)} className="mr-auto">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Error */}
+        {error && (
+          <div className="p-3 mx-4 mt-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <span className="text-sm">{error}</span>
+            <button onClick={() => setError(null)} className="mr-auto">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
-      {/* Scan Button */}
-      {connectionStatus.isConnected && invoices.length === 0 && (
-        <div className="p-6 text-center">
-          <button
-            onClick={handleScan}
-            disabled={scanning}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 mx-auto"
+        {/* Scan Button */}
+        {hasConnectedAccounts && invoices.length === 0 && (
+          <div className="p-6 text-center">
+            <button
+              onClick={handleScan}
+              disabled={scanning}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 mx-auto"
           >
             {scanning ? (
               <>
@@ -352,7 +449,10 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
             ) : (
               <>
                 <RefreshCw className="w-5 h-5" />
-                סרוק מיילים של {monthNames[month]}
+                {useDateRange 
+                  ? `סרוק מיילים`
+                  : `סרוק מיילים של ${monthNames[month]}`
+                }
               </>
             )}
           </button>
@@ -360,7 +460,7 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
             יחפש מיילים עם קבצים מצורפים (PDF, תמונות)
           </p>
         </div>
-      )}
+        )}
 
       {/* Results */}
       {invoices.length > 0 && (
@@ -466,6 +566,7 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
           <span className="text-sm">{scanProgress}</span>
         </div>
       )}
+      </div> {/* End scrollable content */}
     </div>
   );
 }

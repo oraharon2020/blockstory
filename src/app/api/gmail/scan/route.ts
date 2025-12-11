@@ -9,6 +9,7 @@ import {
   GmailTokens,
   ensureValidTokens,
   getMonthlyEmails,
+  searchInvoiceEmails,
   downloadAttachment,
   processInvoiceBatch,
   ScannedInvoice,
@@ -20,7 +21,7 @@ export const maxDuration = 60; // Allow up to 60 seconds for scanning
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { businessId, year, month } = body;
+    const { businessId, year, month, startDate, endDate } = body;
     
     if (!businessId) {
       return NextResponse.json({ error: 'Missing businessId' }, { status: 400 });
@@ -70,11 +71,21 @@ export async function POST(request: NextRequest) {
       }, { status: 401 });
     }
     
-    // Scan emails for the specified month
-    const targetYear = year || new Date().getFullYear();
-    const targetMonth = month || new Date().getMonth() + 1;
-    
-    const emails = await getMonthlyEmails(validTokens, targetYear, targetMonth);
+    // Scan emails - either by date range or by month
+    let emails;
+    if (startDate && endDate) {
+      // Use custom date range
+      emails = await searchInvoiceEmails(validTokens, {
+        afterDate: new Date(startDate),
+        beforeDate: new Date(endDate),
+        maxResults: 100,
+      });
+    } else {
+      // Use month/year
+      const targetYear = year || new Date().getFullYear();
+      const targetMonth = month || new Date().getMonth() + 1;
+      emails = await getMonthlyEmails(validTokens, targetYear, targetMonth);
+    }
     
     if (emails.length === 0) {
       return NextResponse.json({
