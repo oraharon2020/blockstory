@@ -87,9 +87,17 @@ async function extractInvoiceData(
   content.push({
     type: 'text',
     text: `אתה מומחה בקריאת חשבוניות וקבלות ישראליות.
-נא לנתח את המסמך המצורף ולחלץ את הפרטים הבאים.
 
-חפש בקפידה:
+קודם כל, בדוק האם המסמך המצורף הוא חשבונית/קבלה אמיתית.
+
+אם זה לא חשבונית (למשל: לוגו, חתימה, הסכם, מכתב, פרסומת, תמונה רגילה) - החזר:
+{
+  "is_invoice": false,
+  "reason": "סיבה קצרה למה זה לא חשבונית"
+}
+
+אם זו חשבונית אמיתית, חלץ את הפרטים הבאים:
+
 1. שם הספק/העסק - בדרך כלל מופיע בראש המסמך בגדול
 2. סכום סופי לתשלום - חפש "סה"כ", "לתשלום", "Total", המספר הכי גדול בסוף
 3. מע"מ - חפש "מע"מ", "VAT", לפעמים 17% מהסכום
@@ -99,6 +107,7 @@ async function extractInvoiceData(
 
 החזר JSON בלבד בפורמט הזה (בלי טקסט נוסף לפני או אחרי):
 {
+  "is_invoice": true,
   "supplier_name": "שם הספק",
   "amount": 123.45,
   "vat_amount": 17.90,
@@ -136,6 +145,21 @@ async function extractInvoiceData(
     const jsonMatch = textContent.text.match(/\{[\s\S]*?\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
+      
+      // Check if it's not an invoice
+      if (parsed.is_invoice === false) {
+        console.log(`Skipping non-invoice: ${filename} - ${parsed.reason}`);
+        return {
+          supplier_name: '',
+          amount: 0,
+          vat_amount: 0,
+          invoice_number: '',
+          invoice_date: '',
+          description: `לא חשבונית: ${parsed.reason || 'מסמך לא רלוונטי'}`,
+          has_vat: false,
+          confidence: 'skip',
+        };
+      }
       
       // Parse amount - handle string with commas or currency symbols
       let amount = 0;

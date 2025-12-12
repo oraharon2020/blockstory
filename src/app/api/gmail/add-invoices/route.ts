@@ -70,7 +70,7 @@ async function uploadInvoiceFile(
     
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage
-      .from('expenses')
+      .from('invoices')
       .upload(path, buffer, {
         contentType: mimeType,
         upsert: false,
@@ -83,7 +83,7 @@ async function uploadInvoiceFile(
     
     // Get public URL
     const { data: urlData } = supabase.storage
-      .from('expenses')
+      .from('invoices')
       .getPublicUrl(path);
     
     return urlData.publicUrl;
@@ -178,6 +178,8 @@ export async function POST(request: NextRequest) {
         results.errors.push(`${filename}: ${err.message}`);
       }
     }
+    
+    console.log('📊 Final results:', JSON.stringify(results, null, 2));
     
     return NextResponse.json({
       success: true,

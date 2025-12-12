@@ -26,20 +26,10 @@ export async function searchInvoiceEmails(
   const { maxResults = 100, afterDate, beforeDate } = options;
   
   // Build search query - look for invoice-related keywords
-  // Search for PDF/image attachments with invoice keywords in subject, body, or filename
-  const invoiceKeywords = [
-    // Hebrew
-    'חשבונית',
-    'קבלה', 
-    'חשבון',
-    // English
-    'invoice',
-    'receipt',
-  ].join(' OR ');
-  
-  // Search for PDFs with invoice keywords OR any PDF (we'll filter with AI)
-  // filename:pdf catches most invoices
-  let query = `has:attachment (filename:pdf OR filename:png OR filename:jpg) (${invoiceKeywords})`;
+  // Search only for files with invoice-related names or subjects
+  // filename: searches in attachment filename
+  // subject: searches in email subject
+  let query = `has:attachment ((filename:חשבונית OR filename:קבלה OR filename:invoice OR filename:receipt) OR (subject:חשבונית OR subject:קבלה OR subject:חשבון OR subject:invoice OR subject:receipt OR subject:payment))`;
   if (afterDate) {
     query += ` after:${formatDateForSearch(afterDate)}`;
   }

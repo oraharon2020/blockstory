@@ -70,6 +70,14 @@ export async function googleAdsRequest<T>(
     }
   );
 
+  // Check if response is HTML (error page) instead of JSON
+  const contentType = response.headers.get('content-type');
+  if (contentType && !contentType.includes('application/json')) {
+    const text = await response.text();
+    console.error('Non-JSON response from Google Ads API:', text.substring(0, 500));
+    throw new Error(`Google Ads API returned error page. Check developer token and account access.`);
+  }
+
   if (!response.ok) {
     const error = await response.json();
     console.error('Google Ads API Error:', error);

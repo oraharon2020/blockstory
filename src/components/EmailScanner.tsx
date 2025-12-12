@@ -265,6 +265,7 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
       });
       
       const data = await res.json();
+      console.log('📊 Add invoices response:', data);
       
       if (data.error) {
         throw new Error(data.error);
@@ -279,8 +280,16 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
       // Callback
       onInvoicesAdded?.();
       
-      // Show success
-      setScanProgress(`נוספו ${data.results.added} חשבוניות בהצלחה!`);
+      // Show results message
+      const { added, skipped, errors } = data.results;
+      let message = `נוספו ${added} חשבוניות בהצלחה`;
+      if (skipped > 0) {
+        message += `, ${skipped} דולגו (כפולות)`;
+      }
+      if (errors.length > 0) {
+        message += `\n${errors.join('\n')}`;
+      }
+      setScanProgress(message);
     } catch (err: any) {
       setError(err.message);
     } finally {

@@ -104,16 +104,21 @@ export async function POST(request: NextRequest) {
       businessId
     );
     
+    // Filter out non-invoices (confidence === 'skip')
+    const validInvoices = invoices.filter(inv => inv.extractedData.confidence !== 'skip');
+    const skippedNonInvoices = invoices.length - validInvoices.length;
+    
     // Separate new and duplicate invoices
-    const newInvoices = invoices.filter(inv => !inv.isDuplicate);
-    const duplicates = invoices.filter(inv => inv.isDuplicate);
+    const newInvoices = validInvoices.filter(inv => !inv.isDuplicate);
+    const duplicates = validInvoices.filter(inv => inv.isDuplicate);
     
     return NextResponse.json({
       success: true,
-      invoices,
+      invoices: validInvoices,
       summary: {
         totalEmails: emails.length,
         totalAttachments: invoices.length,
+        skippedNonInvoices,
         newInvoices: newInvoices.length,
         duplicates: duplicates.length,
       },
