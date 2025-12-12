@@ -74,8 +74,21 @@ export async function googleAdsRequest<T>(
   const contentType = response.headers.get('content-type');
   if (contentType && !contentType.includes('application/json')) {
     const text = await response.text();
-    console.error('Non-JSON response from Google Ads API:', text.substring(0, 500));
-    throw new Error(`Google Ads API returned error page. Check developer token and account access.`);
+    console.error('Non-JSON response from Google Ads API:', text.substring(0, 1000));
+    console.error('Response status:', response.status);
+    console.error('Content-Type:', contentType);
+    
+    // Try to extract meaningful error from HTML
+    if (text.includes('developer token')) {
+      throw new Error('Developer Token error - make sure you have Basic Access or higher for production accounts');
+    } else if (text.includes('not authorized')) {
+      throw new Error('Not authorized - check account access permissions');
+    } else if (response.status === 401) {
+      throw new Error('Authentication failed - try reconnecting Google Ads');
+    } else if (response.status === 403) {
+      throw new Error('Access denied - Developer Token may be Test-only (need Basic Access for production)');
+    }
+    throw new Error(`Google Ads API error (${response.status}). Check developer token and account access.`);
   }
 
   if (!response.ok) {
