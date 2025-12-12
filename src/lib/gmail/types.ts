@@ -49,7 +49,7 @@ export interface ScannedInvoice {
     invoice_date: string;
     description: string;
     has_vat: boolean;
-    confidence: 'high' | 'medium' | 'low';
+    confidence: 'high' | 'medium' | 'low' | 'skip';
   };
   isDuplicate: boolean;
   duplicateOf?: number; // ID of existing expense
