@@ -15,8 +15,11 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { businessId, startDate, endDate, syncTypes } = body;
+    
+    console.log('🔄 Google Ads Sync Request:', { businessId, startDate, endDate, syncTypes });
 
     if (!businessId) {
+      console.log('❌ Missing businessId');
       return NextResponse.json({ error: 'Missing businessId' }, { status: 400 });
     }
 
@@ -26,8 +29,15 @@ export async function POST(request: NextRequest) {
       .select('google_ads_refresh_token, google_ads_customer_id')
       .eq('business_id', businessId)
       .single();
+    
+    console.log('📋 Settings:', { 
+      hasRefreshToken: !!settings?.google_ads_refresh_token,
+      customerId: settings?.google_ads_customer_id,
+      settingsError: settingsError?.message 
+    });
 
     if (settingsError || !settings?.google_ads_refresh_token) {
+      console.log('❌ Google Ads not connected');
       return NextResponse.json(
         { error: 'Google Ads not connected. Please connect first in Settings.' },
         { status: 400 }
@@ -37,14 +47,18 @@ export async function POST(request: NextRequest) {
     // Get or detect customer ID
     let customerId = settings.google_ads_customer_id;
     if (!customerId) {
+      console.log('🔍 Trying to detect customer ID...');
       customerId = await getCustomerId(businessId, settings.google_ads_refresh_token);
       if (!customerId) {
+        console.log('❌ No Google Ads account found');
         return NextResponse.json(
           { error: 'No Google Ads account found. Please check your account.' },
           { status: 400 }
         );
       }
     }
+    
+    console.log('✅ Using customer ID:', customerId);
 
     // Calculate date range (default: last 90 days)
     const end = endDate || new Date().toISOString().split('T')[0];
