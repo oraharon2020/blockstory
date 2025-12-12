@@ -56,9 +56,14 @@ export async function googleAdsRequest<T>(
   
   // Remove dashes from customer ID
   const cleanCustomerId = customerId.replace(/-/g, '');
+  
+  console.log('🔍 Google Ads Request:', {
+    customerId: cleanCustomerId,
+    queryPreview: query.substring(0, 100),
+  });
 
   const response = await fetch(
-    `https://googleads.googleapis.com/v15/customers/${cleanCustomerId}/googleAds:searchStream`,
+    `https://googleads.googleapis.com/v18/customers/${cleanCustomerId}/googleAds:searchStream`,
     {
       method: 'POST',
       headers: {
@@ -69,6 +74,8 @@ export async function googleAdsRequest<T>(
       body: JSON.stringify({ query }),
     }
   );
+  
+  console.log('📡 Google Ads Response status:', response.status);
 
   // Check if response is HTML (error page) instead of JSON
   const contentType = response.headers.get('content-type');
@@ -92,9 +99,31 @@ export async function googleAdsRequest<T>(
   }
 
   if (!response.ok) {
-    const error = await response.json();
-    console.error('Google Ads API Error:', error);
-    throw new Error(`Google Ads API Error: ${JSON.stringify(error)}`);
+    const errorText = await response.text();
+    console.error('Google Ads API Error Response:', errorText);
+    
+    // Try to parse as JSON
+    try {
+      const error = JSON.parse(errorText);
+      console.error('Google Ads API Error (parsed):', JSON.stringify(error, null, 2));
+      
+      // Check for specific error codes
+      const errorCode = error?.error?.code;
+      const errorMessage = error?.error?.message || '';
+      const errorStatus = error?.error?.status || '';
+      
+      if (errorCode === 404 || errorStatus === 'NOT_FOUND') {
+        throw new Error(`Customer ID not found or no access. Verify ID: ${cleanCustomerId}`);
+      } else if (errorCode === 403 || errorStatus === 'PERMISSION_DENIED') {
+        throw new Error('Permission denied - Developer Token needs Basic Access for production accounts');
+      } else if (errorMessage.includes('developer token')) {
+        throw new Error('Developer Token issue - check if you have the right access level');
+      }
+      
+      throw new Error(`Google Ads API Error: ${errorMessage || errorStatus || JSON.stringify(error)}`);
+    } catch (parseError) {
+      throw new Error(`Google Ads API error (${response.status}): ${errorText.substring(0, 200)}`);
+    }
   }
 
   const data = await response.json();
@@ -111,7 +140,7 @@ export async function listAccessibleCustomers(refreshToken: string): Promise<str
   console.log('Developer token (first 10 chars):', DEVELOPER_TOKEN.substring(0, 10));
 
   const response = await fetch(
-    'https://googleads.googleapis.com/v15/customers:listAccessibleCustomers',
+    'https://googleads.googleapis.com/v18/customers:listAccessibleCustomers',
     {
       method: 'GET',
       headers: {
