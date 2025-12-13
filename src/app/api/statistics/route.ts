@@ -197,8 +197,7 @@ export async function GET(request: NextRequest) {
         .select('salary')
         .eq('business_id', businessId)
         .eq('month', month)
-        .eq('year', year)
-        .eq('is_active', true);
+        .eq('year', year);
 
       if (monthEmployees && monthEmployees.length > 0) {
         const monthTotalSalary = monthEmployees.reduce((sum, e) => sum + (e.salary || 0), 0);
