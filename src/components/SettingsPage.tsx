@@ -885,8 +885,9 @@ function IntegrationsTab({ businessId }: { businessId?: string }) {
       }
 
       // Check GA4 status - check integrations table
-      // For now, we'll check if there's a record in integrations
-      // This will be updated when we implement GA4 properly
+      const gaRes = await fetch(`/api/analytics/status?businessId=${businessId}`);
+      const gaData = await gaRes.json();
+      setGaConnected(gaData.connected);
     } catch (error) {
       console.error('Error checking connection status:', error);
     } finally {
