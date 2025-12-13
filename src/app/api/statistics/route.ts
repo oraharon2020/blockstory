@@ -148,7 +148,7 @@ export async function GET(request: NextRequest) {
     const data = (currentData || []) as DailyCashflow[];
     
     // Fetch expenses (VAT and No VAT)
-    const [expensesVatRes, expensesNoVatRes, refundsRes, employeesRes] = await Promise.all([
+    const [expensesVatRes, expensesNoVatRes, refundsRes] = await Promise.all([
       supabase
         .from('expenses_vat')
         .select('expense_date, amount, vat_amount')
@@ -167,19 +167,61 @@ export async function GET(request: NextRequest) {
         .eq('business_id', businessId)
         .gte('refund_date', startStr)
         .lte('refund_date', endStr),
-      supabase
-        .from('employees')
-        .select('daily_cost')
-        .eq('business_id', businessId)
-        .eq('is_active', true),
     ]);
+
+    // Get employees for each month in the period
+    // Extract unique months from the period
+    const startMonth = start.getMonth() + 1;
+    const startYear = start.getFullYear();
+    const endMonth = end.getMonth() + 1;
+    const endYear = end.getFullYear();
+
+    // Fetch employees for each month in the range
+    const months: { month: number; year: number }[] = [];
+    let loopDate = new Date(startYear, startMonth - 1, 1);
+    const loopEndDate = new Date(endYear, endMonth - 1, 1);
+    
+    while (loopDate <= loopEndDate) {
+      months.push({
+        month: loopDate.getMonth() + 1,
+        year: loopDate.getFullYear(),
+      });
+      loopDate.setMonth(loopDate.getMonth() + 1);
+    }
+
+    // Fetch all employees for these months
+    let totalEmployeeCost = 0;
+    for (const { month, year } of months) {
+      const { data: monthEmployees } = await supabase
+        .from('employees')
+        .select('salary')
+        .eq('business_id', businessId)
+        .eq('month', month)
+        .eq('year', year)
+        .eq('is_active', true);
+
+      if (monthEmployees && monthEmployees.length > 0) {
+        const monthTotalSalary = monthEmployees.reduce((sum, e) => sum + (e.salary || 0), 0);
+        const daysInMonth = new Date(year, month, 0).getDate();
+        
+        // Calculate how many days of this month are in our period
+        const monthStart = new Date(year, month - 1, 1);
+        const monthEnd = new Date(year, month, 0);
+        const periodStartInMonth = start > monthStart ? start : monthStart;
+        const periodEndInMonth = end < monthEnd ? end : monthEnd;
+        const daysInPeriod = Math.ceil((periodEndInMonth.getTime() - periodStartInMonth.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        
+        // Daily cost * days in period for this month
+        const dailyCost = monthTotalSalary / daysInMonth;
+        totalEmployeeCost += dailyCost * Math.min(daysInPeriod, daysInMonth);
+      }
+    }
     
     // Calculate additional expenses totals
     const totalExpensesVat = (expensesVatRes.data || []).reduce((sum, e) => sum + (e.amount || 0), 0);
     const totalExpensesNoVat = (expensesNoVatRes.data || []).reduce((sum, e) => sum + (e.amount || 0), 0);
     const totalRefunds = (refundsRes.data || []).reduce((sum, r) => sum + (r.amount || 0), 0);
-    const dailyEmployeeCost = (employeesRes.data || []).reduce((sum, e) => sum + (e.daily_cost || 0), 0);
-    const totalEmployeeCost = dailyEmployeeCost * data.length;
+    // totalEmployeeCost is already calculated above
 
     // Calculate previous period for trends
     const periodDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
