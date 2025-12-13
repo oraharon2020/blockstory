@@ -316,13 +316,20 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
       // Map for variation costs: key = "productId_variationKey"
       const variationCostMap = new Map<string, any>();
       if (variationJson.data) {
-        variationJson.data.forEach((v: any) => {
+        // Sort so is_default=true comes last (will override non-default)
+        const sortedData = [...variationJson.data].sort((a, b) => {
+          if (a.is_default && !b.is_default) return 1;
+          if (!a.is_default && b.is_default) return -1;
+          // Prefer entries with supplier over entries without
+          if (a.supplier_id && !b.supplier_id) return 1;
+          if (!a.supplier_id && b.supplier_id) return -1;
+          return 0;
+        });
+        
+        sortedData.forEach((v: any) => {
           const vKey = `${v.product_id}_${v.variation_key || ''}`;
-          // If multiple suppliers, prefer the default one
-          const existing = variationCostMap.get(vKey);
-          if (!existing || v.is_default) {
-            variationCostMap.set(vKey, v);
-          }
+          // Always take the last one (which will be is_default=true with supplier if available)
+          variationCostMap.set(vKey, v);
         });
       }
 
