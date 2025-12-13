@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     // Get GA credentials for this business
     const { data: integration, error: integrationError } = await supabase
       .from('integrations')
-      .select('credentials')
+      .select('credentials, settings')
       .eq('business_id', businessId)
       .eq('type', 'google_analytics')
       .eq('is_active', true)
@@ -44,9 +44,18 @@ export async function GET(request: NextRequest) {
       }, { status: 401 });
     }
 
+    // Check if property is selected
+    if (!integration.settings?.property_id) {
+      return NextResponse.json({ 
+        error: 'No GA4 property selected',
+        needsPropertySelection: true 
+      }, { status: 400 });
+    }
+
     const credentials: GACredentials = {
       access_token: integration.credentials.access_token,
       refresh_token: integration.credentials.refresh_token,
+      property_id: integration.settings.property_id,
     };
 
     const dateRange = { startDate, endDate };

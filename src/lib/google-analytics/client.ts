@@ -7,11 +7,10 @@
 
 import { google, analyticsdata_v1beta } from 'googleapis';
 
-const GA_PROPERTY_ID = process.env.GA4_PROPERTY_ID || '255583525';
-
 export interface GACredentials {
   access_token: string;
   refresh_token?: string;
+  property_id?: string; // GA4 Property ID
 }
 
 export interface GADateRange {
@@ -67,6 +66,7 @@ export async function getTrafficBySource(
   dateRange: GADateRange
 ): Promise<GASourceBreakdown> {
   const auth = createOAuth2Client(credentials);
+  const propertyId = credentials.property_id || process.env.GA4_PROPERTY_ID || '255583525';
   
   const analyticsData = google.analyticsdata({
     version: 'v1beta',
@@ -76,7 +76,7 @@ export async function getTrafficBySource(
   try {
     // שליפת נתונים לפי מקור/מדיום
     const response = await analyticsData.properties.runReport({
-      property: `properties/${GA_PROPERTY_ID}`,
+      property: `properties/${propertyId}`,
       requestBody: {
         dateRanges: [{
           startDate: dateRange.startDate,
@@ -101,7 +101,7 @@ export async function getTrafficBySource(
     
     // שליפת סיכום כללי
     const overviewResponse = await analyticsData.properties.runReport({
-      property: `properties/${GA_PROPERTY_ID}`,
+      property: `properties/${propertyId}`,
       requestBody: {
         dateRanges: [{
           startDate: dateRange.startDate,
@@ -167,6 +167,7 @@ export async function getConversionsByCampaign(
   dateRange: GADateRange
 ): Promise<{ campaigns: Array<{ campaign: string; source: string; conversions: number; revenue: number; cost: number }> }> {
   const auth = createOAuth2Client(credentials);
+  const propertyId = credentials.property_id || process.env.GA4_PROPERTY_ID || '255583525';
   
   const analyticsData = google.analyticsdata({
     version: 'v1beta',
@@ -175,7 +176,7 @@ export async function getConversionsByCampaign(
   
   try {
     const response = await analyticsData.properties.runReport({
-      property: `properties/${GA_PROPERTY_ID}`,
+      property: `properties/${propertyId}`,
       requestBody: {
         dateRanges: [{
           startDate: dateRange.startDate,
@@ -230,6 +231,7 @@ export async function getDailyMetrics(
   dateRange: GADateRange
 ): Promise<{ daily: Array<{ date: string; sessions: number; conversions: number; revenue: number }> }> {
   const auth = createOAuth2Client(credentials);
+  const propertyId = credentials.property_id || process.env.GA4_PROPERTY_ID || '255583525';
   
   const analyticsData = google.analyticsdata({
     version: 'v1beta',
@@ -238,7 +240,7 @@ export async function getDailyMetrics(
   
   try {
     const response = await analyticsData.properties.runReport({
-      property: `properties/${GA_PROPERTY_ID}`,
+      property: `properties/${propertyId}`,
       requestBody: {
         dateRanges: [{
           startDate: dateRange.startDate,
