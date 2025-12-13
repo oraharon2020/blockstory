@@ -10,6 +10,7 @@ import { google } from 'googleapis';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/analytics.readonly',
+  'https://www.googleapis.com/auth/analytics.manage.users.readonly', // For listing properties
 ];
 
 // Use same format as Gmail - always use NEXT_PUBLIC_SITE_URL

@@ -86,13 +86,14 @@ export async function GET(request: NextRequest) {
 
   } catch (error: any) {
     console.error('Error fetching GA properties:', error);
+    console.error('Error details:', JSON.stringify(error, null, 2));
     
     // If token expired, indicate need for re-auth
     if (error.code === 401 || error.message?.includes('invalid_grant')) {
       return NextResponse.json({ error: 'Token expired', needsAuth: true }, { status: 401 });
     }
     
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message, details: error.errors || error.response?.data }, { status: 500 });
   }
 }
 
