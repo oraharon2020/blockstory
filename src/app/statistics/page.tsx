@@ -13,7 +13,9 @@ import {
   Target,
   RefreshCw,
   AlertCircle,
-  Store
+  Store,
+  Users,
+  Package
 } from 'lucide-react';
 
 // Import all statistics components
@@ -26,7 +28,13 @@ import {
   PeriodSelector,
   StatisticsData,
   ChannelPerformanceCard,
+  TrafficTab,
+  SalesTab,
+  ProductsTab,
 } from '@/components/statistics';
+
+// Tab types
+type TabType = 'summary' | 'traffic' | 'sales' | 'channels' | 'products';
 
 /**
  * StatisticsPage - דף סטטיסטיקות ראשי
@@ -38,6 +46,7 @@ export default function StatisticsPage() {
   const { currentBusiness, loading: authLoading } = useAuth();
   
   // State
+  const [activeTab, setActiveTab] = useState<TabType>('summary');
   const [period, setPeriod] = useState('month');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
@@ -149,10 +158,38 @@ export default function StatisticsPage() {
             </button>
           </div>
         </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 mt-6 border-t pt-4 overflow-x-auto">
+          {[
+            { id: 'summary' as TabType, label: 'סיכום', icon: BarChart3 },
+            { id: 'traffic' as TabType, label: 'תנועה', icon: Users },
+            { id: 'sales' as TabType, label: 'מכירות', icon: ShoppingCart },
+            { id: 'channels' as TabType, label: 'ערוצים', icon: Target },
+            { id: 'products' as TabType, label: 'מוצרים', icon: Package },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all whitespace-nowrap ${
+                  isActive
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Error state */}
-      {error && (
+      {error && activeTab === 'summary' && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
           <AlertCircle className="w-5 h-5 text-red-500" />
           <p className="text-red-700">{error}</p>
@@ -165,17 +202,20 @@ export default function StatisticsPage() {
         </div>
       )}
 
-      {/* Main Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="סה״כ הכנסות"
-          value={data?.totalRevenue || 0}
-          trend={data?.trends.revenue}
-          icon={DollarSign}
-          color="blue"
-          format="currency"
-          loading={loading}
-        />
+      {/* Summary Tab Content */}
+      {activeTab === 'summary' && (
+        <>
+          {/* Main Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard
+              title="סה״כ הכנסות"
+              value={data?.totalRevenue || 0}
+              trend={data?.trends.revenue}
+              icon={DollarSign}
+              color="blue"
+              format="currency"
+              loading={loading}
+            />
         <StatCard
           title="סה״כ רווח"
           value={data?.totalProfit || 0}
@@ -266,31 +306,64 @@ export default function StatisticsPage() {
           loading={loading}
         />
       </div>
+        </>
+      )}
 
       {/* Charts Row 2 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <OrdersChart
-          data={data?.dailyData || []}
-          loading={loading}
-        />
-        <HighlightsCard
-          bestDay={data?.bestDay || null}
-          worstDay={data?.worstDay || null}
-          mostProfitableDay={data?.mostProfitableDay || null}
-          daysWithData={data?.daysWithData || 0}
-          loading={loading}
-        />
-      </div>
+      {activeTab === 'summary' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <OrdersChart
+            data={data?.dailyData || []}
+            loading={loading}
+          />
+          <HighlightsCard
+            bestDay={data?.bestDay || null}
+            worstDay={data?.worstDay || null}
+            mostProfitableDay={data?.mostProfitableDay || null}
+            daysWithData={data?.daysWithData || 0}
+            loading={loading}
+          />
+        </div>
+      )}
 
-      {/* Channel Performance */}
-      <div className="grid grid-cols-1 gap-6">
-        <ChannelPerformanceCard
+      {/* Channel Performance - moved to channels tab */}
+      {activeTab === 'channels' && (
+        <div className="grid grid-cols-1 gap-6">
+          <ChannelPerformanceCard
+            businessId={currentBusiness.id}
+            startDate={data?.periodStart || ''}
+            endDate={data?.periodEnd || ''}
+            loading={loading}
+          />
+        </div>
+      )}
+
+      {/* Traffic Tab */}
+      {activeTab === 'traffic' && data?.periodStart && data?.periodEnd && (
+        <TrafficTab
           businessId={currentBusiness.id}
-          startDate={data?.periodStart || ''}
-          endDate={data?.periodEnd || ''}
-          loading={loading}
+          startDate={data.periodStart}
+          endDate={data.periodEnd}
         />
-      </div>
+      )}
+
+      {/* Sales Tab */}
+      {activeTab === 'sales' && data?.periodStart && data?.periodEnd && (
+        <SalesTab
+          businessId={currentBusiness.id}
+          startDate={data.periodStart}
+          endDate={data.periodEnd}
+        />
+      )}
+
+      {/* Products Tab */}
+      {activeTab === 'products' && data?.periodStart && data?.periodEnd && (
+        <ProductsTab
+          businessId={currentBusiness.id}
+          startDate={data.periodStart}
+          endDate={data.periodEnd}
+        />
+      )}
 
       {/* Period Info */}
       {data && !loading && (

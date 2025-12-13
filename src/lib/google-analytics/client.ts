@@ -357,3 +357,327 @@ export function calculateChannelMetrics(
     })
     .sort((a, b) => b.revenue - a.revenue);
 }
+
+// ===========================================
+// פונקציות חדשות לטאבים של דף הסטטיסטיקות
+// ===========================================
+
+/**
+ * נתוני תנועה - משתמשים חדשים/חוזרים, מכשירים
+ */
+export async function getTrafficAnalytics(
+  credentials: GACredentials,
+  dateRange: GADateRange
+): Promise<{
+  userTypes: { type: string; users: number; sessions: number }[];
+  devices: { device: string; users: number; sessions: number; percentage: number }[];
+  topPages: { page: string; views: number; avgTime: number }[];
+  avgSessionDuration: number;
+  bounceRate: number;
+}> {
+  const auth = createOAuth2Client(credentials);
+  const propertyId = credentials.property_id || process.env.GA4_PROPERTY_ID || '255583525';
+  
+  const analyticsData = google.analyticsdata({
+    version: 'v1beta',
+    auth,
+  });
+
+  try {
+    // משתמשים חדשים vs חוזרים
+    const userTypesResponse = await analyticsData.properties.runReport({
+      property: `properties/${propertyId}`,
+      requestBody: {
+        dateRanges: [{ startDate: dateRange.startDate, endDate: dateRange.endDate }],
+        dimensions: [{ name: 'newVsReturning' }],
+        metrics: [{ name: 'totalUsers' }, { name: 'sessions' }],
+      },
+    });
+
+    const userTypes = (userTypesResponse.data.rows || []).map(row => ({
+      type: row.dimensionValues?.[0]?.value === 'new' ? 'חדשים' : 'חוזרים',
+      users: parseInt(row.metricValues?.[0]?.value || '0'),
+      sessions: parseInt(row.metricValues?.[1]?.value || '0'),
+    }));
+
+    // התפלגות מכשירים
+    const devicesResponse = await analyticsData.properties.runReport({
+      property: `properties/${propertyId}`,
+      requestBody: {
+        dateRanges: [{ startDate: dateRange.startDate, endDate: dateRange.endDate }],
+        dimensions: [{ name: 'deviceCategory' }],
+        metrics: [{ name: 'totalUsers' }, { name: 'sessions' }],
+      },
+    });
+
+    const totalDeviceUsers = (devicesResponse.data.rows || []).reduce(
+      (sum, row) => sum + parseInt(row.metricValues?.[0]?.value || '0'), 0
+    );
+
+    const devices = (devicesResponse.data.rows || []).map(row => {
+      const users = parseInt(row.metricValues?.[0]?.value || '0');
+      const deviceName = row.dimensionValues?.[0]?.value || '';
+      return {
+        device: deviceName === 'desktop' ? 'מחשב' : deviceName === 'mobile' ? 'נייד' : 'טאבלט',
+        users,
+        sessions: parseInt(row.metricValues?.[1]?.value || '0'),
+        percentage: totalDeviceUsers > 0 ? Math.round((users / totalDeviceUsers) * 100) : 0,
+      };
+    });
+
+    // דפים הכי נצפים
+    const pagesResponse = await analyticsData.properties.runReport({
+      property: `properties/${propertyId}`,
+      requestBody: {
+        dateRanges: [{ startDate: dateRange.startDate, endDate: dateRange.endDate }],
+        dimensions: [{ name: 'pagePath' }],
+        metrics: [{ name: 'screenPageViews' }, { name: 'averageSessionDuration' }],
+        orderBys: [{ metric: { metricName: 'screenPageViews' }, desc: true }],
+        limit: '10',
+      },
+    });
+
+    const topPages = (pagesResponse.data.rows || []).map(row => ({
+      page: row.dimensionValues?.[0]?.value || '',
+      views: parseInt(row.metricValues?.[0]?.value || '0'),
+      avgTime: parseFloat(row.metricValues?.[1]?.value || '0'),
+    }));
+
+    // סיכום כללי
+    const overviewResponse = await analyticsData.properties.runReport({
+      property: `properties/${propertyId}`,
+      requestBody: {
+        dateRanges: [{ startDate: dateRange.startDate, endDate: dateRange.endDate }],
+        metrics: [{ name: 'averageSessionDuration' }, { name: 'bounceRate' }],
+      },
+    });
+
+    const overview = overviewResponse.data.rows?.[0];
+
+    return {
+      userTypes,
+      devices,
+      topPages,
+      avgSessionDuration: parseFloat(overview?.metricValues?.[0]?.value || '0'),
+      bounceRate: parseFloat(overview?.metricValues?.[1]?.value || '0') * 100,
+    };
+  } catch (error: any) {
+    console.error('GA4 Traffic Analytics Error:', error.message);
+    throw new Error(`Failed to fetch traffic analytics: ${error.message}`);
+  }
+}
+
+/**
+ * נתוני מכירות - Funnel, נטישת עגלה
+ */
+export async function getSalesAnalytics(
+  credentials: GACredentials,
+  dateRange: GADateRange
+): Promise<{
+  funnel: { step: string; users: number; dropoff: number }[];
+  cartAbandonment: number;
+  avgOrderValue: number;
+  conversionRate: number;
+  purchasesBySource: { source: string; purchases: number; revenue: number }[];
+}> {
+  const auth = createOAuth2Client(credentials);
+  const propertyId = credentials.property_id || process.env.GA4_PROPERTY_ID || '255583525';
+  
+  const analyticsData = google.analyticsdata({
+    version: 'v1beta',
+    auth,
+  });
+
+  try {
+    // נתוני Funnel - אירועי E-commerce
+    const funnelResponse = await analyticsData.properties.runReport({
+      property: `properties/${propertyId}`,
+      requestBody: {
+        dateRanges: [{ startDate: dateRange.startDate, endDate: dateRange.endDate }],
+        dimensions: [{ name: 'eventName' }],
+        metrics: [{ name: 'eventCount' }, { name: 'totalUsers' }],
+        dimensionFilter: {
+          filter: {
+            fieldName: 'eventName',
+            inListFilter: {
+              values: ['view_item', 'add_to_cart', 'begin_checkout', 'purchase'],
+            },
+          },
+        },
+      },
+    });
+
+    const funnelEvents: Record<string, number> = {};
+    (funnelResponse.data.rows || []).forEach(row => {
+      const eventName = row.dimensionValues?.[0]?.value || '';
+      funnelEvents[eventName] = parseInt(row.metricValues?.[1]?.value || '0');
+    });
+
+    const funnelSteps = [
+      { key: 'view_item', label: 'צפייה במוצר' },
+      { key: 'add_to_cart', label: 'הוספה לעגלה' },
+      { key: 'begin_checkout', label: 'התחלת תשלום' },
+      { key: 'purchase', label: 'רכישה' },
+    ];
+
+    const funnel = funnelSteps.map((step, idx) => {
+      const users = funnelEvents[step.key] || 0;
+      const prevUsers = idx > 0 ? (funnelEvents[funnelSteps[idx - 1].key] || 0) : users;
+      const dropoff = prevUsers > 0 ? Math.round(((prevUsers - users) / prevUsers) * 100) : 0;
+      return { step: step.label, users, dropoff: idx === 0 ? 0 : dropoff };
+    });
+
+    // חישוב נטישת עגלה
+    const addToCart = funnelEvents['add_to_cart'] || 0;
+    const purchases = funnelEvents['purchase'] || 0;
+    const cartAbandonment = addToCart > 0 ? Math.round(((addToCart - purchases) / addToCart) * 100) : 0;
+
+    // נתוני המרות כלליים
+    const conversionResponse = await analyticsData.properties.runReport({
+      property: `properties/${propertyId}`,
+      requestBody: {
+        dateRanges: [{ startDate: dateRange.startDate, endDate: dateRange.endDate }],
+        metrics: [
+          { name: 'totalUsers' },
+          { name: 'ecommercePurchases' },
+          { name: 'purchaseRevenue' },
+        ],
+      },
+    });
+
+    const convData = conversionResponse.data.rows?.[0];
+    const totalUsers = parseInt(convData?.metricValues?.[0]?.value || '0');
+    const totalPurchases = parseInt(convData?.metricValues?.[1]?.value || '0');
+    const totalRevenue = parseFloat(convData?.metricValues?.[2]?.value || '0');
+
+    const conversionRate = totalUsers > 0 ? (totalPurchases / totalUsers) * 100 : 0;
+    const avgOrderValue = totalPurchases > 0 ? totalRevenue / totalPurchases : 0;
+
+    // רכישות לפי מקור
+    const sourceResponse = await analyticsData.properties.runReport({
+      property: `properties/${propertyId}`,
+      requestBody: {
+        dateRanges: [{ startDate: dateRange.startDate, endDate: dateRange.endDate }],
+        dimensions: [{ name: 'sessionSource' }],
+        metrics: [{ name: 'ecommercePurchases' }, { name: 'purchaseRevenue' }],
+        orderBys: [{ metric: { metricName: 'purchaseRevenue' }, desc: true }],
+        limit: '10',
+      },
+    });
+
+    const purchasesBySource = (sourceResponse.data.rows || []).map(row => ({
+      source: row.dimensionValues?.[0]?.value || 'לא ידוע',
+      purchases: parseInt(row.metricValues?.[0]?.value || '0'),
+      revenue: parseFloat(row.metricValues?.[1]?.value || '0'),
+    }));
+
+    return {
+      funnel,
+      cartAbandonment,
+      avgOrderValue,
+      conversionRate,
+      purchasesBySource,
+    };
+  } catch (error: any) {
+    console.error('GA4 Sales Analytics Error:', error.message);
+    throw new Error(`Failed to fetch sales analytics: ${error.message}`);
+  }
+}
+
+/**
+ * נתוני מוצרים - הכי נצפים והכי נמכרים
+ */
+export async function getProductsAnalytics(
+  credentials: GACredentials,
+  dateRange: GADateRange
+): Promise<{
+  topViewed: { name: string; views: number; addToCartRate: number }[];
+  topSelling: { name: string; quantity: number; revenue: number }[];
+  lowConversion: { name: string; views: number; purchases: number; conversionRate: number }[];
+}> {
+  const auth = createOAuth2Client(credentials);
+  const propertyId = credentials.property_id || process.env.GA4_PROPERTY_ID || '255583525';
+  
+  const analyticsData = google.analyticsdata({
+    version: 'v1beta',
+    auth,
+  });
+
+  try {
+    // מוצרים הכי נצפים
+    const viewedResponse = await analyticsData.properties.runReport({
+      property: `properties/${propertyId}`,
+      requestBody: {
+        dateRanges: [{ startDate: dateRange.startDate, endDate: dateRange.endDate }],
+        dimensions: [{ name: 'itemName' }],
+        metrics: [{ name: 'itemsViewed' }, { name: 'itemsAddedToCart' }],
+        orderBys: [{ metric: { metricName: 'itemsViewed' }, desc: true }],
+        limit: '10',
+      },
+    });
+
+    const topViewed = (viewedResponse.data.rows || []).map(row => {
+      const views = parseInt(row.metricValues?.[0]?.value || '0');
+      const addToCart = parseInt(row.metricValues?.[1]?.value || '0');
+      return {
+        name: row.dimensionValues?.[0]?.value || 'לא ידוע',
+        views,
+        addToCartRate: views > 0 ? Math.round((addToCart / views) * 100) : 0,
+      };
+    });
+
+    // מוצרים הכי נמכרים
+    const sellingResponse = await analyticsData.properties.runReport({
+      property: `properties/${propertyId}`,
+      requestBody: {
+        dateRanges: [{ startDate: dateRange.startDate, endDate: dateRange.endDate }],
+        dimensions: [{ name: 'itemName' }],
+        metrics: [{ name: 'itemsPurchased' }, { name: 'itemRevenue' }],
+        orderBys: [{ metric: { metricName: 'itemRevenue' }, desc: true }],
+        limit: '10',
+      },
+    });
+
+    const topSelling = (sellingResponse.data.rows || []).map(row => ({
+      name: row.dimensionValues?.[0]?.value || 'לא ידוע',
+      quantity: parseInt(row.metricValues?.[0]?.value || '0'),
+      revenue: parseFloat(row.metricValues?.[1]?.value || '0'),
+    }));
+
+    // מוצרים עם שיעור המרה נמוך (הרבה צפיות, מעט רכישות)
+    const conversionResponse = await analyticsData.properties.runReport({
+      property: `properties/${propertyId}`,
+      requestBody: {
+        dateRanges: [{ startDate: dateRange.startDate, endDate: dateRange.endDate }],
+        dimensions: [{ name: 'itemName' }],
+        metrics: [{ name: 'itemsViewed' }, { name: 'itemsPurchased' }],
+        orderBys: [{ metric: { metricName: 'itemsViewed' }, desc: true }],
+        limit: '20',
+      },
+    });
+
+    const lowConversion = (conversionResponse.data.rows || [])
+      .map(row => {
+        const views = parseInt(row.metricValues?.[0]?.value || '0');
+        const purchases = parseInt(row.metricValues?.[1]?.value || '0');
+        return {
+          name: row.dimensionValues?.[0]?.value || 'לא ידוע',
+          views,
+          purchases,
+          conversionRate: views > 0 ? (purchases / views) * 100 : 0,
+        };
+      })
+      .filter(p => p.views >= 10 && p.conversionRate < 5) // רק מוצרים עם מספיק צפיות והמרה נמוכה
+      .sort((a, b) => a.conversionRate - b.conversionRate)
+      .slice(0, 10);
+
+    return {
+      topViewed,
+      topSelling,
+      lowConversion,
+    };
+  } catch (error: any) {
+    console.error('GA4 Products Analytics Error:', error.message);
+    throw new Error(`Failed to fetch products analytics: ${error.message}`);
+  }
+}

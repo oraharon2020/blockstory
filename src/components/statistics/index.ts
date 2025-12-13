@@ -15,6 +15,11 @@ export { default as HighlightsCard } from './HighlightsCard';
 export { default as PeriodSelector } from './PeriodSelector';
 export { default as ChannelPerformanceCard } from './ChannelPerformanceCard';
 
+// New Tab Components
+export { default as TrafficTab } from './TrafficTab';
+export { default as SalesTab } from './SalesTab';
+export { default as ProductsTab } from './ProductsTab';
+
 // Types
 export interface StatisticsData {
   totalRevenue: number;

@@ -5,10 +5,15 @@
  */
 
 export {
+  // פונקציות בסיסיות
   getTrafficBySource,
   getConversionsByCampaign,
   getDailyMetrics,
   calculateChannelMetrics,
+  // פונקציות חדשות לטאבים
+  getTrafficAnalytics,
+  getSalesAnalytics,
+  getProductsAnalytics,
 } from './client';
 
 export type {
