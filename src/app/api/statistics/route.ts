@@ -215,20 +215,26 @@ function calculateStatistics(
     employeeCost: number;
   }
 ): StatisticsResponse {
-  // Current period totals
+  // Current period totals - use profit directly from the table (already calculated correctly)
   const totalRevenue = data.reduce((sum, d) => sum + (d.revenue || 0), 0);
   const totalOrders = data.reduce((sum, d) => sum + (d.orders_count || 0), 0);
   const dailyExpenses = data.reduce((sum, d) => sum + (d.total_expenses || 0), 0);
   
-  // Total expenses including additional sources
-  const totalExpenses = dailyExpenses + 
+  // Use profit from table - it's already calculated correctly with all daily expenses
+  const tableProfit = data.reduce((sum, d) => sum + (d.profit || 0), 0);
+  
+  // Additional expenses from separate tables (not included in daily_cashflow)
+  const additionalExpensesTotal = 
     additionalExpenses.expensesVat + 
     additionalExpenses.expensesNoVat + 
     additionalExpenses.refunds + 
     additionalExpenses.employeeCost;
   
-  // Recalculate profit with all expenses
-  const totalProfit = totalRevenue - totalExpenses - data.reduce((sum, d) => sum + (d.materials_cost || 0), 0);
+  // Total expenses = daily expenses + additional expenses from other tables
+  const totalExpenses = dailyExpenses + additionalExpensesTotal;
+  
+  // Total profit = table profit - additional expenses (since they're not in daily calc)
+  const totalProfit = tableProfit - additionalExpensesTotal;
   
   // Expenses breakdown
   const expensesBreakdown = {
