@@ -2,6 +2,7 @@
  * Google Analytics OAuth Authentication
  * 
  * מתחבר ל-GA4 באמצעות OAuth2
+ * משתמש באותם credentials של Gmail
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -11,9 +12,15 @@ const SCOPES = [
   'https://www.googleapis.com/auth/analytics.readonly',
 ];
 
-const REDIRECT_URI = process.env.NODE_ENV === 'production'
-  ? `${process.env.NEXT_PUBLIC_SITE_URL}/api/analytics/callback`
-  : 'http://localhost:3000/api/analytics/callback';
+// Use same format as Gmail - always use NEXT_PUBLIC_SITE_URL
+const getRedirectUri = () => {
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  return `${baseUrl}/api/analytics/callback`;
+};
+
+// Use Gmail OAuth credentials (same Google project)
+const CLIENT_ID = process.env.GOOGLE_GMAIL_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
+const CLIENT_SECRET = process.env.GOOGLE_GMAIL_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET;
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -23,10 +30,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'businessId is required' }, { status: 400 });
   }
 
+  if (!CLIENT_ID || !CLIENT_SECRET) {
+    return NextResponse.json({ 
+      error: 'Google OAuth credentials not configured',
+      details: 'Missing GOOGLE_GMAIL_CLIENT_ID or GOOGLE_GMAIL_CLIENT_SECRET' 
+    }, { status: 500 });
+  }
+
   const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    REDIRECT_URI
+    CLIENT_ID,
+    CLIENT_SECRET,
+    getRedirectUri()
   );
 
   const authUrl = oauth2Client.generateAuthUrl({
