@@ -132,6 +132,19 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
   // Expenses spread mode from business settings
   const [expensesSpreadMode, setExpensesSpreadMode] = useState<'exact' | 'spread'>('exact');
 
+  // Clear data when business changes
+  useEffect(() => {
+    // Reset all data when business changes
+    setData([]);
+    setOrders([]);
+    setLoading(true);
+    setEmployeeDailyCost(0);
+    setTotalProductsSold(0);
+    setSearchResults([]);
+    setHighlightedRow(null);
+    setSelectedDate(null);
+  }, [currentBusiness?.id]);
+
   // Load visible columns from localStorage
   useEffect(() => {
     if (currentBusiness?.id) {
