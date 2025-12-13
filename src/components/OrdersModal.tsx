@@ -64,6 +64,7 @@ interface OrderItemCost {
   supplier_name?: string;
   supplier_id?: string;
   is_ready?: boolean;
+  notes?: string;
 }
 
 interface ItemCostState {
@@ -78,6 +79,7 @@ interface ItemCostState {
   isDefault: boolean;
   isVariationCost: boolean; // האם העלות מגיעה מוריאציה ספציפית
   isReady: boolean; // האם מסומן כמוכן
+  note: string; // הערה לפריט
 }
 
 interface OrdersModalProps {
@@ -400,6 +402,7 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
             isDefault,
             isVariationCost,
             isReady: savedItem?.is_ready || false,
+            note: savedItem?.notes || '',
           });
         });
       });
@@ -466,6 +469,18 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
       setItemCostStates(new Map(itemCostStates.set(key, { 
         ...current, 
         shippingCost: value,
+        saved: false,
+      })));
+    }
+  };
+
+  const handleNoteChange = (orderId: number, itemId: number, value: string) => {
+    const key = `${orderId}_${itemId}`;
+    const current = itemCostStates.get(key);
+    if (current) {
+      setItemCostStates(new Map(itemCostStates.set(key, { 
+        ...current, 
+        note: value,
         saved: false,
       })));
     }
@@ -579,6 +594,7 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
           save_as_default: saveAsDefault,
           order_date: orderDate,
           businessId: currentBusiness?.id,
+          notes: state.note || null,
         }),
       });
 
@@ -1002,6 +1018,17 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
                                     )}
                                   </div>
                                 )}
+
+                                {/* Note input */}
+                                <div className="flex items-center gap-1 border-r border-gray-200 pr-2">
+                                  <input
+                                    type="text"
+                                    value={state?.note || ''}
+                                    onChange={(e) => handleNoteChange(order.id, item.id, e.target.value)}
+                                    placeholder="הערה..."
+                                    className="w-24 px-1.5 py-1 text-xs border border-gray-200 rounded font-medium placeholder:text-gray-400"
+                                  />
+                                </div>
                                 
                                 {/* Action buttons */}
                                 <div className="flex items-center gap-1 mr-auto">

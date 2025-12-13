@@ -1,20 +1,11 @@
 'use client';
 
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from 'recharts';
+import { Treemap, ResponsiveContainer, Tooltip } from 'recharts';
 import { formatCurrency } from '@/lib/calculations';
 
 /**
- * ExpensesBreakdownChart - גרף פילוח הוצאות
- * Bar chart אופקי שמציג את ההוצאות לפי קטגוריה
+ * ExpensesBreakdownChart - פילוח הוצאות
+ * Treemap - משבצות צבעוניות לפי גודל ההוצאה
  */
 interface ExpensesBreakdown {
   googleAds: number;
@@ -36,30 +27,80 @@ interface ExpensesBreakdownChartProps {
 }
 
 const EXPENSE_LABELS: Record<string, { label: string; color: string }> = {
-  googleAds: { label: 'Google Ads', color: '#4285F4' },
-  facebookAds: { label: 'Facebook Ads', color: '#1877F2' },
-  tiktokAds: { label: 'TikTok Ads', color: '#000000' },
-  shipping: { label: 'משלוחים', color: '#F59E0B' },
+  employeeCost: { label: 'עובדים', color: '#10B981' },
   materials: { label: 'חומרים', color: '#8B5CF6' },
-  creditCardFees: { label: 'עמלות אשראי', color: '#EC4899' },
+  expensesVat: { label: 'הוצאות+מעמ', color: '#EF4444' },
+  expensesNoVat: { label: 'הוצאות', color: '#F97316' },
   vat: { label: 'מע"מ', color: '#6B7280' },
-  expensesVat: { label: 'הוצאות (כולל מע"מ)', color: '#EF4444' },
-  expensesNoVat: { label: 'הוצאות (ללא מע"מ)', color: '#F97316' },
+  googleAds: { label: 'Google', color: '#4285F4' },
+  facebookAds: { label: 'Facebook', color: '#1877F2' },
+  tiktokAds: { label: 'TikTok', color: '#171717' },
+  shipping: { label: 'משלוחים', color: '#F59E0B' },
+  creditCardFees: { label: 'אשראי', color: '#EC4899' },
   refunds: { label: 'זיכויים', color: '#DC2626' },
-  employeeCost: { label: 'עלויות עובדים', color: '#10B981' },
 };
 
-// Custom tooltip
+// Custom content for treemap cells
+const CustomizedContent = (props: any) => {
+  const { x, y, width, height, name, label, value, percentage, color } = props;
+  
+  // Don't render if too small
+  if (width < 40 || height < 30) return null;
+  
+  const showValue = width > 70 && height > 50;
+  
+  return (
+    <g>
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        fill={color}
+        stroke="#fff"
+        strokeWidth={2}
+        rx={4}
+        style={{ cursor: 'pointer' }}
+      />
+      <text
+        x={x + width / 2}
+        y={y + height / 2 - (showValue ? 8 : 0)}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fill="#fff"
+        fontSize={width > 80 ? 13 : 11}
+        fontWeight="600"
+      >
+        {label}
+      </text>
+      {showValue && (
+        <>
+          <text
+            x={x + width / 2}
+            y={y + height / 2 + 10}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill="rgba(255,255,255,0.9)"
+            fontSize={11}
+          >
+            {percentage}%
+          </text>
+        </>
+      )}
+    </g>
+  );
+};
+
 const CustomTooltip = ({ active, payload }: any) => {
   if (!active || !payload?.length) return null;
-
-  const item = payload[0];
+  const item = payload[0].payload;
   return (
-    <div className="bg-white p-3 rounded-lg shadow-lg border text-right" dir="rtl">
-      <p className="font-medium text-gray-800">{item.payload.label}</p>
-      <p className="text-lg font-bold" style={{ color: item.payload.color }}>
+    <div className="bg-white px-3 py-2 rounded-lg shadow-lg border text-right" dir="rtl">
+      <p className="font-semibold text-gray-800">{item.label}</p>
+      <p className="text-lg font-bold" style={{ color: item.color }}>
         {formatCurrency(item.value)}
       </p>
+      <p className="text-sm text-gray-500">{item.percentage}% מההוצאות</p>
     </div>
   );
 };
@@ -74,27 +115,27 @@ export default function ExpensesBreakdownChart({ data, loading }: ExpensesBreakd
     );
   }
 
-  // Transform data for chart
+  // Transform data
+  const total = Object.entries(data)
+    .filter(([key]) => EXPENSE_LABELS[key])
+    .reduce((sum, [, value]) => sum + (value || 0), 0);
+
   const chartData = Object.entries(data)
-    .filter(([key, value]) => {
-      // Only include entries that have labels defined and positive values
-      return EXPENSE_LABELS[key] && value > 0;
-    })
+    .filter(([key, value]) => EXPENSE_LABELS[key] && value > 0)
     .map(([key, value]) => ({
       name: key,
       value,
       label: EXPENSE_LABELS[key].label,
       color: EXPENSE_LABELS[key].color,
+      percentage: ((value / total) * 100).toFixed(0),
     }))
     .sort((a, b) => b.value - a.value);
-
-  const total = chartData.reduce((sum, item) => sum + item.value, 0);
 
   if (!chartData.length || total === 0) {
     return (
       <div className="bg-white rounded-xl shadow-sm border p-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">פילוח הוצאות</h3>
-        <div className="h-64 flex items-center justify-center text-gray-400">
+        <div className="h-48 flex items-center justify-center text-gray-400">
           אין נתונים להצגה
         </div>
       </div>
@@ -105,55 +146,21 @@ export default function ExpensesBreakdownChart({ data, loading }: ExpensesBreakd
     <div className="bg-white rounded-xl shadow-sm border p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-800">פילוח הוצאות</h3>
-        <span className="text-sm text-gray-500">סה"כ: {formatCurrency(total)}</span>
+        <span className="text-sm font-medium text-gray-600">סה"כ: {formatCurrency(total)}</span>
       </div>
       
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart 
-            data={chartData} 
-            layout="vertical"
-            margin={{ top: 10, right: 20, left: 20, bottom: 0 }}
+          <Treemap
+            data={chartData}
+            dataKey="value"
+            aspectRatio={4/3}
+            stroke="#fff"
+            content={<CustomizedContent />}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" horizontal={true} vertical={false} />
-            <XAxis 
-              type="number"
-              tickFormatter={(value) => `₪${(value / 1000).toFixed(0)}K`}
-              tick={{ fill: '#6B7280', fontSize: 12 }}
-              axisLine={{ stroke: '#E5E7EB' }}
-            />
-            <YAxis 
-              type="category"
-              dataKey="label"
-              tick={{ fill: '#374151', fontSize: 12, textAnchor: 'end' }}
-              axisLine={{ stroke: '#E5E7EB' }}
-              width={100}
-              orientation="right"
-            />
             <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-              {chartData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.color} />
-              ))}
-            </Bar>
-          </BarChart>
+          </Treemap>
         </ResponsiveContainer>
-      </div>
-      
-      {/* Legend */}
-      <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t">
-        {chartData.map((item) => (
-          <div key={item.name} className="flex items-center gap-2 text-sm">
-            <div 
-              className="w-3 h-3 rounded-full" 
-              style={{ backgroundColor: item.color }}
-            />
-            <span className="text-gray-600">{item.label}</span>
-            <span className="font-medium text-gray-800">
-              ({((item.value / total) * 100).toFixed(0)}%)
-            </span>
-          </div>
-        ))}
       </div>
     </div>
   );
