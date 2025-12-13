@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, Package, Loader2, User, MapPin, CreditCard, Save, TrendingUp, AlertCircle, Building2, ChevronDown, ChevronUp, Star, Check, ChevronsUpDown, Plus, Truck } from 'lucide-react';
+import { X, Package, Loader2, User, MapPin, CreditCard, Save, TrendingUp, AlertCircle, Building2, ChevronDown, ChevronUp, Star, Check, ChevronsUpDown, Plus, Truck, StickyNote } from 'lucide-react';
 import { formatCurrency } from '@/lib/calculations';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -1021,12 +1021,13 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
 
                                 {/* Note input */}
                                 <div className="flex items-center gap-1 border-r border-gray-200 pr-2">
+                                  <StickyNote className="w-3.5 h-3.5 text-gray-400" />
                                   <input
                                     type="text"
                                     value={state?.note || ''}
                                     onChange={(e) => handleNoteChange(order.id, item.id, e.target.value)}
-                                    placeholder="הערה..."
-                                    className="w-24 px-1.5 py-1 text-xs border border-gray-200 rounded font-medium placeholder:text-gray-400"
+                                    placeholder="הוסף הערה..."
+                                    className="w-36 px-2 py-1 text-xs border border-gray-200 rounded font-medium placeholder:text-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-200 transition-colors"
                                   />
                                 </div>
                                 
