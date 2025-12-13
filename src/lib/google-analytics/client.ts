@@ -394,11 +394,32 @@ export async function getTrafficAnalytics(
       },
     });
 
-    const userTypes = (userTypesResponse.data.rows || []).map(row => ({
-      type: row.dimensionValues?.[0]?.value === 'new' ? 'חדשים' : 'חוזרים',
+    const userTypesRaw = (userTypesResponse.data.rows || []).map(row => ({
+      type: row.dimensionValues?.[0]?.value || '',
       users: parseInt(row.metricValues?.[0]?.value || '0'),
       sessions: parseInt(row.metricValues?.[1]?.value || '0'),
     }));
+
+    // Aggregate user types - combine "returning" and "(not set)" into "returning"
+    const userTypesMap: Record<string, { users: number; sessions: number }> = {
+      'חדשים': { users: 0, sessions: 0 },
+      'חוזרים': { users: 0, sessions: 0 },
+    };
+    
+    userTypesRaw.forEach(item => {
+      if (item.type === 'new') {
+        userTypesMap['חדשים'].users += item.users;
+        userTypesMap['חדשים'].sessions += item.sessions;
+      } else {
+        // "returning" or "(not set)" -> חוזרים
+        userTypesMap['חוזרים'].users += item.users;
+        userTypesMap['חוזרים'].sessions += item.sessions;
+      }
+    });
+
+    const userTypes = Object.entries(userTypesMap)
+      .filter(([_, data]) => data.users > 0)
+      .map(([type, data]) => ({ type, ...data }));
 
     // התפלגות מכשירים
     const devicesResponse = await analyticsData.properties.runReport({
@@ -414,16 +435,40 @@ export async function getTrafficAnalytics(
       (sum, row) => sum + parseInt(row.metricValues?.[0]?.value || '0'), 0
     );
 
-    const devices = (devicesResponse.data.rows || []).map(row => {
+    // Aggregate devices - handle all device categories properly
+    const devicesMap: Record<string, { users: number; sessions: number }> = {
+      'נייד': { users: 0, sessions: 0 },
+      'מחשב': { users: 0, sessions: 0 },
+      'טאבלט': { users: 0, sessions: 0 },
+    };
+
+    (devicesResponse.data.rows || []).forEach(row => {
       const users = parseInt(row.metricValues?.[0]?.value || '0');
-      const deviceName = row.dimensionValues?.[0]?.value || '';
-      return {
-        device: deviceName === 'desktop' ? 'מחשב' : deviceName === 'mobile' ? 'נייד' : 'טאבלט',
-        users,
-        sessions: parseInt(row.metricValues?.[1]?.value || '0'),
-        percentage: totalDeviceUsers > 0 ? Math.round((users / totalDeviceUsers) * 100) : 0,
-      };
+      const sessions = parseInt(row.metricValues?.[1]?.value || '0');
+      const deviceName = (row.dimensionValues?.[0]?.value || '').toLowerCase();
+      
+      if (deviceName === 'desktop') {
+        devicesMap['מחשב'].users += users;
+        devicesMap['מחשב'].sessions += sessions;
+      } else if (deviceName === 'mobile') {
+        devicesMap['נייד'].users += users;
+        devicesMap['נייד'].sessions += sessions;
+      } else if (deviceName === 'tablet') {
+        devicesMap['טאבלט'].users += users;
+        devicesMap['טאבלט'].sessions += sessions;
+      }
+      // Ignore "(not set)" and other unknown categories
     });
+
+    const devices = Object.entries(devicesMap)
+      .filter(([_, data]) => data.users > 0)
+      .map(([device, data]) => ({
+        device,
+        users: data.users,
+        sessions: data.sessions,
+        percentage: totalDeviceUsers > 0 ? Math.round((data.users / totalDeviceUsers) * 100) : 0,
+      }))
+      .sort((a, b) => b.users - a.users); // Sort by users descending
 
     // דפים הכי נצפים
     const pagesResponse = await analyticsData.properties.runReport({
