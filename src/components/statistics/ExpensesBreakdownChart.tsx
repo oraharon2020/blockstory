@@ -24,6 +24,10 @@ interface ExpensesBreakdown {
   materials: number;
   creditCardFees: number;
   vat: number;
+  expensesVat?: number;
+  expensesNoVat?: number;
+  refunds?: number;
+  employeeCost?: number;
 }
 
 interface ExpensesBreakdownChartProps {
@@ -31,7 +35,7 @@ interface ExpensesBreakdownChartProps {
   loading?: boolean;
 }
 
-const EXPENSE_LABELS: Record<keyof ExpensesBreakdown, { label: string; color: string }> = {
+const EXPENSE_LABELS: Record<string, { label: string; color: string }> = {
   googleAds: { label: 'Google Ads', color: '#4285F4' },
   facebookAds: { label: 'Facebook Ads', color: '#1877F2' },
   tiktokAds: { label: 'TikTok Ads', color: '#000000' },
@@ -39,6 +43,10 @@ const EXPENSE_LABELS: Record<keyof ExpensesBreakdown, { label: string; color: st
   materials: { label: 'חומרים', color: '#8B5CF6' },
   creditCardFees: { label: 'עמלות אשראי', color: '#EC4899' },
   vat: { label: 'מע"מ', color: '#6B7280' },
+  expensesVat: { label: 'הוצאות (כולל מע"מ)', color: '#EF4444' },
+  expensesNoVat: { label: 'הוצאות (ללא מע"מ)', color: '#F97316' },
+  refunds: { label: 'זיכויים', color: '#DC2626' },
+  employeeCost: { label: 'עלויות עובדים', color: '#10B981' },
 };
 
 // Custom tooltip
@@ -68,13 +76,16 @@ export default function ExpensesBreakdownChart({ data, loading }: ExpensesBreakd
 
   // Transform data for chart
   const chartData = Object.entries(data)
+    .filter(([key, value]) => {
+      // Only include entries that have labels defined and positive values
+      return EXPENSE_LABELS[key] && value > 0;
+    })
     .map(([key, value]) => ({
       name: key,
       value,
-      label: EXPENSE_LABELS[key as keyof ExpensesBreakdown].label,
-      color: EXPENSE_LABELS[key as keyof ExpensesBreakdown].color,
+      label: EXPENSE_LABELS[key].label,
+      color: EXPENSE_LABELS[key].color,
     }))
-    .filter(item => item.value > 0)
     .sort((a, b) => b.value - a.value);
 
   const total = chartData.reduce((sum, item) => sum + item.value, 0);

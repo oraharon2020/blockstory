@@ -34,6 +34,10 @@ export interface StatisticsData {
     materials: number;
     creditCardFees: number;
     vat: number;
+    expensesVat: number;
+    expensesNoVat: number;
+    refunds: number;
+    employeeCost: number;
   };
   
   trends: {

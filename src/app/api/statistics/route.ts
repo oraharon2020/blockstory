@@ -40,6 +40,10 @@ interface StatisticsResponse {
     materials: number;
     creditCardFees: number;
     vat: number;
+    expensesVat: number;
+    expensesNoVat: number;
+    refunds: number;
+    employeeCost: number;
   };
   
   // Trends (compare to previous period)
@@ -133,6 +137,40 @@ export async function GET(request: NextRequest) {
     }
 
     const data = (currentData || []) as DailyCashflow[];
+    
+    // Fetch expenses (VAT and No VAT)
+    const [expensesVatRes, expensesNoVatRes, refundsRes, employeesRes] = await Promise.all([
+      supabase
+        .from('expenses_vat')
+        .select('expense_date, amount, vat_amount')
+        .eq('business_id', businessId)
+        .gte('expense_date', startStr)
+        .lte('expense_date', endStr),
+      supabase
+        .from('expenses_no_vat')
+        .select('expense_date, amount')
+        .eq('business_id', businessId)
+        .gte('expense_date', startStr)
+        .lte('expense_date', endStr),
+      supabase
+        .from('customer_refunds')
+        .select('refund_date, amount')
+        .eq('business_id', businessId)
+        .gte('refund_date', startStr)
+        .lte('refund_date', endStr),
+      supabase
+        .from('employees')
+        .select('daily_cost')
+        .eq('business_id', businessId)
+        .eq('is_active', true),
+    ]);
+    
+    // Calculate additional expenses totals
+    const totalExpensesVat = (expensesVatRes.data || []).reduce((sum, e) => sum + (e.amount || 0), 0);
+    const totalExpensesNoVat = (expensesNoVatRes.data || []).reduce((sum, e) => sum + (e.amount || 0), 0);
+    const totalRefunds = (refundsRes.data || []).reduce((sum, r) => sum + (r.amount || 0), 0);
+    const dailyEmployeeCost = (employeesRes.data || []).reduce((sum, e) => sum + (e.daily_cost || 0), 0);
+    const totalEmployeeCost = dailyEmployeeCost * data.length;
 
     // Calculate previous period for trends
     const periodDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
@@ -150,8 +188,13 @@ export async function GET(request: NextRequest) {
 
     const previousData = (prevData || []) as DailyCashflow[];
 
-    // Calculate statistics
-    const stats = calculateStatistics(data, previousData, startStr, endStr);
+    // Calculate statistics with additional expenses
+    const stats = calculateStatistics(data, previousData, startStr, endStr, {
+      expensesVat: totalExpensesVat,
+      expensesNoVat: totalExpensesNoVat,
+      refunds: totalRefunds,
+      employeeCost: totalEmployeeCost,
+    });
 
     return NextResponse.json(stats);
   } catch (error: any) {
@@ -164,13 +207,28 @@ function calculateStatistics(
   data: DailyCashflow[], 
   previousData: DailyCashflow[],
   periodStart: string,
-  periodEnd: string
+  periodEnd: string,
+  additionalExpenses: {
+    expensesVat: number;
+    expensesNoVat: number;
+    refunds: number;
+    employeeCost: number;
+  }
 ): StatisticsResponse {
   // Current period totals
   const totalRevenue = data.reduce((sum, d) => sum + (d.revenue || 0), 0);
-  const totalProfit = data.reduce((sum, d) => sum + (d.profit || 0), 0);
   const totalOrders = data.reduce((sum, d) => sum + (d.orders_count || 0), 0);
-  const totalExpenses = data.reduce((sum, d) => sum + (d.total_expenses || 0), 0);
+  const dailyExpenses = data.reduce((sum, d) => sum + (d.total_expenses || 0), 0);
+  
+  // Total expenses including additional sources
+  const totalExpenses = dailyExpenses + 
+    additionalExpenses.expensesVat + 
+    additionalExpenses.expensesNoVat + 
+    additionalExpenses.refunds + 
+    additionalExpenses.employeeCost;
+  
+  // Recalculate profit with all expenses
+  const totalProfit = totalRevenue - totalExpenses - data.reduce((sum, d) => sum + (d.materials_cost || 0), 0);
   
   // Expenses breakdown
   const expensesBreakdown = {
@@ -181,6 +239,10 @@ function calculateStatistics(
     materials: data.reduce((sum, d) => sum + (d.materials_cost || 0), 0),
     creditCardFees: data.reduce((sum, d) => sum + (d.credit_card_fees || 0), 0),
     vat: data.reduce((sum, d) => sum + (d.vat || 0), 0),
+    expensesVat: additionalExpenses.expensesVat,
+    expensesNoVat: additionalExpenses.expensesNoVat,
+    refunds: additionalExpenses.refunds,
+    employeeCost: additionalExpenses.employeeCost,
   };
   
   // Averages

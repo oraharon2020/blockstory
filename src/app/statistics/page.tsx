@@ -257,6 +257,10 @@ export default function StatisticsPage() {
             materials: 0,
             creditCardFees: 0,
             vat: 0,
+            expensesVat: 0,
+            expensesNoVat: 0,
+            refunds: 0,
+            employeeCost: 0,
           }}
           loading={loading}
         />
