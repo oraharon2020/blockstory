@@ -101,26 +101,35 @@ export async function GET(request: NextRequest) {
           end = now;
           break;
         case 'month':
+          // Full current month (1st to last day)
           start = new Date(now.getFullYear(), now.getMonth(), 1);
-          end = now;
+          end = new Date(now.getFullYear(), now.getMonth() + 1, 0); // Last day of month
           break;
         case 'quarter':
           const quarterStart = Math.floor(now.getMonth() / 3) * 3;
           start = new Date(now.getFullYear(), quarterStart, 1);
-          end = now;
+          end = new Date(now.getFullYear(), quarterStart + 3, 0); // Last day of quarter
           break;
         case 'year':
           start = new Date(now.getFullYear(), 0, 1);
-          end = now;
+          end = new Date(now.getFullYear(), 11, 31); // Dec 31
           break;
         default:
           start = new Date(now.getFullYear(), now.getMonth(), 1);
-          end = now;
+          end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       }
     }
 
-    const startStr = start.toISOString().split('T')[0];
-    const endStr = end.toISOString().split('T')[0];
+    // Format dates as YYYY-MM-DD without timezone issues
+    const formatDate = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    
+    const startStr = formatDate(start);
+    const endStr = formatDate(end);
 
     // Fetch current period data
     const { data: currentData, error } = await supabase
@@ -215,26 +224,26 @@ function calculateStatistics(
     employeeCost: number;
   }
 ): StatisticsResponse {
-  // Current period totals - use profit directly from the table (already calculated correctly)
+  // The profit stored in daily_cashflow already includes all expenses
+  // (it's calculated with expenses_vat, expenses_no_vat, refunds, employees in the sync)
+  // So we should NOT subtract them again
+  
   const totalRevenue = data.reduce((sum, d) => sum + (d.revenue || 0), 0);
   const totalOrders = data.reduce((sum, d) => sum + (d.orders_count || 0), 0);
-  const dailyExpenses = data.reduce((sum, d) => sum + (d.total_expenses || 0), 0);
+  const baseDailyExpenses = data.reduce((sum, d) => sum + (d.total_expenses || 0), 0);
   
-  // Use profit from table - it's already calculated correctly with all daily expenses
-  const tableProfit = data.reduce((sum, d) => sum + (d.profit || 0), 0);
+  // Profit from table - already includes all expenses
+  const totalProfit = data.reduce((sum, d) => sum + (d.profit || 0), 0);
   
-  // Additional expenses from separate tables (not included in daily_cashflow)
+  // Additional expenses - for display in breakdown only, NOT subtracted from profit
   const additionalExpensesTotal = 
     additionalExpenses.expensesVat + 
     additionalExpenses.expensesNoVat + 
     additionalExpenses.refunds + 
     additionalExpenses.employeeCost;
   
-  // Total expenses = daily expenses + additional expenses from other tables
-  const totalExpenses = dailyExpenses + additionalExpensesTotal;
-  
-  // Total profit = table profit - additional expenses (since they're not in daily calc)
-  const totalProfit = tableProfit - additionalExpensesTotal;
+  // Total expenses for display
+  const totalExpenses = baseDailyExpenses + additionalExpensesTotal;
   
   // Expenses breakdown
   const expensesBreakdown = {
