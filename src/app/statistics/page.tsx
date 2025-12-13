@@ -36,6 +36,12 @@ import {
 // Tab types
 type TabType = 'summary' | 'traffic' | 'sales' | 'channels' | 'products';
 
+// Helper: Get max date (today or earlier) - GA can't query future dates
+const getMaxEndDate = (endDate: string): string => {
+  const today = new Date().toISOString().split('T')[0];
+  return endDate > today ? today : endDate;
+};
+
 /**
  * StatisticsPage - דף סטטיסטיקות ראשי
  * 
@@ -343,7 +349,7 @@ export default function StatisticsPage() {
         <TrafficTab
           businessId={currentBusiness.id}
           startDate={data.periodStart}
-          endDate={data.periodEnd}
+          endDate={getMaxEndDate(data.periodEnd)}
         />
       )}
 
@@ -352,7 +358,7 @@ export default function StatisticsPage() {
         <SalesTab
           businessId={currentBusiness.id}
           startDate={data.periodStart}
-          endDate={data.periodEnd}
+          endDate={getMaxEndDate(data.periodEnd)}
         />
       )}
 
@@ -361,7 +367,7 @@ export default function StatisticsPage() {
         <ProductsTab
           businessId={currentBusiness.id}
           startDate={data.periodStart}
-          endDate={data.periodEnd}
+          endDate={getMaxEndDate(data.periodEnd)}
         />
       )}
 
