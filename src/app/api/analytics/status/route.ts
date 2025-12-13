@@ -31,8 +31,15 @@ export async function GET(request: NextRequest) {
     // Check if tokens exist
     const hasTokens = data.credentials?.access_token && data.credentials?.refresh_token;
     
+    // Check if property is selected
+    const hasProperty = data.settings?.property_id;
+    
     return NextResponse.json({ 
-      connected: hasTokens,
+      connected: hasTokens && hasProperty,
+      hasTokens,
+      hasProperty,
+      propertyId: data.settings?.property_id,
+      propertyName: data.settings?.property_name,
       connectedAt: data.updated_at 
     });
 

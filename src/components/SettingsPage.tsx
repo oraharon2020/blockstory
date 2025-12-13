@@ -859,13 +859,28 @@ function WebhookSetupTab() {
 function IntegrationsTab({ businessId }: { businessId?: string }) {
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gaConnected, setGaConnected] = useState(false);
+  const [gaPropertyName, setGaPropertyName] = useState<string | null>(null);
   const [googleAdsConnected, setGoogleAdsConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState<string | null>(null);
+  
+  // GA Property selection
+  const [showPropertySelector, setShowPropertySelector] = useState(false);
+  const [gaProperties, setGaProperties] = useState<Array<{id: string; displayName: string; accountName: string}>>([]);
+  const [loadingProperties, setLoadingProperties] = useState(false);
+  const [savingProperty, setSavingProperty] = useState(false);
 
   useEffect(() => {
     if (businessId) {
       checkConnectionStatus();
+      
+      // Check URL params for property selection prompt
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('ga_select_property') === 'true') {
+        loadGaProperties();
+        // Clean URL
+        window.history.replaceState({}, '', window.location.pathname);
+      }
     }
   }, [businessId]);
 
@@ -888,10 +903,54 @@ function IntegrationsTab({ businessId }: { businessId?: string }) {
       const gaRes = await fetch(`/api/analytics/status?businessId=${businessId}`);
       const gaData = await gaRes.json();
       setGaConnected(gaData.connected);
+      if (gaData.propertyName) {
+        setGaPropertyName(gaData.propertyName);
+      }
     } catch (error) {
       console.error('Error checking connection status:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadGaProperties = async () => {
+    setLoadingProperties(true);
+    setShowPropertySelector(true);
+    try {
+      const res = await fetch(`/api/analytics/properties?businessId=${businessId}`);
+      const data = await res.json();
+      if (data.properties) {
+        setGaProperties(data.properties);
+      }
+    } catch (error) {
+      console.error('Error loading GA properties:', error);
+    } finally {
+      setLoadingProperties(false);
+    }
+  };
+
+  const handleSelectProperty = async (propertyId: string, propertyName: string) => {
+    setSavingProperty(true);
+    try {
+      const res = await fetch('/api/analytics/properties', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessId,
+          propertyId,
+          propertyName,
+        }),
+      });
+      
+      if (res.ok) {
+        setGaConnected(true);
+        setGaPropertyName(propertyName);
+        setShowPropertySelector(false);
+      }
+    } catch (error) {
+      console.error('Error saving property:', error);
+    } finally {
+      setSavingProperty(false);
     }
   };
 
@@ -945,7 +1004,7 @@ function IntegrationsTab({ businessId }: { businessId?: string }) {
     {
       id: 'ga4',
       name: 'Google Analytics 4',
-      description: 'ניתוח תנועה והמרות לפי מקור',
+      description: gaPropertyName ? `מחובר ל: ${gaPropertyName}` : 'ניתוח תנועה והמרות לפי מקור',
       icon: PieChart,
       color: 'orange',
       connected: gaConnected,
@@ -1060,6 +1119,54 @@ function IntegrationsTab({ businessId }: { businessId?: string }) {
           </div>
         </div>
       </div>
+
+      {/* GA Property Selection Modal */}
+      {showPropertySelector && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-hidden">
+            <div className="p-6 border-b">
+              <h3 className="text-lg font-semibold text-gray-900">בחר את ה-Property</h3>
+              <p className="text-sm text-gray-500 mt-1">בחר את חשבון Google Analytics שברצונך לחבר</p>
+            </div>
+            
+            <div className="p-4 max-h-96 overflow-y-auto">
+              {loadingProperties ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                </div>
+              ) : gaProperties.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p>לא נמצאו Properties</p>
+                  <p className="text-sm mt-1">ודא שיש לך גישה לחשבון Google Analytics</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {gaProperties.map((property) => (
+                    <button
+                      key={property.id}
+                      onClick={() => handleSelectProperty(property.id, property.displayName)}
+                      disabled={savingProperty}
+                      className="w-full text-right p-4 border rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors disabled:opacity-50"
+                    >
+                      <div className="font-medium text-gray-900">{property.displayName}</div>
+                      <div className="text-sm text-gray-500">{property.accountName} · ID: {property.id}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <div className="p-4 border-t bg-gray-50 flex justify-end gap-3">
+              <button
+                onClick={() => setShowPropertySelector(false)}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                ביטול
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

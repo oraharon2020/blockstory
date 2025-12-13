@@ -74,7 +74,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${redirectBase}/settings?ga_error=db_error`);
     }
 
-    return NextResponse.redirect(`${redirectBase}/settings?ga_success=true`);
+    // Redirect to settings with flag to show property selector
+    return NextResponse.redirect(`${redirectBase}/settings?ga_select_property=true`);
 
   } catch (error: any) {
     console.error('GA OAuth error:', error);
