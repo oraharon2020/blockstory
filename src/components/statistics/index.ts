@@ -13,6 +13,7 @@ export { default as ExpensesBreakdownChart } from './ExpensesBreakdownChart';
 export { default as OrdersChart } from './OrdersChart';
 export { default as HighlightsCard } from './HighlightsCard';
 export { default as PeriodSelector } from './PeriodSelector';
+export { default as ChannelPerformanceCard } from './ChannelPerformanceCard';
 
 // Types
 export interface StatisticsData {

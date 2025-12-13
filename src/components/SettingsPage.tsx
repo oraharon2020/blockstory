@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings, Save, Loader2, Eye, EyeOff, TestTube, Check, X, Store, Calculator, Package, HelpCircle, ListChecks, Truck, Webhook, BarChart3, Copy, ExternalLink } from 'lucide-react';
+import { Settings, Save, Loader2, Eye, EyeOff, TestTube, Check, X, Store, Calculator, Package, HelpCircle, ListChecks, Truck, Webhook, BarChart3, Copy, ExternalLink, Link2, Mail, PieChart } from 'lucide-react';
 import ProductCostsManager from './ProductCostsManager';
 import OrderStatusSelector from './OrderStatusSelector';
 import { useAuth } from '@/contexts/AuthContext';
@@ -22,7 +22,7 @@ interface SettingsFormData {
   freeShippingMethods: string[];
 }
 
-type TabType = 'woocommerce' | 'business' | 'products' | 'webhook' | 'googleads';
+type TabType = 'woocommerce' | 'business' | 'products' | 'integrations' | 'webhook';
 
 export default function SettingsPage() {
   const { currentBusiness } = useAuth();
@@ -163,11 +163,11 @@ export default function SettingsPage() {
   }
 
   const tabs = [
-    { id: 'woocommerce' as TabType, label: 'חיבור WooCommerce', icon: Store, color: 'purple' },
-    { id: 'business' as TabType, label: 'פרמטרים עסקיים', icon: Calculator, color: 'green' },
-    { id: 'products' as TabType, label: 'עלויות מוצרים', icon: Package, color: 'orange' },
-    { id: 'googleads' as TabType, label: 'Google Ads', icon: BarChart3, color: 'blue' },
-    { id: 'webhook' as TabType, label: 'Webhook התראות', icon: Webhook, color: 'emerald' },
+    { id: 'woocommerce' as TabType, label: 'WooCommerce', icon: Store, color: 'purple' },
+    { id: 'business' as TabType, label: 'פרמטרים', icon: Calculator, color: 'green' },
+    { id: 'products' as TabType, label: 'מוצרים', icon: Package, color: 'orange' },
+    { id: 'integrations' as TabType, label: 'אינטגרציות', icon: Link2, color: 'blue' },
+    { id: 'webhook' as TabType, label: 'Webhook', icon: Webhook, color: 'emerald' },
   ];
 
   return (
@@ -635,9 +635,9 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Google Ads Tab */}
-          {activeTab === 'googleads' && (
-            <GoogleAdsSetupTab businessId={currentBusiness?.id} />
+          {/* Integrations Tab */}
+          {activeTab === 'integrations' && (
+            <IntegrationsTab businessId={currentBusiness?.id} />
           )}
 
           {/* Webhook Tab */}
@@ -850,6 +850,214 @@ function WebhookSetupTab() {
         <p className="text-xs text-gray-500 mt-3">
           💡 הזמנות עם סטטוס Cancelled, Refunded, Failed או Pending לא נספרות כהכנסה
         </p>
+      </div>
+    </div>
+  );
+}
+
+// Integrations Tab Component - All external connections
+function IntegrationsTab({ businessId }: { businessId?: string }) {
+  const [gmailConnected, setGmailConnected] = useState(false);
+  const [gaConnected, setGaConnected] = useState(false);
+  const [googleAdsConnected, setGoogleAdsConnected] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [connecting, setConnecting] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (businessId) {
+      checkConnectionStatus();
+    }
+  }, [businessId]);
+
+  const checkConnectionStatus = async () => {
+    setLoading(true);
+    try {
+      // Check Gmail status
+      const gmailRes = await fetch(`/api/gmail/status?businessId=${businessId}`);
+      const gmailData = await gmailRes.json();
+      setGmailConnected(gmailData.connected);
+
+      // Check Google Ads status
+      const settingsRes = await fetch(`/api/business-settings?businessId=${businessId}`);
+      const settingsData = await settingsRes.json();
+      if (settingsData.data?.googleAdsRefreshToken) {
+        setGoogleAdsConnected(true);
+      }
+
+      // Check GA4 status - check integrations table
+      // For now, we'll check if there's a record in integrations
+      // This will be updated when we implement GA4 properly
+    } catch (error) {
+      console.error('Error checking connection status:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConnect = async (service: string) => {
+    setConnecting(service);
+    try {
+      let authUrl = '';
+      
+      switch (service) {
+        case 'gmail':
+          const gmailRes = await fetch(`/api/gmail/auth?businessId=${businessId}`);
+          const gmailData = await gmailRes.json();
+          authUrl = gmailData.authUrl;
+          break;
+        case 'ga4':
+          const gaRes = await fetch(`/api/analytics/auth?businessId=${businessId}`);
+          const gaData = await gaRes.json();
+          authUrl = gaData.authUrl;
+          break;
+        case 'googleads':
+          const adsRes = await fetch(`/api/google-ads/auth?businessId=${businessId}`);
+          const adsData = await adsRes.json();
+          authUrl = adsData.authUrl;
+          break;
+      }
+      
+      if (authUrl) {
+        window.location.href = authUrl;
+      }
+    } catch (error) {
+      console.error(`Error connecting ${service}:`, error);
+    } finally {
+      setConnecting(null);
+    }
+  };
+
+  const handleDisconnect = async (service: string) => {
+    // TODO: Implement disconnect
+    console.log(`Disconnecting ${service}`);
+  };
+
+  const integrations = [
+    {
+      id: 'gmail',
+      name: 'Gmail - סריקת חשבוניות',
+      description: 'סריקה אוטומטית של חשבוניות ספקים מהמייל',
+      icon: Mail,
+      color: 'red',
+      connected: gmailConnected,
+    },
+    {
+      id: 'ga4',
+      name: 'Google Analytics 4',
+      description: 'ניתוח תנועה והמרות לפי מקור',
+      icon: PieChart,
+      color: 'orange',
+      connected: gaConnected,
+    },
+    {
+      id: 'googleads',
+      name: 'Google Ads',
+      description: 'סנכרון אוטומטי של הוצאות פרסום',
+      icon: BarChart3,
+      color: 'blue',
+      connected: googleAdsConnected,
+    },
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start gap-4 p-4 bg-blue-50 rounded-lg border border-blue-100">
+        <Link2 className="w-10 h-10 text-blue-600 flex-shrink-0" />
+        <div>
+          <h3 className="font-semibold text-blue-900">חיבורים ואינטגרציות</h3>
+          <p className="text-blue-700 text-sm">חבר שירותים חיצוניים לסנכרון אוטומטי</p>
+        </div>
+      </div>
+
+      {/* Integration Cards */}
+      <div className="grid gap-4">
+        {integrations.map((integration) => {
+          const Icon = integration.icon;
+          const isConnecting = connecting === integration.id;
+          
+          return (
+            <div
+              key={integration.id}
+              className="flex items-center justify-between p-5 bg-white border rounded-xl hover:shadow-md transition-shadow"
+            >
+              <div className="flex items-center gap-4">
+                <div className={`p-3 rounded-xl ${
+                  integration.color === 'red' ? 'bg-red-100' :
+                  integration.color === 'orange' ? 'bg-orange-100' :
+                  'bg-blue-100'
+                }`}>
+                  <Icon className={`w-6 h-6 ${
+                    integration.color === 'red' ? 'text-red-600' :
+                    integration.color === 'orange' ? 'text-orange-600' :
+                    'text-blue-600'
+                  }`} />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-900">{integration.name}</h4>
+                  <p className="text-sm text-gray-500">{integration.description}</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                {integration.connected ? (
+                  <>
+                    <span className="flex items-center gap-1.5 px-3 py-1.5 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+                      <Check className="w-4 h-4" />
+                      מחובר
+                    </span>
+                    <button
+                      onClick={() => handleDisconnect(integration.id)}
+                      className="px-4 py-2 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      נתק
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => handleConnect(integration.id)}
+                    disabled={isConnecting}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-colors ${
+                      integration.color === 'red' ? 'bg-red-600 hover:bg-red-700' :
+                      integration.color === 'orange' ? 'bg-orange-600 hover:bg-orange-700' :
+                      'bg-blue-600 hover:bg-blue-700'
+                    } text-white disabled:opacity-50`}
+                  >
+                    {isConnecting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <ExternalLink className="w-4 h-4" />
+                    )}
+                    התחבר
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Info Box */}
+      <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+        <div className="flex items-start gap-3">
+          <HelpCircle className="w-5 h-5 text-gray-500 flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-gray-600">
+            <p className="font-medium mb-1">איך זה עובד?</p>
+            <ul className="list-disc list-inside space-y-1">
+              <li><strong>Gmail:</strong> סריקת מיילים עם חשבוניות והעברה אוטומטית להוצאות</li>
+              <li><strong>Google Analytics:</strong> ניתוח מקורות תנועה, המרות ו-ROAS לכל ערוץ</li>
+              <li><strong>Google Ads:</strong> משיכת הוצאות פרסום אוטומטית לטבלת התזרים</li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   );

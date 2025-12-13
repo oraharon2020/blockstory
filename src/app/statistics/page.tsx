@@ -25,6 +25,7 @@ import {
   HighlightsCard,
   PeriodSelector,
   StatisticsData,
+  ChannelPerformanceCard,
 } from '@/components/statistics';
 
 /**
@@ -277,6 +278,16 @@ export default function StatisticsPage() {
           worstDay={data?.worstDay || null}
           mostProfitableDay={data?.mostProfitableDay || null}
           daysWithData={data?.daysWithData || 0}
+          loading={loading}
+        />
+      </div>
+
+      {/* Channel Performance */}
+      <div className="grid grid-cols-1 gap-6">
+        <ChannelPerformanceCard
+          businessId={currentBusiness.id}
+          startDate={data?.periodStart || ''}
+          endDate={data?.periodEnd || ''}
           loading={loading}
         />
       </div>
