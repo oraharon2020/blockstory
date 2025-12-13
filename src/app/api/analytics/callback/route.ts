@@ -15,9 +15,9 @@ const getRedirectUri = () => {
   return `${baseUrl}/api/analytics/callback`;
 };
 
-// Use Gmail OAuth credentials (same Google project)
-const CLIENT_ID = process.env.GOOGLE_GMAIL_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
-const CLIENT_SECRET = process.env.GOOGLE_GMAIL_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET;
+// Use Google Ads OAuth credentials (has the redirect URI configured)
+const CLIENT_ID = process.env.GOOGLE_ADS_CLIENT_ID || process.env.GOOGLE_GMAIL_CLIENT_ID;
+const CLIENT_SECRET = process.env.GOOGLE_ADS_CLIENT_SECRET || process.env.GOOGLE_GMAIL_CLIENT_SECRET;
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
