@@ -988,8 +988,41 @@ function IntegrationsTab({ businessId }: { businessId?: string }) {
   };
 
   const handleDisconnect = async (service: string) => {
-    // TODO: Implement disconnect
-    console.log(`Disconnecting ${service}`);
+    if (!currentBusiness?.id) return;
+    
+    try {
+      console.log(`Disconnecting ${service}`);
+      
+      if (service === 'ga4') {
+        // Delete GA4 integration
+        const { error } = await supabase
+          .from('integrations')
+          .delete()
+          .eq('business_id', currentBusiness.id)
+          .eq('type', 'google_analytics');
+        
+        if (error) throw error;
+        
+        setGaConnected(false);
+        setGaPropertyName(null);
+        alert('Google Analytics נותק בהצלחה');
+      } else if (service === 'gmail') {
+        // Delete Gmail integration
+        const { error } = await supabase
+          .from('integrations')
+          .delete()
+          .eq('business_id', currentBusiness.id)
+          .eq('type', 'gmail');
+        
+        if (error) throw error;
+        
+        setGmailConnected(false);
+        alert('Gmail נותק בהצלחה');
+      }
+    } catch (error: any) {
+      console.error('Error disconnecting:', error);
+      alert('שגיאה בניתוק: ' + error.message);
+    }
   };
 
   const integrations = [
