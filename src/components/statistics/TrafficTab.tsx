@@ -155,7 +155,10 @@ export default function TrafficTab({ businessId, startDate, endDate }: TrafficTa
         </div>
 
         {/* שיעור נטישה */}
-        <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-5 border border-orange-200">
+        <div 
+          className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-5 border border-orange-200 relative group cursor-help"
+          title="אחוז המבקרים שעזבו את האתר אחרי צפייה בדף אחד בלבד, ללא אינטראקציה נוספת"
+        >
           <div className="flex items-center gap-3 mb-3">
             <div className="p-2 bg-orange-500 rounded-lg">
               <TrendingDown className="w-5 h-5 text-white" />
@@ -163,6 +166,11 @@ export default function TrafficTab({ businessId, startDate, endDate }: TrafficTa
             <span className="text-orange-700 font-medium">שיעור נטישה</span>
           </div>
           <p className="text-3xl font-bold text-orange-900">{data.bounceRate.toFixed(1)}%</p>
+          {/* Tooltip */}
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+            אחוז המבקרים שעזבו אחרי דף אחד בלבד
+            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+          </div>
         </div>
       </div>
 
