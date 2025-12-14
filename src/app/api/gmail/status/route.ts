@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     // Get connection from database
     const { data, error } = await supabase
       .from('gmail_connections')
-      .select('email, connected_at, expiry_date')
+      .select('email, connected_at, expiry_date, refresh_token')
       .eq('business_id', businessId)
       .single();
     
@@ -33,14 +33,19 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    // Check if token is expired
-    const isExpired = new Date(data.expiry_date) < new Date();
+    // Check if access token is expired
+    const isExpired = data.expiry_date ? new Date(data.expiry_date) < new Date() : true;
+    
+    // If we have a refresh token, we can still connect (even if access token expired)
+    const hasRefreshToken = !!data.refresh_token;
+    const isConnected = hasRefreshToken; // As long as we have refresh token, we're connected
     
     return NextResponse.json({
-      isConnected: !isExpired,
+      isConnected,
       email: data.email,
       lastSync: data.connected_at,
       needsRefresh: isExpired,
+      hasRefreshToken,
     });
   } catch (error: any) {
     console.error('Gmail status error:', error);

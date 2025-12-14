@@ -45,10 +45,16 @@ export async function POST(request: NextRequest) {
     const tokens: GmailTokens = {
       access_token: connection.access_token,
       refresh_token: connection.refresh_token,
-      expiry_date: new Date(connection.expiry_date).getTime(),
+      expiry_date: connection.expiry_date ? new Date(connection.expiry_date).getTime() : 0,
       token_type: 'Bearer',
       scope: '',
     };
+    
+    console.log('🔍 Gmail token check:', {
+      hasRefreshToken: !!tokens.refresh_token,
+      expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : 'none',
+      isExpired: tokens.expiry_date ? Date.now() >= tokens.expiry_date - 5 * 60 * 1000 : true,
+    });
     
     let validTokens: GmailTokens;
     try {
@@ -56,17 +62,32 @@ export async function POST(request: NextRequest) {
       
       // Update tokens if refreshed
       if (validTokens.access_token !== tokens.access_token) {
-        await supabase
+        console.log('🔄 Gmail token refreshed, updating database...');
+        const updateData: any = {
+          access_token: validTokens.access_token,
+          expiry_date: new Date(validTokens.expiry_date).toISOString(),
+        };
+        
+        // Also update refresh_token if a new one was returned
+        if (validTokens.refresh_token && validTokens.refresh_token !== tokens.refresh_token) {
+          updateData.refresh_token = validTokens.refresh_token;
+        }
+        
+        const { error: updateError } = await supabase
           .from('gmail_connections')
-          .update({
-            access_token: validTokens.access_token,
-            expiry_date: new Date(validTokens.expiry_date).toISOString(),
-          })
+          .update(updateData)
           .eq('business_id', businessId);
+          
+        if (updateError) {
+          console.error('❌ Failed to update Gmail tokens:', updateError);
+        } else {
+          console.log('✅ Gmail tokens updated successfully');
+        }
       }
-    } catch (tokenError) {
+    } catch (tokenError: any) {
+      console.error('❌ Gmail token refresh failed:', tokenError.message);
       return NextResponse.json({ 
-        error: 'Token refresh failed',
+        error: 'Token refresh failed: ' + tokenError.message,
         needsAuth: true 
       }, { status: 401 });
     }

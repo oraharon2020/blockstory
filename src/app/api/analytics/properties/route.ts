@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { supabase } from '@/lib/supabase';
+import { refreshAccessToken } from '@/lib/google-analytics';
 
 // Use Google Ads OAuth credentials
 const CLIENT_ID = process.env.GOOGLE_ADS_CLIENT_ID || process.env.GOOGLE_GMAIL_CLIENT_ID;
@@ -33,7 +34,37 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Not connected to Google Analytics', needsAuth: true }, { status: 401 });
     }
 
-    const { access_token, refresh_token } = integration.credentials;
+    let { access_token, refresh_token, expiry_date } = integration.credentials;
+
+    // Check if token is expired or about to expire (5 minutes buffer)
+    const isExpired = expiry_date && Date.now() > expiry_date - 5 * 60 * 1000;
+
+    if (isExpired && refresh_token) {
+      console.log('🔄 GA token expired (properties), refreshing...');
+      try {
+        const newTokens = await refreshAccessToken(refresh_token);
+        access_token = newTokens.access_token;
+
+        // Update tokens in database
+        await supabase
+          .from('integrations')
+          .update({
+            credentials: {
+              ...integration.credentials,
+              access_token: newTokens.access_token,
+              expiry_date: newTokens.expiry_date,
+            },
+            updated_at: new Date().toISOString(),
+          })
+          .eq('business_id', businessId)
+          .eq('type', 'google_analytics');
+
+        console.log('✅ GA token refreshed successfully (properties)');
+      } catch (e: any) {
+        console.error('❌ Failed to refresh GA token:', e.message);
+        return NextResponse.json({ error: 'Token expired and refresh failed', needsAuth: true }, { status: 401 });
+      }
+    }
 
     // Create OAuth client
     const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET);

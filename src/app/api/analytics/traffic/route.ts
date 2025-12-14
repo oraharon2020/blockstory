@@ -5,8 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getTrafficAnalytics, GACredentials } from '@/lib/google-analytics';
-import { supabase } from '@/lib/supabase';
+import { getTrafficAnalytics, getValidCredentials } from '@/lib/google-analytics';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,34 +38,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'businessId is required' }, { status: 400 });
     }
 
-    // Get GA credentials
-    const { data: integration, error: integrationError } = await supabase
-      .from('integrations')
-      .select('credentials, settings')
-      .eq('business_id', businessId)
-      .eq('type', 'google_analytics')
-      .eq('is_active', true)
-      .single();
-
-    if (integrationError || !integration) {
-      return NextResponse.json({ 
-        error: 'Google Analytics not connected',
-        needsAuth: true 
-      }, { status: 401 });
+    // Get GA credentials with auto-refresh
+    const result = await getValidCredentials(businessId);
+    
+    if ('error' in result) {
+      const status = result.needsAuth ? 401 : 400;
+      return NextResponse.json(result, { status });
     }
 
-    if (!integration.settings?.property_id) {
-      return NextResponse.json({ 
-        error: 'No GA4 property selected',
-        needsPropertySelection: true 
-      }, { status: 400 });
-    }
-
-    const credentials: GACredentials = {
-      access_token: integration.credentials.access_token,
-      refresh_token: integration.credentials.refresh_token,
-      property_id: integration.settings.property_id,
-    };
+    const { credentials } = result;
 
     const data = await getTrafficAnalytics(credentials, { startDate, endDate });
 

@@ -41,13 +41,45 @@ export interface GASourceBreakdown {
   overview: GATrafficOverview;
 }
 
+// Use Google Ads OAuth credentials (same as analytics callback)
+const CLIENT_ID = process.env.GOOGLE_ADS_CLIENT_ID || process.env.GOOGLE_GMAIL_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
+const CLIENT_SECRET = process.env.GOOGLE_ADS_CLIENT_SECRET || process.env.GOOGLE_GMAIL_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET;
+
+/**
+ * רענון access_token באמצעות refresh_token
+ */
+export async function refreshAccessToken(refreshToken: string): Promise<{ access_token: string; expiry_date?: number }> {
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: CLIENT_ID!,
+      client_secret: CLIENT_SECRET!,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error('Failed to refresh GA token:', error);
+    throw new Error(`Failed to refresh token: ${error}`);
+  }
+
+  const tokens = await response.json();
+  return {
+    access_token: tokens.access_token,
+    expiry_date: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : undefined,
+  };
+}
+
 /**
  * יצירת OAuth2 client עם credentials
  */
 function createOAuth2Client(credentials: GACredentials) {
   const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET
+    CLIENT_ID,
+    CLIENT_SECRET
   );
   
   oauth2Client.setCredentials({
@@ -535,12 +567,18 @@ export async function getSalesAnalytics(
 
   try {
     // נתוני Funnel - אירועי E-commerce
+    // משתמשים ב-eventCount במקום totalUsers כי totalUsers סופר משתמשים ייחודיים
+    // ו-eventCount סופר את מספר האירועים בפועל (יותר מדויק לרכישות)
     const funnelResponse = await analyticsData.properties.runReport({
       property: `properties/${propertyId}`,
       requestBody: {
         dateRanges: [{ startDate: dateRange.startDate, endDate: dateRange.endDate }],
         dimensions: [{ name: 'eventName' }],
-        metrics: [{ name: 'eventCount' }, { name: 'totalUsers' }],
+        metrics: [
+          { name: 'eventCount' }, 
+          { name: 'totalUsers' },
+          { name: 'conversions' },
+        ],
         dimensionFilter: {
           filter: {
             fieldName: 'eventName',
@@ -552,10 +590,27 @@ export async function getSalesAnalytics(
       },
     });
 
-    const funnelEvents: Record<string, number> = {};
+    // לוג לדיבוג - מראה eventCount, totalUsers, conversions לכל אירוע
+    console.log('🔍 GA4 Funnel raw data for', dateRange.startDate, '-', dateRange.endDate);
+    (funnelResponse.data.rows || []).forEach(row => {
+      console.log(`   ${row.dimensionValues?.[0]?.value}: eventCount=${row.metricValues?.[0]?.value}, users=${row.metricValues?.[1]?.value}, conversions=${row.metricValues?.[2]?.value}`);
+    });
+    
+    // אם אין purchase, נבדוק גם את האירוע transaction_id או transactions
+    const purchaseRow = funnelResponse.data.rows?.find(r => r.dimensionValues?.[0]?.value === 'purchase');
+    if (!purchaseRow) {
+      console.log('⚠️ No purchase events found in this date range!');
+    } else {
+      console.log('✅ Purchase found: eventCount=' + purchaseRow.metricValues?.[0]?.value);
+    }
+
+    const funnelEvents: Record<string, { eventCount: number; users: number }> = {};
     (funnelResponse.data.rows || []).forEach(row => {
       const eventName = row.dimensionValues?.[0]?.value || '';
-      funnelEvents[eventName] = parseInt(row.metricValues?.[1]?.value || '0');
+      funnelEvents[eventName] = {
+        eventCount: parseInt(row.metricValues?.[0]?.value || '0'),
+        users: parseInt(row.metricValues?.[1]?.value || '0'),
+      };
     });
 
     const funnelSteps = [
@@ -565,19 +620,31 @@ export async function getSalesAnalytics(
       { key: 'purchase', label: 'רכישה' },
     ];
 
+    // עבור ה-Funnel משתמשים ב-users (ייחודיים) לצפייה/עגלה/checkout
+    // אבל עבור purchase משתמשים ב-eventCount (מספר הזמנות בפועל)
     const funnel = funnelSteps.map((step, idx) => {
-      const users = funnelEvents[step.key] || 0;
-      const prevUsers = idx > 0 ? (funnelEvents[funnelSteps[idx - 1].key] || 0) : users;
+      // לרכישות - משתמשים ב-eventCount (מספר הזמנות אמיתי)
+      // לשאר - משתמשים ב-users (משתמשים ייחודיים)
+      const users = step.key === 'purchase' 
+        ? (funnelEvents[step.key]?.eventCount || 0)
+        : (funnelEvents[step.key]?.users || 0);
+      
+      const prevUsers = idx > 0 
+        ? (funnelSteps[idx - 1].key === 'purchase' 
+            ? (funnelEvents[funnelSteps[idx - 1].key]?.eventCount || 0)
+            : (funnelEvents[funnelSteps[idx - 1].key]?.users || 0))
+        : users;
+      
       const dropoff = prevUsers > 0 ? Math.round(((prevUsers - users) / prevUsers) * 100) : 0;
       return { step: step.label, users, dropoff: idx === 0 ? 0 : dropoff };
     });
 
-    // חישוב נטישת עגלה
-    const addToCart = funnelEvents['add_to_cart'] || 0;
-    const purchases = funnelEvents['purchase'] || 0;
+    // חישוב נטישת עגלה - משתמשים ב-users לעגלה וב-eventCount לרכישות
+    const addToCart = funnelEvents['add_to_cart']?.users || 0;
+    const purchases = funnelEvents['purchase']?.eventCount || 0;
     const cartAbandonment = addToCart > 0 ? Math.round(((addToCart - purchases) / addToCart) * 100) : 0;
 
-    // נתוני המרות כלליים
+    // נתוני המרות כלליים - משתמשים ב-ecommercePurchases וב-transactions
     const conversionResponse = await analyticsData.properties.runReport({
       property: `properties/${propertyId}`,
       requestBody: {
@@ -586,14 +653,22 @@ export async function getSalesAnalytics(
           { name: 'totalUsers' },
           { name: 'ecommercePurchases' },
           { name: 'purchaseRevenue' },
+          { name: 'transactions' },
         ],
       },
     });
 
     const convData = conversionResponse.data.rows?.[0];
     const totalUsers = parseInt(convData?.metricValues?.[0]?.value || '0');
-    const totalPurchases = parseInt(convData?.metricValues?.[1]?.value || '0');
+    const ecommercePurchases = parseInt(convData?.metricValues?.[1]?.value || '0');
     const totalRevenue = parseFloat(convData?.metricValues?.[2]?.value || '0');
+    const transactions = parseInt(convData?.metricValues?.[3]?.value || '0');
+    
+    // משתמשים ב-transactions או ecommercePurchases - הגבוה מביניהם
+    // כי לפעמים GA4 מדווח רק אחד מהם
+    const totalPurchases = Math.max(ecommercePurchases, transactions);
+    
+    console.log('🔍 GA4 Conversions:', { totalUsers, ecommercePurchases, transactions, totalRevenue });
 
     const conversionRate = totalUsers > 0 ? (totalPurchases / totalUsers) * 100 : 0;
     const avgOrderValue = totalPurchases > 0 ? totalRevenue / totalPurchases : 0;

@@ -24,12 +24,21 @@ import {
 import ComparisonSelector from './ComparisonSelector';
 import ComparisonMetric from './ComparisonMetric';
 
+interface RealDataInfo {
+  source: string;
+  purchases: number;
+  revenue: number;
+  ga4Purchases: number;
+  discrepancy: number;
+}
+
 interface SalesData {
   funnel: { step: string; users: number; dropoff: number }[];
   cartAbandonment: number;
   avgOrderValue: number;
   conversionRate: number;
   purchasesBySource: { source: string; purchases: number; revenue: number }[];
+  realData?: RealDataInfo;
 }
 
 interface SalesTabProps {
@@ -301,12 +310,44 @@ export default function SalesTab({ businessId, startDate, endDate }: SalesTabPro
 
       {/* Funnel */}
       <div className="bg-white rounded-xl shadow-sm border p-6">
-        <h4 className="font-semibold text-gray-800 mb-6 flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-gray-500" />
-          משפך המרה (Funnel)
-        </h4>
+        <div className="flex items-center justify-between mb-6">
+          <h4 className="font-semibold text-gray-800 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-gray-500" />
+            משפך המרה (Funnel)
+          </h4>
+          {data.realData && (
+            <div className="flex items-center gap-2 text-xs bg-green-50 text-green-700 px-3 py-1.5 rounded-full">
+              <CheckCircle className="w-3.5 h-3.5" />
+              <span>נתוני רכישות אמיתיים מהחנות</span>
+            </div>
+          )}
+        </div>
         
-        <div className="space-y-4">
+        {/* Funnel Summary Stats */}
+        <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-blue-600">
+              {data.funnel[0]?.users.toLocaleString() || 0}
+            </div>
+            <div className="text-xs text-gray-500">צפו במוצרים</div>
+          </div>
+          <div className="text-center border-x border-gray-200">
+            <div className="text-2xl font-bold text-green-600">
+              {data.funnel[data.funnel.length - 1]?.users.toLocaleString() || 0}
+            </div>
+            <div className="text-xs text-gray-500">רכשו</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-purple-600">
+              {data.funnel[0]?.users > 0 
+                ? ((data.funnel[data.funnel.length - 1]?.users / data.funnel[0]?.users) * 100).toFixed(1)
+                : 0}%
+            </div>
+            <div className="text-xs text-gray-500">יחס המרה כולל</div>
+          </div>
+        </div>
+        
+        <div className="space-y-1">
           {data.funnel.map((step, idx) => {
             const maxUsers = data.funnel[0]?.users || 1;
             const percentage = maxUsers > 0 ? (step.users / maxUsers) * 100 : 0;
@@ -316,49 +357,154 @@ export default function SalesTab({ businessId, startDate, endDate }: SalesTabPro
               ? getChangePercent(step.users, comparisonStep.users)
               : null;
             
+            // Calculate step-to-step conversion rate
+            const prevStepUsers = idx > 0 ? data.funnel[idx - 1]?.users : step.users;
+            const stepConversion = prevStepUsers > 0 ? ((step.users / prevStepUsers) * 100).toFixed(0) : 100;
+            
+            // Determine if this step has real WooCommerce data
+            const isRealData = step.step === 'רכישה' && data.realData;
+            
             return (
               <div key={step.step}>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-full ${colors[idx]} flex items-center justify-center text-white font-bold text-sm`}>
-                      {idx + 1}
-                    </div>
-                    <span className="font-medium text-gray-800">{step.step}</span>
+                <div className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                  {/* Step Number */}
+                  <div className={`w-10 h-10 rounded-full ${colors[idx]} flex items-center justify-center text-white font-bold text-sm shrink-0`}>
+                    {idx + 1}
                   </div>
-                  <div className="text-left flex items-center gap-2">
-                    <span className="font-bold text-gray-900">{step.users.toLocaleString()}</span>
+                  
+                  {/* Step Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-gray-800">{step.step}</span>
+                      {isRealData && (
+                        <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">WooCommerce</span>
+                      )}
+                    </div>
+                    
+                    {/* Progress Bar */}
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden mt-1">
+                      <div 
+                        className={`h-full ${colors[idx]} transition-all duration-700`}
+                        style={{ width: `${percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Stats */}
+                  <div className="text-left flex items-center gap-3 shrink-0">
+                    {/* Users Count */}
+                    <div className="text-right">
+                      <div className="font-bold text-gray-900 text-lg">{step.users.toLocaleString()}</div>
+                      <div className="text-xs text-gray-400">{percentage.toFixed(0)}% מהצפיות</div>
+                    </div>
+                    
+                    {/* Step Conversion */}
+                    {idx > 0 && (
+                      <div className="text-right border-r border-gray-200 pr-3">
+                        {step.dropoff > 0 ? (
+                          <div className="text-red-500 text-sm font-medium">
+                            ↓ {step.dropoff}%
+                            <div className="text-[10px] text-red-400">נטשו</div>
+                          </div>
+                        ) : (
+                          <div className="text-green-500 text-sm font-medium">
+                            {stepConversion}%
+                            <div className="text-[10px] text-green-400">המשיכו</div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Comparison */}
                     {changePercent !== null && (
-                      <span className={`text-xs flex items-center gap-0.5 ${changePercent >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                      <div className={`text-xs flex items-center gap-0.5 ${changePercent >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                         {changePercent >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                         {Math.abs(changePercent).toFixed(1)}%
-                      </span>
-                    )}
-                    {step.dropoff > 0 && (
-                      <span className="text-red-500 text-sm">
-                        ({step.dropoff}% נטישה)
-                      </span>
+                      </div>
                     )}
                   </div>
                 </div>
-                <div className="h-8 bg-gray-100 rounded-lg overflow-hidden relative">
-                  <div 
-                    className={`h-full ${colors[idx]} transition-all duration-700 flex items-center justify-end px-3`}
-                    style={{ width: `${percentage}%` }}
-                  >
-                    {percentage > 15 && (
-                      <span className="text-white text-sm font-medium">{percentage.toFixed(0)}%</span>
-                    )}
-                  </div>
-                </div>
+                
+                {/* Arrow between steps */}
                 {idx < data.funnel.length - 1 && (
-                  <div className="flex justify-center py-2">
-                    <ArrowDown className="w-5 h-5 text-gray-300" />
+                  <div className="flex justify-center py-0.5">
+                    <ArrowDown className="w-4 h-4 text-gray-300" />
                   </div>
                 )}
               </div>
             );
           })}
         </div>
+        
+        {/* Funnel Insights */}
+        {data.funnel.length > 0 && (
+          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+            <h5 className="font-medium text-blue-800 mb-2 text-sm">💡 תובנות</h5>
+            <ul className="text-sm text-blue-700 space-y-1">
+              {(() => {
+                const viewToCart = data.funnel[0]?.users > 0 
+                  ? ((data.funnel[1]?.users || 0) / data.funnel[0].users * 100) 
+                  : 0;
+                const cartToCheckout = (data.funnel[1]?.users || 0) > 0 
+                  ? ((data.funnel[2]?.users || 0) / data.funnel[1].users * 100) 
+                  : 0;
+                const checkoutToPurchase = (data.funnel[2]?.users || 0) > 0 
+                  ? ((data.funnel[3]?.users || 0) / data.funnel[2].users * 100) 
+                  : 0;
+                
+                const insights = [];
+                
+                if (viewToCart < 3) {
+                  insights.push('• רק ' + viewToCart.toFixed(1) + '% מהצופים מוסיפים לעגלה - שקול לשפר את דפי המוצר');
+                }
+                if (cartToCheckout < 40) {
+                  insights.push('• ' + (100 - cartToCheckout).toFixed(0) + '% נוטשים בעגלה - שקול להוסיף תזכורות או הנחות');
+                }
+                if (checkoutToPurchase < 50 && checkoutToPurchase > 0) {
+                  insights.push('• ' + (100 - checkoutToPurchase).toFixed(0) + '% נוטשים בתשלום - בדוק את תהליך התשלום');
+                }
+                if (checkoutToPurchase >= 100) {
+                  insights.push('• יש רכישות שלא עברו דרך checkout רגיל (כמו העברה בנקאית)');
+                }
+                if (insights.length === 0) {
+                  insights.push('• המשפך נראה תקין! המשך לעקוב אחרי השינויים');
+                }
+                
+                return insights.map((insight, i) => <li key={i}>{insight}</li>);
+              })()}
+            </ul>
+          </div>
+        )}
+        
+        {/* Data Source Explanation */}
+        {data.realData && data.realData.discrepancy !== 0 && (
+          <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <h5 className="font-medium text-amber-800 mb-2 text-sm flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" />
+              הבדל בין מקורות הנתונים
+            </h5>
+            <div className="text-sm text-amber-700 space-y-2">
+              <div className="flex justify-between items-center p-2 bg-white/50 rounded">
+                <span>Google Analytics דיווח:</span>
+                <span className="font-bold">{data.realData.ga4Purchases} רכישות</span>
+              </div>
+              <div className="flex justify-between items-center p-2 bg-white/50 rounded">
+                <span>WooCommerce בפועל:</span>
+                <span className="font-bold text-green-700">{data.realData.purchases} רכישות</span>
+              </div>
+              <div className="flex justify-between items-center p-2 bg-amber-100 rounded">
+                <span>פער:</span>
+                <span className="font-bold">{Math.abs(data.realData.discrepancy)} רכישות ({data.realData.discrepancy > 0 ? 'חסרות' : 'עודף'} ב-GA4)</span>
+              </div>
+              <p className="text-xs text-amber-600 mt-2 pt-2 border-t border-amber-200">
+                💡 <strong>למה יש פער?</strong> Google Analytics לא קולט ~20-30% מהמבקרים בגלל:
+                חוסמי פרסומות (AdBlocker), גלישה פרטית (Incognito), או דפדפנים עם הגנת פרטיות (Brave, Firefox).
+                <br />
+                <strong>המספר מ-WooCommerce הוא המדויק!</strong>
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* רכישות לפי מקור */}

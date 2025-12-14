@@ -9,7 +9,8 @@ import {
   Menu,
   X,
   Truck,
-  BarChart3
+  BarChart3,
+  Bot
 } from 'lucide-react';
 import { useState, ReactNode } from 'react';
 
@@ -17,6 +18,7 @@ const navigation = [
   { name: 'דשבורד', href: '/', icon: LayoutDashboard },
   { name: 'הזמנות לספקים', href: '/supplier-orders', icon: Truck },
   { name: 'Google Ads', href: '/google-ads', icon: BarChart3 },
+  { name: 'עוזר AI', href: '/ai-assistant', icon: Bot, badge: 'PILOT' },
   { name: 'הגדרות', href: '/settings', icon: Settings },
 ];
 
@@ -84,6 +86,11 @@ export default function Sidebar({ children }: SidebarProps) {
                 >
                   <item.icon className="w-5 h-5" />
                   <span>{item.name}</span>
+                  {'badge' in item && item.badge && (
+                    <span className="px-1.5 py-0.5 bg-orange-100 text-orange-600 text-[10px] rounded-full font-medium">
+                      {item.badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}

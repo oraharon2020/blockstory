@@ -55,18 +55,35 @@ export async function getTokensFromCode(code: string): Promise<GmailTokens> {
  * Refresh access token
  */
 export async function refreshAccessToken(refreshToken: string): Promise<GmailTokens> {
+  console.log('🔄 Refreshing Gmail access token...');
+  
   const oauth2Client = createOAuth2Client();
   oauth2Client.setCredentials({ refresh_token: refreshToken });
   
-  const { credentials } = await oauth2Client.refreshAccessToken();
-  
-  return {
-    access_token: credentials.access_token || '',
-    refresh_token: credentials.refresh_token || refreshToken, // Keep old if not returned
-    expiry_date: credentials.expiry_date || 0,
-    token_type: credentials.token_type || 'Bearer',
-    scope: credentials.scope || '',
-  };
+  try {
+    const { credentials } = await oauth2Client.refreshAccessToken();
+    
+    console.log('✅ Gmail token refreshed, new expiry:', credentials.expiry_date 
+      ? new Date(credentials.expiry_date).toISOString() 
+      : 'unknown');
+    
+    return {
+      access_token: credentials.access_token || '',
+      refresh_token: credentials.refresh_token || refreshToken, // Keep old if not returned
+      expiry_date: credentials.expiry_date || Date.now() + 3600 * 1000, // Default 1 hour if not provided
+      token_type: credentials.token_type || 'Bearer',
+      scope: credentials.scope || '',
+    };
+  } catch (error: any) {
+    console.error('❌ Gmail token refresh error:', error.message);
+    
+    // Check for specific errors
+    if (error.message?.includes('invalid_grant')) {
+      throw new Error('Refresh token revoked or expired. Please reconnect Gmail.');
+    }
+    
+    throw error;
+  }
 }
 
 /**

@@ -6,7 +6,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
-import { supabase } from '@/lib/supabase';
+import { getValidCredentials } from '@/lib/google-analytics';
+
+// Use Google Ads OAuth credentials (same as used for GA connection)
+const CLIENT_ID = process.env.GOOGLE_ADS_CLIENT_ID || process.env.GOOGLE_GMAIL_CLIENT_ID;
+const CLIENT_SECRET = process.env.GOOGLE_ADS_CLIENT_SECRET || process.env.GOOGLE_GMAIL_CLIENT_SECRET;
 
 export const dynamic = 'force-dynamic';
 
@@ -39,45 +43,27 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'businessId is required' }, { status: 400 });
     }
 
-    // Get GA credentials
-    const { data: integration, error: integrationError } = await supabase
-      .from('integrations')
-      .select('credentials, settings')
-      .eq('business_id', businessId)
-      .eq('type', 'google_analytics')
-      .eq('is_active', true)
-      .single();
-
-    if (integrationError || !integration) {
-      return NextResponse.json({ 
-        error: 'Google Analytics not connected',
-        needsAuth: true 
-      }, { status: 401 });
+    // Get GA credentials with auto-refresh
+    const result = await getValidCredentials(businessId);
+    
+    if ('error' in result) {
+      const status = result.needsAuth ? 401 : 400;
+      return NextResponse.json(result, { status });
     }
 
-    if (!integration.settings?.property_id) {
-      return NextResponse.json({ 
-        error: 'No GA4 property selected',
-        needsPropertySelection: true 
-      }, { status: 400 });
-    }
+    const { credentials, propertyId } = result;
 
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET
-    );
+    const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET);
     
     oauth2Client.setCredentials({
-      access_token: integration.credentials.access_token,
-      refresh_token: integration.credentials.refresh_token,
+      access_token: credentials.access_token,
+      refresh_token: credentials.refresh_token,
     });
 
     const analyticsData = google.analyticsdata({
       version: 'v1beta',
       auth: oauth2Client,
     });
-
-    const propertyId = integration.settings.property_id;
 
     // Countries data
     const countriesResponse = await analyticsData.properties.runReport({
