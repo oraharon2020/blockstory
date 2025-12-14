@@ -20,10 +20,18 @@ export async function fetchOrders(
 ) {
   try {
     const statuses = validStatuses || DEFAULT_VALID_STATUSES;
+    
+    // Calculate the day before dateFrom for 'after' parameter (exclusive)
+    const fromDate = new Date(dateFrom);
+    const dayBefore = new Date(fromDate);
+    dayBefore.setDate(dayBefore.getDate() - 1);
+    const dayBeforeStr = dayBefore.toISOString().split('T')[0];
+    
     // Use dates_are_gmt=false to use the store's timezone
+    // after is EXCLUSIVE, before is EXCLUSIVE
     const response = await client.get('orders', {
-      after: `${dateFrom}T00:00:00`,
-      before: `${dateTo}T23:59:59`,
+      after: `${dayBeforeStr}T23:59:59`,  // After end of previous day = start of dateFrom
+      before: `${dateTo}T23:59:59`,        // Before end of dateTo
       per_page: 100,
       status: statuses,
       dates_are_gmt: false,
@@ -45,10 +53,18 @@ export async function fetchOrdersByDate(
     console.log(`🔍 WooCommerce query: date=${date}, statuses count=${statuses.length}`);
     console.log(`   First 5 statuses: ${statuses.slice(0, 5).join(', ')}`);
     
+    // Calculate the day before for 'after' parameter (exclusive)
+    const targetDate = new Date(date);
+    const dayBefore = new Date(targetDate);
+    dayBefore.setDate(dayBefore.getDate() - 1);
+    const dayBeforeStr = dayBefore.toISOString().split('T')[0];
+    
     // Use dates_are_gmt=false to use the store's timezone (Jerusalem)
+    // after is EXCLUSIVE (orders created AFTER this datetime)
+    // before is EXCLUSIVE (orders created BEFORE this datetime)
     const response = await client.get('orders', {
-      after: `${date}T00:00:00`,
-      before: `${date}T23:59:59`,
+      after: `${dayBeforeStr}T23:59:59`,  // After end of previous day = start of target day
+      before: `${date}T23:59:59`,          // Before end of target day
       per_page: 100,
       status: statuses,
       dates_are_gmt: false,
