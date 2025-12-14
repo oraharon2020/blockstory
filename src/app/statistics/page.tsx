@@ -15,7 +15,10 @@ import {
   AlertCircle,
   Store,
   Users,
-  Package
+  Package,
+  Globe,
+  Clock,
+  Search
 } from 'lucide-react';
 
 // Import all statistics components
@@ -32,9 +35,12 @@ import {
   SalesTab,
   ProductsTab,
 } from '@/components/statistics';
+import GeographyTab from '@/components/statistics/GeographyTab';
+import TimeAnalysisTab from '@/components/statistics/TimeAnalysisTab';
+import SearchTermsTab from '@/components/statistics/SearchTermsTab';
 
 // Tab types
-type TabType = 'summary' | 'traffic' | 'sales' | 'channels' | 'products';
+type TabType = 'summary' | 'traffic' | 'sales' | 'channels' | 'products' | 'geography' | 'time' | 'search';
 
 // Helper: Get max date (today or earlier) - GA can't query future dates
 const getMaxEndDate = (endDate: string): string => {
@@ -173,6 +179,9 @@ export default function StatisticsPage() {
             { id: 'sales' as TabType, label: 'מכירות', icon: ShoppingCart },
             { id: 'channels' as TabType, label: 'ערוצים', icon: Target },
             { id: 'products' as TabType, label: 'מוצרים', icon: Package },
+            { id: 'geography' as TabType, label: 'גיאוגרפיה', icon: Globe },
+            { id: 'time' as TabType, label: 'זמנים', icon: Clock },
+            { id: 'search' as TabType, label: 'חיפושים', icon: Search },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -365,6 +374,33 @@ export default function StatisticsPage() {
       {/* Products Tab */}
       {activeTab === 'products' && data?.periodStart && data?.periodEnd && (
         <ProductsTab
+          businessId={currentBusiness.id}
+          startDate={data.periodStart}
+          endDate={getMaxEndDate(data.periodEnd)}
+        />
+      )}
+
+      {/* Geography Tab */}
+      {activeTab === 'geography' && data?.periodStart && data?.periodEnd && (
+        <GeographyTab
+          businessId={currentBusiness.id}
+          startDate={data.periodStart}
+          endDate={getMaxEndDate(data.periodEnd)}
+        />
+      )}
+
+      {/* Time Analysis Tab */}
+      {activeTab === 'time' && data?.periodStart && data?.periodEnd && (
+        <TimeAnalysisTab
+          businessId={currentBusiness.id}
+          startDate={data.periodStart}
+          endDate={getMaxEndDate(data.periodEnd)}
+        />
+      )}
+
+      {/* Search Terms Tab */}
+      {activeTab === 'search' && data?.periodStart && data?.periodEnd && (
+        <SearchTermsTab
           businessId={currentBusiness.id}
           startDate={data.periodStart}
           endDate={getMaxEndDate(data.periodEnd)}
