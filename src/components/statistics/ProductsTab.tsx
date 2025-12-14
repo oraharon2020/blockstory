@@ -12,12 +12,14 @@ import {
   Eye, 
   ShoppingBag,
   TrendingDown,
+  TrendingUp,
   Loader2,
   AlertCircle,
   RefreshCw,
   AlertTriangle,
   Star
 } from 'lucide-react';
+import ComparisonSelector from './ComparisonSelector';
 
 interface ProductsData {
   topViewed: { name: string; views: number; addToCartRate: number }[];
@@ -33,8 +35,47 @@ interface ProductsTabProps {
 
 export default function ProductsTab({ businessId, startDate, endDate }: ProductsTabProps) {
   const [data, setData] = useState<ProductsData | null>(null);
+  const [comparisonData, setComparisonData] = useState<ProductsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Comparison state
+  const [comparisonEnabled, setComparisonEnabled] = useState(false);
+  const [comparisonType, setComparisonType] = useState<'previous' | 'year' | 'custom'>('previous');
+  const [customComparisonStart, setCustomComparisonStart] = useState('');
+  const [customComparisonEnd, setCustomComparisonEnd] = useState('');
+
+  // Calculate comparison dates based on type
+  const getComparisonDates = () => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (comparisonType === 'previous') {
+      const compEnd = new Date(start);
+      compEnd.setDate(compEnd.getDate() - 1);
+      const compStart = new Date(compEnd);
+      compStart.setDate(compStart.getDate() - daysDiff);
+      return {
+        startDate: compStart.toISOString().split('T')[0],
+        endDate: compEnd.toISOString().split('T')[0]
+      };
+    } else if (comparisonType === 'year') {
+      const compStart = new Date(start);
+      compStart.setFullYear(compStart.getFullYear() - 1);
+      const compEnd = new Date(end);
+      compEnd.setFullYear(compEnd.getFullYear() - 1);
+      return {
+        startDate: compStart.toISOString().split('T')[0],
+        endDate: compEnd.toISOString().split('T')[0]
+      };
+    } else {
+      return {
+        startDate: customComparisonStart,
+        endDate: customComparisonEnd
+      };
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -55,6 +96,27 @@ export default function ProductsTab({ businessId, startDate, endDate }: Products
       }
       
       setData(json);
+
+      // Fetch comparison data if enabled
+      if (comparisonEnabled) {
+        const compDates = getComparisonDates();
+        if (compDates.startDate && compDates.endDate) {
+          const compParams = new URLSearchParams({
+            businessId,
+            startDate: compDates.startDate,
+            endDate: compDates.endDate,
+          });
+          
+          const compRes = await fetch(`/api/analytics/products?${compParams}`);
+          const compJson = await compRes.json();
+          
+          if (compRes.ok) {
+            setComparisonData(compJson);
+          }
+        }
+      } else {
+        setComparisonData(null);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -66,7 +128,12 @@ export default function ProductsTab({ businessId, startDate, endDate }: Products
     if (businessId && startDate && endDate) {
       fetchData();
     }
-  }, [businessId, startDate, endDate]);
+  }, [businessId, startDate, endDate, comparisonEnabled, comparisonType, customComparisonStart, customComparisonEnd]);
+
+  const getChangePercent = (current: number, previous: number): number | null => {
+    if (previous === 0) return current > 0 ? 100 : null;
+    return ((current - previous) / previous) * 100;
+  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('he-IL', {
@@ -105,18 +172,33 @@ export default function ProductsTab({ businessId, startDate, endDate }: Products
   return (
     <div className="space-y-6">
       {/* כותרת */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-2">
           <Package className="w-5 h-5 text-purple-600" />
           <h3 className="text-lg font-semibold text-gray-900">ניתוח מוצרים</h3>
         </div>
-        <button
-          onClick={fetchData}
-          disabled={loading}
-          className="p-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="flex items-center gap-3">
+          <ComparisonSelector
+            enabled={comparisonEnabled}
+            onToggle={setComparisonEnabled}
+            comparisonType={comparisonType}
+            onTypeChange={setComparisonType}
+            customStartDate={customComparisonStart}
+            customEndDate={customComparisonEnd}
+            onCustomDateChange={(start, end) => {
+              setCustomComparisonStart(start);
+              setCustomComparisonEnd(end);
+            }}
+            currentPeriodLabel={`${startDate} - ${endDate}`}
+          />
+          <button
+            onClick={fetchData}
+            disabled={loading}
+            className="p-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
 
       {/* 2 טבלאות בשורה */}
@@ -134,26 +216,46 @@ export default function ProductsTab({ businessId, startDate, endDate }: Products
                   <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">#</th>
                   <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">מוצר</th>
                   <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">צפיות</th>
+                  {comparisonEnabled && <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">שינוי</th>}
                   <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">% הוספה לעגלה</th>
                 </tr>
               </thead>
               <tbody>
-                {data.topViewed.map((product, idx) => (
-                  <tr key={product.name} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="py-2 px-3 text-gray-400 text-sm">{idx + 1}</td>
-                    <td className="py-2 px-3">
-                      <span className="text-gray-800 text-sm font-medium truncate block max-w-[150px]" title={product.name}>
-                        {product.name.length > 25 ? product.name.substring(0, 25) + '...' : product.name}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3 text-gray-900 text-sm font-semibold">{product.views.toLocaleString()}</td>
-                    <td className="py-2 px-3">
-                      <span className={`text-sm font-medium ${product.addToCartRate >= 10 ? 'text-green-600' : product.addToCartRate >= 5 ? 'text-yellow-600' : 'text-red-600'}`}>
-                        {product.addToCartRate}%
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {data.topViewed.map((product, idx) => {
+                  const compProduct = comparisonData?.topViewed.find(p => p.name === product.name);
+                  const changePercent = comparisonEnabled && compProduct
+                    ? getChangePercent(product.views, compProduct.views)
+                    : null;
+                  
+                  return (
+                    <tr key={product.name} className="border-b border-gray-50 hover:bg-gray-50">
+                      <td className="py-2 px-3 text-gray-400 text-sm">{idx + 1}</td>
+                      <td className="py-2 px-3">
+                        <span className="text-gray-800 text-sm font-medium truncate block max-w-[150px]" title={product.name}>
+                          {product.name.length > 25 ? product.name.substring(0, 25) + '...' : product.name}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 text-gray-900 text-sm font-semibold">{product.views.toLocaleString()}</td>
+                      {comparisonEnabled && (
+                        <td className="py-2 px-3">
+                          {changePercent !== null ? (
+                            <span className={`text-xs flex items-center gap-0.5 ${changePercent >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                              {changePercent >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                              {Math.abs(changePercent).toFixed(1)}%
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-xs">—</span>
+                          )}
+                        </td>
+                      )}
+                      <td className="py-2 px-3">
+                        <span className={`text-sm font-medium ${product.addToCartRate >= 10 ? 'text-green-600' : product.addToCartRate >= 5 ? 'text-yellow-600' : 'text-red-600'}`}>
+                          {product.addToCartRate}%
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -172,22 +274,42 @@ export default function ProductsTab({ businessId, startDate, endDate }: Products
                   <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">#</th>
                   <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">מוצר</th>
                   <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">נמכרו</th>
+                  {comparisonEnabled && <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">שינוי</th>}
                   <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">הכנסות</th>
                 </tr>
               </thead>
               <tbody>
-                {data.topSelling.map((product, idx) => (
-                  <tr key={product.name} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="py-2 px-3 text-gray-400 text-sm">{idx + 1}</td>
-                    <td className="py-2 px-3">
-                      <span className="text-gray-800 text-sm font-medium truncate block max-w-[150px]" title={product.name}>
-                        {product.name.length > 25 ? product.name.substring(0, 25) + '...' : product.name}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3 text-gray-900 text-sm font-semibold">{product.quantity}</td>
-                    <td className="py-2 px-3 text-green-600 text-sm font-semibold">{formatCurrency(product.revenue)}</td>
-                  </tr>
-                ))}
+                {data.topSelling.map((product, idx) => {
+                  const compProduct = comparisonData?.topSelling.find(p => p.name === product.name);
+                  const changePercent = comparisonEnabled && compProduct
+                    ? getChangePercent(product.quantity, compProduct.quantity)
+                    : null;
+                  
+                  return (
+                    <tr key={product.name} className="border-b border-gray-50 hover:bg-gray-50">
+                      <td className="py-2 px-3 text-gray-400 text-sm">{idx + 1}</td>
+                      <td className="py-2 px-3">
+                        <span className="text-gray-800 text-sm font-medium truncate block max-w-[150px]" title={product.name}>
+                          {product.name.length > 25 ? product.name.substring(0, 25) + '...' : product.name}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 text-gray-900 text-sm font-semibold">{product.quantity}</td>
+                      {comparisonEnabled && (
+                        <td className="py-2 px-3">
+                          {changePercent !== null ? (
+                            <span className={`text-xs flex items-center gap-0.5 ${changePercent >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                              {changePercent >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                              {Math.abs(changePercent).toFixed(1)}%
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-xs">—</span>
+                          )}
+                        </td>
+                      )}
+                      <td className="py-2 px-3 text-green-600 text-sm font-semibold">{formatCurrency(product.revenue)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

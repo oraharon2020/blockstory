@@ -14,6 +14,8 @@ export { default as OrdersChart } from './OrdersChart';
 export { default as HighlightsCard } from './HighlightsCard';
 export { default as PeriodSelector } from './PeriodSelector';
 export { default as ChannelPerformanceCard } from './ChannelPerformanceCard';
+export { default as ComparisonSelector } from './ComparisonSelector';
+export { default as ComparisonMetric } from './ComparisonMetric';
 
 // New Tab Components
 export { default as TrafficTab } from './TrafficTab';
