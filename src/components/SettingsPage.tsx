@@ -5,6 +5,7 @@ import { Settings, Save, Loader2, Eye, EyeOff, TestTube, Check, X, Store, Calcul
 import ProductCostsManager from './ProductCostsManager';
 import OrderStatusSelector from './OrderStatusSelector';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 interface SettingsFormData {
   wooUrl: string;
@@ -988,7 +989,7 @@ function IntegrationsTab({ businessId }: { businessId?: string }) {
   };
 
   const handleDisconnect = async (service: string) => {
-    if (!currentBusiness?.id) return;
+    if (!businessId) return;
     
     try {
       console.log(`Disconnecting ${service}`);
@@ -998,7 +999,7 @@ function IntegrationsTab({ businessId }: { businessId?: string }) {
         const { error } = await supabase
           .from('integrations')
           .delete()
-          .eq('business_id', currentBusiness.id)
+          .eq('business_id', businessId)
           .eq('type', 'google_analytics');
         
         if (error) throw error;
@@ -1011,7 +1012,7 @@ function IntegrationsTab({ businessId }: { businessId?: string }) {
         const { error } = await supabase
           .from('integrations')
           .delete()
-          .eq('business_id', currentBusiness.id)
+          .eq('business_id', businessId)
           .eq('type', 'gmail');
         
         if (error) throw error;
