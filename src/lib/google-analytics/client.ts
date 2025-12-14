@@ -657,7 +657,7 @@ export async function getProductsAnalytics(
         dimensions: [{ name: 'itemName' }],
         metrics: [{ name: 'itemsViewed' }, { name: 'itemsAddedToCart' }],
         orderBys: [{ metric: { metricName: 'itemsViewed' }, desc: true }],
-        limit: '10',
+        limit: '500',
       },
     });
 
@@ -679,7 +679,7 @@ export async function getProductsAnalytics(
         dimensions: [{ name: 'itemName' }],
         metrics: [{ name: 'itemsPurchased' }, { name: 'itemRevenue' }],
         orderBys: [{ metric: { metricName: 'itemRevenue' }, desc: true }],
-        limit: '10',
+        limit: '500',
       },
     });
 
@@ -697,7 +697,7 @@ export async function getProductsAnalytics(
         dimensions: [{ name: 'itemName' }],
         metrics: [{ name: 'itemsViewed' }, { name: 'itemsPurchased' }],
         orderBys: [{ metric: { metricName: 'itemsViewed' }, desc: true }],
-        limit: '20',
+        limit: '500',
       },
     });
 
@@ -714,7 +714,7 @@ export async function getProductsAnalytics(
       })
       .filter(p => p.views >= 10 && p.conversionRate < 5) // רק מוצרים עם מספיק צפיות והמרה נמוכה
       .sort((a, b) => a.conversionRate - b.conversionRate)
-      .slice(0, 10);
+      .slice(0, 50);
 
     return {
       topViewed,

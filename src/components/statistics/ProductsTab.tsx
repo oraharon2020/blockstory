@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Package, 
   Eye, 
@@ -17,7 +17,11 @@ import {
   AlertCircle,
   RefreshCw,
   AlertTriangle,
-  Star
+  Star,
+  Search,
+  ArrowUpDown,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import ComparisonSelector from './ComparisonSelector';
 
@@ -44,6 +48,16 @@ export default function ProductsTab({ businessId, startDate, endDate }: Products
   const [comparisonType, setComparisonType] = useState<'previous' | 'year' | 'custom'>('previous');
   const [customComparisonStart, setCustomComparisonStart] = useState('');
   const [customComparisonEnd, setCustomComparisonEnd] = useState('');
+
+  // Search and display state
+  const [searchViewed, setSearchViewed] = useState('');
+  const [searchSelling, setSearchSelling] = useState('');
+  const [showAllViewed, setShowAllViewed] = useState(false);
+  const [showAllSelling, setShowAllSelling] = useState(false);
+  const [sortViewedBy, setSortViewedBy] = useState<'views' | 'addToCartRate'>('views');
+  const [sortViewedDesc, setSortViewedDesc] = useState(true);
+  const [sortSellingBy, setSortSellingBy] = useState<'quantity' | 'revenue'>('revenue');
+  const [sortSellingDesc, setSortSellingDesc] = useState(true);
 
   // Calculate comparison dates based on type
   const getComparisonDates = () => {
@@ -169,6 +183,31 @@ export default function ProductsTab({ businessId, startDate, endDate }: Products
 
   if (!data) return null;
 
+  // Calculate totals
+  const totalViews = data.topViewed.reduce((sum, p) => sum + p.views, 0);
+  const totalSold = data.topSelling.reduce((sum, p) => sum + p.quantity, 0);
+  const totalRevenue = data.topSelling.reduce((sum, p) => sum + p.revenue, 0);
+
+  // Filter and sort viewed products
+  const filteredViewed = data.topViewed
+    .filter(p => p.name.toLowerCase().includes(searchViewed.toLowerCase()))
+    .sort((a, b) => {
+      const aVal = sortViewedBy === 'views' ? a.views : a.addToCartRate;
+      const bVal = sortViewedBy === 'views' ? b.views : b.addToCartRate;
+      return sortViewedDesc ? bVal - aVal : aVal - bVal;
+    });
+  const displayedViewed = showAllViewed ? filteredViewed : filteredViewed.slice(0, 10);
+
+  // Filter and sort selling products
+  const filteredSelling = data.topSelling
+    .filter(p => p.name.toLowerCase().includes(searchSelling.toLowerCase()))
+    .sort((a, b) => {
+      const aVal = sortSellingBy === 'quantity' ? a.quantity : a.revenue;
+      const bVal = sortSellingBy === 'quantity' ? b.quantity : b.revenue;
+      return sortSellingDesc ? bVal - aVal : aVal - bVal;
+    });
+  const displayedSelling = showAllSelling ? filteredSelling : filteredSelling.slice(0, 10);
+
   return (
     <div className="space-y-6">
       {/* כותרת */}
@@ -201,27 +240,78 @@ export default function ProductsTab({ businessId, startDate, endDate }: Products
         </div>
       </div>
 
+      {/* סיכום כללי */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200">
+          <div className="text-sm text-blue-700 mb-1">סה"כ צפיות במוצרים</div>
+          <div className="text-2xl font-bold text-blue-900">{totalViews.toLocaleString()}</div>
+          <div className="text-xs text-blue-600">{data.topViewed.length} מוצרים שונים</div>
+        </div>
+        <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-4 border border-yellow-200">
+          <div className="text-sm text-yellow-700 mb-1">סה"כ יחידות שנמכרו</div>
+          <div className="text-2xl font-bold text-yellow-900">{totalSold.toLocaleString()}</div>
+          <div className="text-xs text-yellow-600">{data.topSelling.length} מוצרים שונים</div>
+        </div>
+        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
+          <div className="text-sm text-green-700 mb-1">סה"כ הכנסות ממוצרים</div>
+          <div className="text-2xl font-bold text-green-900">{formatCurrency(totalRevenue)}</div>
+          <div className="text-xs text-green-600">לפי GA4</div>
+        </div>
+      </div>
+
       {/* 2 טבלאות בשורה */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* מוצרים הכי נצפים */}
         <div className="bg-white rounded-xl shadow-sm border p-6">
-          <h4 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <Eye className="w-4 h-4 text-blue-500" />
-            מוצרים הכי נצפים
-          </h4>
-          <div className="overflow-x-auto">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="font-semibold text-gray-800 flex items-center gap-2">
+              <Eye className="w-4 h-4 text-blue-500" />
+              מוצרים הכי נצפים
+              <span className="text-xs font-normal text-gray-500">({filteredViewed.length} מוצרים)</span>
+            </h4>
+          </div>
+          
+          {/* חיפוש */}
+          <div className="relative mb-3">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="חפש מוצר..."
+              value={searchViewed}
+              onChange={(e) => setSearchViewed(e.target.value)}
+              className="w-full pr-10 pl-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
             <table className="w-full">
-              <thead>
+              <thead className="sticky top-0 bg-white">
                 <tr className="border-b border-gray-100">
                   <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">#</th>
                   <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">מוצר</th>
-                  <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">צפיות</th>
+                  <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">
+                    <button 
+                      onClick={() => { setSortViewedBy('views'); setSortViewedDesc(!sortViewedDesc); }}
+                      className="flex items-center gap-1 hover:text-blue-600"
+                    >
+                      צפיות
+                      {sortViewedBy === 'views' && (sortViewedDesc ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />)}
+                    </button>
+                  </th>
                   {comparisonEnabled && <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">שינוי</th>}
-                  <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">% הוספה לעגלה</th>
+                  <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">
+                    <button 
+                      onClick={() => { setSortViewedBy('addToCartRate'); setSortViewedDesc(!sortViewedDesc); }}
+                      className="flex items-center gap-1 hover:text-blue-600"
+                    >
+                      % לעגלה
+                      {sortViewedBy === 'addToCartRate' && (sortViewedDesc ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />)}
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {data.topViewed.map((product, idx) => {
+                {displayedViewed.map((product, idx) => {
                   const compProduct = comparisonData?.topViewed.find(p => p.name === product.name);
                   const changePercent = comparisonEnabled && compProduct
                     ? getChangePercent(product.views, compProduct.views)
@@ -259,27 +349,69 @@ export default function ProductsTab({ businessId, startDate, endDate }: Products
               </tbody>
             </table>
           </div>
+          
+          {/* כפתור הצג עוד */}
+          {filteredViewed.length > 10 && (
+            <button
+              onClick={() => setShowAllViewed(!showAllViewed)}
+              className="w-full mt-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            >
+              {showAllViewed ? `הצג פחות` : `הצג את כל ${filteredViewed.length} המוצרים`}
+            </button>
+          )}
         </div>
 
         {/* מוצרים הכי נמכרים */}
         <div className="bg-white rounded-xl shadow-sm border p-6">
-          <h4 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <Star className="w-4 h-4 text-yellow-500" />
-            מוצרים הכי נמכרים
-          </h4>
-          <div className="overflow-x-auto">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="font-semibold text-gray-800 flex items-center gap-2">
+              <Star className="w-4 h-4 text-yellow-500" />
+              מוצרים הכי נמכרים
+              <span className="text-xs font-normal text-gray-500">({filteredSelling.length} מוצרים)</span>
+            </h4>
+          </div>
+          
+          {/* חיפוש */}
+          <div className="relative mb-3">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="חפש מוצר..."
+              value={searchSelling}
+              onChange={(e) => setSearchSelling(e.target.value)}
+              className="w-full pr-10 pl-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
+            />
+          </div>
+
+          <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
             <table className="w-full">
-              <thead>
+              <thead className="sticky top-0 bg-white">
                 <tr className="border-b border-gray-100">
                   <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">#</th>
                   <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">מוצר</th>
-                  <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">נמכרו</th>
+                  <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">
+                    <button 
+                      onClick={() => { setSortSellingBy('quantity'); setSortSellingDesc(!sortSellingDesc); }}
+                      className="flex items-center gap-1 hover:text-yellow-600"
+                    >
+                      נמכרו
+                      {sortSellingBy === 'quantity' && (sortSellingDesc ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />)}
+                    </button>
+                  </th>
                   {comparisonEnabled && <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">שינוי</th>}
-                  <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">הכנסות</th>
+                  <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">
+                    <button 
+                      onClick={() => { setSortSellingBy('revenue'); setSortSellingDesc(!sortSellingDesc); }}
+                      className="flex items-center gap-1 hover:text-yellow-600"
+                    >
+                      הכנסות
+                      {sortSellingBy === 'revenue' && (sortSellingDesc ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />)}
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {data.topSelling.map((product, idx) => {
+                {displayedSelling.map((product, idx) => {
                   const compProduct = comparisonData?.topSelling.find(p => p.name === product.name);
                   const changePercent = comparisonEnabled && compProduct
                     ? getChangePercent(product.quantity, compProduct.quantity)
@@ -313,6 +445,16 @@ export default function ProductsTab({ businessId, startDate, endDate }: Products
               </tbody>
             </table>
           </div>
+          
+          {/* כפתור הצג עוד */}
+          {filteredSelling.length > 10 && (
+            <button
+              onClick={() => setShowAllSelling(!showAllSelling)}
+              className="w-full mt-3 py-2 text-sm text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors"
+            >
+              {showAllSelling ? `הצג פחות` : `הצג את כל ${filteredSelling.length} המוצרים`}
+            </button>
+          )}
         </div>
       </div>
 
