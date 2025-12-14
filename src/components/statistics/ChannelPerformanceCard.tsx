@@ -63,11 +63,20 @@ export default function ChannelPerformanceCard({ businessId, startDate, endDate,
       const res = await fetch(`/api/analytics?${params}`);
       const data = await res.json();
       
-      if (data.needsAuth) {
+      // Handle various auth/connection states
+      if (data.needsAuth || data.needsPropertySelection || data.error?.includes('not connected')) {
         setNeedsConnection(true);
+        setChannels([]);
+      } else if (data.error) {
+        // Other errors (not connection related)
+        setError(data.error);
         setChannels([]);
       } else if (data.channels) {
         setChannels(data.channels);
+        setNeedsConnection(false);
+      } else {
+        // No channels returned but no error - empty data
+        setChannels([]);
         setNeedsConnection(false);
       }
     } catch (err: any) {

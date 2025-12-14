@@ -64,13 +64,20 @@ export async function GET(request: NextRequest) {
       case 'overview': {
         const gaData = await getTrafficBySource(credentials, dateRange);
         
+        console.log('GA Data sources:', gaData.sources?.length || 0, 'sources');
+        
         // Get ad spend from daily_cashflow for the same period
-        const { data: cashflowData } = await supabase
+        const { data: cashflowData, error: cashflowError } = await supabase
           .from('daily_cashflow')
           .select('google_ads_cost, facebook_ads_cost, tiktok_ads_cost')
           .eq('business_id', businessId)
           .gte('date', startDate === '30daysAgo' ? new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0] : startDate)
           .lte('date', endDate === 'today' ? new Date().toISOString().split('T')[0] : endDate);
+        
+        if (cashflowError) {
+          console.log('Cashflow error:', cashflowError);
+        }
+        console.log('Cashflow data rows:', cashflowData?.length || 0);
         
         const adSpend = {
           google: cashflowData?.reduce((sum, d) => sum + (d.google_ads_cost || 0), 0) || 0,
@@ -78,7 +85,11 @@ export async function GET(request: NextRequest) {
           tiktok: cashflowData?.reduce((sum, d) => sum + (d.tiktok_ads_cost || 0), 0) || 0,
         };
         
+        console.log('Ad spend:', adSpend);
+        
         const channelMetrics = calculateChannelMetrics(gaData, adSpend);
+        
+        console.log('Channel metrics:', channelMetrics.length, 'channels');
         
         return NextResponse.json({
           overview: gaData.overview,
