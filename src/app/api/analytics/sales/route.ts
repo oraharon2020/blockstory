@@ -10,12 +10,31 @@ import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
+// Helper to ensure end date is not in the future
+function getMaxEndDate(endDate: string): string {
+  if (endDate === 'today' || endDate === 'yesterday') {
+    return endDate;
+  }
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const requestedEnd = new Date(endDate);
+  requestedEnd.setHours(0, 0, 0, 0);
+  
+  if (requestedEnd > today) {
+    return today.toISOString().split('T')[0];
+  }
+  
+  return endDate;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const businessId = searchParams.get('businessId');
     const startDate = searchParams.get('startDate') || '30daysAgo';
-    const endDate = searchParams.get('endDate') || 'today';
+    const endDate = getMaxEndDate(searchParams.get('endDate') || 'today');
 
     if (!businessId) {
       return NextResponse.json({ error: 'businessId is required' }, { status: 400 });
