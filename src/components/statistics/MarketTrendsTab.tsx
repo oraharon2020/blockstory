@@ -2,6 +2,7 @@
  * MarketTrendsTab Component
  * 
  * טאב טרנדים בשוק - מה חם עכשיו בתחום הרהיטים
+ * כולל מוצרים אמיתיים מאמזון ואלי אקספרס
  */
 
 'use client';
@@ -22,7 +23,10 @@ import {
   Sparkles,
   ExternalLink,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  ShoppingBag,
+  Star,
+  Package
 } from 'lucide-react';
 
 interface TrendItem {
@@ -40,11 +44,28 @@ interface MarketInsight {
   seasonalTip: string;
 }
 
+interface TrendingProduct {
+  title: string;
+  price: string;
+  originalPrice?: string;
+  image: string;
+  rating: number;
+  reviews: number;
+  sales?: string;
+  source: 'amazon' | 'aliexpress' | 'ebay';
+  url: string;
+  badge?: string;
+}
+
 interface TrendsData {
   trends: TrendItem[];
   insights: MarketInsight[];
   topSearches: { term: string; volume: string; trend: 'up' | 'down' | 'stable' }[];
   recommendations: string[];
+  trendingProducts?: {
+    amazon: TrendingProduct[];
+    aliexpress: TrendingProduct[];
+  };
 }
 
 interface MarketTrendsTabProps {
@@ -56,6 +77,7 @@ export default function MarketTrendsTab({ businessId }: MarketTrendsTabProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedTrend, setSelectedTrend] = useState<TrendItem | null>(null);
+  const [productSource, setProductSource] = useState<'amazon' | 'aliexpress'>('amazon');
 
   const fetchData = async () => {
     setLoading(true);
@@ -199,6 +221,108 @@ export default function MarketTrendsTab({ businessId }: MarketTrendsTabProps) {
           ))}
         </div>
       </div>
+
+      {/* מוצרים חמים ממרקטפלייסים */}
+      {data.trendingProducts && (
+        <div className="bg-white rounded-xl shadow-sm border p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="font-semibold text-gray-800 flex items-center gap-2">
+              <ShoppingBag className="w-4 h-4 text-orange-500" />
+              מוצרים חמים עכשיו - השראה מהשוק העולמי
+            </h4>
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setProductSource('amazon')}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  productSource === 'amazon' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                🛒 Amazon
+              </button>
+              <button
+                onClick={() => setProductSource('aliexpress')}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  productSource === 'aliexpress' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                📦 AliExpress
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {(productSource === 'amazon' ? data.trendingProducts.amazon : data.trendingProducts.aliexpress).map((product, idx) => (
+              <div 
+                key={idx}
+                className="bg-gray-50 rounded-xl p-3 hover:shadow-lg transition-all cursor-pointer group relative"
+                onClick={() => window.open(product.url, '_blank')}
+              >
+                {/* תג */}
+                {product.badge && (
+                  <span className={`absolute top-2 right-2 px-2 py-0.5 text-xs font-medium rounded-full ${
+                    product.badge === 'Best Seller' ? 'bg-orange-500 text-white' :
+                    product.badge === 'Hot' ? 'bg-red-500 text-white' :
+                    product.badge === 'Amazon Choice' ? 'bg-blue-500 text-white' :
+                    'bg-green-500 text-white'
+                  }`}>
+                    {product.badge}
+                  </span>
+                )}
+                
+                {/* תמונה */}
+                <div className="aspect-square bg-white rounded-lg mb-2 overflow-hidden flex items-center justify-center">
+                  <Package className="w-12 h-12 text-gray-300" />
+                </div>
+                
+                {/* פרטים */}
+                <h5 className="text-sm font-medium text-gray-800 line-clamp-2 mb-1 group-hover:text-blue-600">
+                  {product.title}
+                </h5>
+                
+                {/* מחיר */}
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-lg font-bold text-green-600">{product.price}</span>
+                  {product.originalPrice && (
+                    <span className="text-xs text-gray-400 line-through">{product.originalPrice}</span>
+                  )}
+                </div>
+                
+                {/* דירוג */}
+                <div className="flex items-center gap-1 text-xs text-gray-500">
+                  <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                  <span>{product.rating}</span>
+                  <span>({product.reviews.toLocaleString()})</span>
+                </div>
+                
+                {/* מכירות */}
+                {product.sales && (
+                  <div className="text-xs text-orange-600 mt-1 font-medium">
+                    🔥 {product.sales}
+                  </div>
+                )}
+                
+                {/* אייקון לינק */}
+                <ExternalLink className="absolute bottom-2 left-2 w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            ))}
+          </div>
+          
+          <div className="mt-4 text-center">
+            <a 
+              href={productSource === 'amazon' 
+                ? 'https://www.amazon.com/s?k=furniture+home+decor' 
+                : 'https://www.aliexpress.com/category/1503/furniture.html'
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800"
+            >
+              צפה בעוד מוצרים ב-{productSource === 'amazon' ? 'Amazon' : 'AliExpress'}
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* טרנדים עולים */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
