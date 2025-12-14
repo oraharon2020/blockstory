@@ -18,7 +18,8 @@ import {
   Package,
   Globe,
   Clock,
-  Search
+  Search,
+  Flame
 } from 'lucide-react';
 
 // Import all statistics components
@@ -38,9 +39,10 @@ import {
 import GeographyTab from '@/components/statistics/GeographyTab';
 import TimeAnalysisTab from '@/components/statistics/TimeAnalysisTab';
 import SearchTermsTab from '@/components/statistics/SearchTermsTab';
+import MarketTrendsTab from '@/components/statistics/MarketTrendsTab';
 
 // Tab types
-type TabType = 'summary' | 'traffic' | 'sales' | 'channels' | 'products' | 'geography' | 'time' | 'search';
+type TabType = 'summary' | 'traffic' | 'sales' | 'channels' | 'products' | 'geography' | 'time' | 'search' | 'trends';
 
 // Helper: Get max date (today or earlier) - GA can't query future dates
 const getMaxEndDate = (endDate: string): string => {
@@ -182,6 +184,7 @@ export default function StatisticsPage() {
             { id: 'geography' as TabType, label: 'גיאוגרפיה', icon: Globe },
             { id: 'time' as TabType, label: 'זמנים', icon: Clock },
             { id: 'search' as TabType, label: 'חיפושים', icon: Search },
+            { id: 'trends' as TabType, label: 'טרנדים', icon: Flame },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -405,6 +408,11 @@ export default function StatisticsPage() {
           startDate={data.periodStart}
           endDate={getMaxEndDate(data.periodEnd)}
         />
+      )}
+
+      {/* Market Trends Tab */}
+      {activeTab === 'trends' && (
+        <MarketTrendsTab businessId={currentBusiness.id} />
       )}
 
       {/* Period Info */}
