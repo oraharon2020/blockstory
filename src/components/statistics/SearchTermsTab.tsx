@@ -17,8 +17,12 @@ import {
   Lightbulb,
   Package,
   XCircle,
-  CheckCircle
+  CheckCircle,
+  Calendar,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
+import ComparisonSelector from './ComparisonSelector';
 
 interface SearchData {
   terms: { term: string; searches: number; clicks: number; ctr: number; hasResults: boolean }[];
@@ -43,7 +47,44 @@ export default function SearchTermsTab({ businessId, startDate, endDate }: Searc
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'noResults' | 'lowCtr'>('all');
 
-  const fetchData = async () => {
+  // Comparison states
+  const [comparisonEnabled, setComparisonEnabled] = useState(false);
+  const [comparisonType, setComparisonType] = useState<'previous' | 'year' | 'custom'>('previous');
+  const [customCompareStart, setCustomCompareStart] = useState<string>('');
+  const [customCompareEnd, setCustomCompareEnd] = useState<string>('');
+  const [comparisonData, setComparisonData] = useState<SearchData | null>(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
+
+  // Calculate comparison dates
+  const getComparisonDates = () => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (comparisonType === 'previous') {
+      const compEnd = new Date(start);
+      compEnd.setDate(compEnd.getDate() - 1);
+      const compStart = new Date(compEnd);
+      compStart.setDate(compStart.getDate() - daysDiff);
+      return {
+        start: compStart.toISOString().split('T')[0],
+        end: compEnd.toISOString().split('T')[0]
+      };
+    } else if (comparisonType === 'year') {
+      const compStart = new Date(start);
+      compStart.setFullYear(compStart.getFullYear() - 1);
+      const compEnd = new Date(end);
+      compEnd.setFullYear(compEnd.getFullYear() - 1);
+      return {
+        start: compStart.toISOString().split('T')[0],
+        end: compEnd.toISOString().split('T')[0]
+      };
+    } else {
+      return { start: customCompareStart, end: customCompareEnd };
+    }
+  };
+
+  const fetchData = async (fetchComparison = comparisonEnabled) => {
     setLoading(true);
     setError(null);
     
@@ -62,6 +103,32 @@ export default function SearchTermsTab({ businessId, startDate, endDate }: Searc
       }
       
       setData(json);
+
+      // Fetch comparison data if enabled
+      if (fetchComparison) {
+        setComparisonLoading(true);
+        try {
+          const compDates = getComparisonDates();
+          const compParams = new URLSearchParams({
+            businessId,
+            startDate: compDates.start,
+            endDate: compDates.end,
+          });
+          
+          const compRes = await fetch(`/api/analytics/search-terms?${compParams}`);
+          const compJson = await compRes.json();
+          
+          if (compRes.ok) {
+            setComparisonData(compJson);
+          }
+        } catch (compErr) {
+          console.error('Comparison fetch error:', compErr);
+        } finally {
+          setComparisonLoading(false);
+        }
+      } else {
+        setComparisonData(null);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -74,6 +141,33 @@ export default function SearchTermsTab({ businessId, startDate, endDate }: Searc
       fetchData();
     }
   }, [businessId, startDate, endDate]);
+
+  useEffect(() => {
+    if (data && comparisonEnabled) {
+      fetchData(true);
+    } else if (!comparisonEnabled) {
+      setComparisonData(null);
+    }
+  }, [comparisonEnabled, comparisonType, customCompareStart, customCompareEnd]);
+
+  const calculateChange = (current: number, previous: number | undefined): number | null => {
+    if (previous === undefined || previous === 0) return null;
+    return ((current - previous) / previous) * 100;
+  };
+
+  const renderChange = (current: number, previous: number | undefined) => {
+    if (!comparisonEnabled || !comparisonData) return null;
+    const change = calculateChange(current, previous);
+    if (change === null) return null;
+    
+    const isPositive = change >= 0;
+    return (
+      <span className={`text-xs flex items-center gap-0.5 ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+        {isPositive ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
+        {Math.abs(change).toFixed(1)}%
+      </span>
+    );
+  };
 
   if (loading) {
     return (
@@ -89,7 +183,7 @@ export default function SearchTermsTab({ businessId, startDate, endDate }: Searc
         <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-3" />
         <p className="text-red-700 mb-3">{error}</p>
         <button 
-          onClick={fetchData}
+          onClick={() => fetchData()}
           className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
         >
           נסה שוב
@@ -113,10 +207,24 @@ export default function SearchTermsTab({ businessId, startDate, endDate }: Searc
         <div className="flex items-center gap-2">
           <Search className="w-5 h-5 text-indigo-600" />
           <h3 className="text-lg font-semibold text-gray-900">חיפושים באתר</h3>
+          {comparisonLoading && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
         </div>
         <div className="flex items-center gap-3">
+          <ComparisonSelector
+            enabled={comparisonEnabled}
+            onToggle={setComparisonEnabled}
+            comparisonType={comparisonType}
+            onTypeChange={setComparisonType}
+            customStartDate={customCompareStart}
+            customEndDate={customCompareEnd}
+            onCustomDateChange={(start, end) => {
+              setCustomCompareStart(start);
+              setCustomCompareEnd(end);
+            }}
+            currentPeriodLabel={`${startDate} - ${endDate}`}
+          />
           <button
-            onClick={fetchData}
+            onClick={() => fetchData()}
             disabled={loading}
             className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
           >
@@ -132,7 +240,10 @@ export default function SearchTermsTab({ businessId, startDate, endDate }: Searc
             <Search className="w-4 h-4 text-indigo-600" />
             <span className="text-sm text-indigo-700">סה"כ חיפושים</span>
           </div>
-          <p className="text-2xl font-bold text-indigo-900">{data.summary.totalSearches.toLocaleString()}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-2xl font-bold text-indigo-900">{data.summary.totalSearches.toLocaleString()}</p>
+            {renderChange(data.summary.totalSearches, comparisonData?.summary.totalSearches)}
+          </div>
         </div>
         
         <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200">
@@ -140,7 +251,10 @@ export default function SearchTermsTab({ businessId, startDate, endDate }: Searc
             <Lightbulb className="w-4 h-4 text-purple-600" />
             <span className="text-sm text-purple-700">מונחים ייחודיים</span>
           </div>
-          <p className="text-2xl font-bold text-purple-900">{data.summary.uniqueTerms}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-2xl font-bold text-purple-900">{data.summary.uniqueTerms}</p>
+            {renderChange(data.summary.uniqueTerms, comparisonData?.summary.uniqueTerms)}
+          </div>
         </div>
         
         <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
@@ -148,7 +262,10 @@ export default function SearchTermsTab({ businessId, startDate, endDate }: Searc
             <CheckCircle className="w-4 h-4 text-green-600" />
             <span className="text-sm text-green-700">CTR ממוצע</span>
           </div>
-          <p className="text-2xl font-bold text-green-900">{data.summary.avgCtr.toFixed(1)}%</p>
+          <div className="flex items-center gap-2">
+            <p className="text-2xl font-bold text-green-900">{data.summary.avgCtr.toFixed(1)}%</p>
+            {renderChange(data.summary.avgCtr, comparisonData?.summary.avgCtr)}
+          </div>
         </div>
         
         <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-4 border border-red-200">
@@ -156,7 +273,10 @@ export default function SearchTermsTab({ businessId, startDate, endDate }: Searc
             <XCircle className="w-4 h-4 text-red-600" />
             <span className="text-sm text-red-700">% ללא תוצאות</span>
           </div>
-          <p className="text-2xl font-bold text-red-900">{data.summary.noResultsPercent.toFixed(1)}%</p>
+          <div className="flex items-center gap-2">
+            <p className="text-2xl font-bold text-red-900">{data.summary.noResultsPercent.toFixed(1)}%</p>
+            {renderChange(data.summary.noResultsPercent, comparisonData?.summary.noResultsPercent)}
+          </div>
         </div>
       </div>
 
@@ -227,37 +347,50 @@ export default function SearchTermsTab({ businessId, startDate, endDate }: Searc
               </tr>
             </thead>
             <tbody>
-              {filteredTerms.map((term, idx) => (
-                <tr key={term.term} className="border-b border-gray-50 hover:bg-gray-50">
-                  <td className="py-3 px-4">
-                    <span className="font-medium text-gray-800">"{term.term}"</span>
-                  </td>
-                  <td className="py-3 px-4 text-gray-900">{term.searches.toLocaleString()}</td>
-                  <td className="py-3 px-4 text-gray-900">{term.clicks}</td>
-                  <td className="py-3 px-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      term.ctr >= 20 ? 'bg-green-100 text-green-700' :
-                      term.ctr >= 10 ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-red-100 text-red-700'
-                    }`}>
-                      {term.ctr.toFixed(1)}%
-                    </span>
-                  </td>
-                  <td className="py-3 px-4">
-                    {term.hasResults ? (
-                      <span className="flex items-center gap-1 text-green-600 text-sm">
-                        <CheckCircle className="w-4 h-4" />
-                        יש תוצאות
+              {filteredTerms.map((term, idx) => {
+                const compTerm = comparisonData?.terms.find(t => t.term === term.term);
+                return (
+                  <tr key={term.term} className="border-b border-gray-50 hover:bg-gray-50">
+                    <td className="py-3 px-4">
+                      <span className="font-medium text-gray-800">"{term.term}"</span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-900">{term.searches.toLocaleString()}</span>
+                        {renderChange(term.searches, compTerm?.searches)}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-900">{term.clicks}</span>
+                        {renderChange(term.clicks, compTerm?.clicks)}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        term.ctr >= 20 ? 'bg-green-100 text-green-700' :
+                        term.ctr >= 10 ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-red-100 text-red-700'
+                      }`}>
+                        {term.ctr.toFixed(1)}%
                       </span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-red-600 text-sm">
-                        <XCircle className="w-4 h-4" />
-                        אין תוצאות
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="py-3 px-4">
+                      {term.hasResults ? (
+                        <span className="flex items-center gap-1 text-green-600 text-sm">
+                          <CheckCircle className="w-4 h-4" />
+                          יש תוצאות
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-red-600 text-sm">
+                          <XCircle className="w-4 h-4" />
+                          אין תוצאות
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

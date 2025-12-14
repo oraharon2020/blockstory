@@ -2,6 +2,7 @@
  * TimeAnalysisTab Component
  * 
  * טאב ניתוח זמנים - מתי הכי קונים, שעות ו ימים
+ * עם תמיכה בהשוואה בין תקופות
  */
 
 'use client';
@@ -11,6 +12,7 @@ import {
   Clock, 
   Calendar,
   TrendingUp,
+  TrendingDown,
   Loader2,
   AlertCircle,
   RefreshCw,
@@ -18,6 +20,7 @@ import {
   Sun,
   Moon
 } from 'lucide-react';
+import ComparisonSelector from './ComparisonSelector';
 
 interface TimeData {
   hourly: { hour: number; users: number; conversions: number; revenue: number }[];
@@ -35,29 +38,76 @@ interface TimeAnalysisTabProps {
 
 export default function TimeAnalysisTab({ businessId, startDate, endDate }: TimeAnalysisTabProps) {
   const [data, setData] = useState<TimeData | null>(null);
+  const [comparisonData, setComparisonData] = useState<TimeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<'hours' | 'days'>('hours');
+  
+  // Comparison state
+  const [comparisonEnabled, setComparisonEnabled] = useState(false);
+  const [comparisonType, setComparisonType] = useState<'previous' | 'year' | 'custom'>('previous');
+  const [customCompareStart, setCustomCompareStart] = useState('');
+  const [customCompareEnd, setCustomCompareEnd] = useState('');
+
+  // Calculate comparison dates
+  const getComparisonDates = () => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (comparisonType === 'previous') {
+      const compEnd = new Date(start);
+      compEnd.setDate(compEnd.getDate() - 1);
+      const compStart = new Date(compEnd);
+      compStart.setDate(compStart.getDate() - daysDiff);
+      return {
+        start: compStart.toISOString().split('T')[0],
+        end: compEnd.toISOString().split('T')[0]
+      };
+    } else if (comparisonType === 'year') {
+      const compStart = new Date(start);
+      compStart.setFullYear(compStart.getFullYear() - 1);
+      const compEnd = new Date(end);
+      compEnd.setFullYear(compEnd.getFullYear() - 1);
+      return {
+        start: compStart.toISOString().split('T')[0],
+        end: compEnd.toISOString().split('T')[0]
+      };
+    } else {
+      return { start: customCompareStart, end: customCompareEnd };
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     
     try {
-      const params = new URLSearchParams({
-        businessId,
-        startDate,
-        endDate,
-      });
-      
+      const params = new URLSearchParams({ businessId, startDate, endDate });
       const res = await fetch(`/api/analytics/time-analysis?${params}`);
       const json = await res.json();
       
-      if (!res.ok) {
-        throw new Error(json.error || 'Failed to fetch time analysis data');
-      }
-      
+      if (!res.ok) throw new Error(json.error || 'Failed to fetch time analysis data');
       setData(json);
+
+      // Fetch comparison data if enabled
+      if (comparisonEnabled) {
+        const compDates = getComparisonDates();
+        if (compDates.start && compDates.end) {
+          const compParams = new URLSearchParams({
+            businessId,
+            startDate: compDates.start,
+            endDate: compDates.end,
+          });
+          const compRes = await fetch(`/api/analytics/time-analysis?${compParams}`);
+          if (compRes.ok) {
+            const compJson = await compRes.json();
+            setComparisonData(compJson);
+          }
+        }
+      } else {
+        setComparisonData(null);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -69,7 +119,7 @@ export default function TimeAnalysisTab({ businessId, startDate, endDate }: Time
     if (businessId && startDate && endDate) {
       fetchData();
     }
-  }, [businessId, startDate, endDate]);
+  }, [businessId, startDate, endDate, comparisonEnabled, comparisonType, customCompareStart, customCompareEnd]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('he-IL', {
@@ -87,6 +137,24 @@ export default function TimeAnalysisTab({ businessId, startDate, endDate }: Time
   const getDayName = (dayNum: number) => {
     const days = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
     return days[dayNum] || '';
+  };
+
+  const getChangePercent = (current: number, previous: number): number | null => {
+    if (previous === 0) return current > 0 ? 100 : null;
+    return ((current - previous) / previous) * 100;
+  };
+
+  const renderChange = (current: number, previous: number | undefined) => {
+    if (!comparisonEnabled || previous === undefined) return null;
+    const change = getChangePercent(current, previous);
+    if (change === null) return null;
+    
+    return (
+      <span className={`text-xs flex items-center gap-0.5 ${change >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+        {change >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+        {Math.abs(change).toFixed(0)}%
+      </span>
+    );
   };
 
   if (loading) {
@@ -126,6 +194,19 @@ export default function TimeAnalysisTab({ businessId, startDate, endDate }: Time
           <h3 className="text-lg font-semibold text-gray-900">ניתוח זמנים</h3>
         </div>
         <div className="flex items-center gap-3">
+          <ComparisonSelector
+            enabled={comparisonEnabled}
+            onToggle={setComparisonEnabled}
+            comparisonType={comparisonType}
+            onTypeChange={setComparisonType}
+            customStartDate={customCompareStart}
+            customEndDate={customCompareEnd}
+            onCustomDateChange={(start, end) => {
+              setCustomCompareStart(start);
+              setCustomCompareEnd(end);
+            }}
+            currentPeriodLabel={`${startDate} - ${endDate}`}
+          />
           {/* Toggle בין שעות לימים */}
           <div className="flex bg-gray-100 rounded-lg p-1">
             <button
@@ -164,7 +245,14 @@ export default function TimeAnalysisTab({ businessId, startDate, endDate }: Time
             <Zap className="w-4 h-4 text-orange-600" />
             <span className="text-sm text-orange-700">שעת שיא</span>
           </div>
-          <p className="text-2xl font-bold text-orange-900">{data.peakHour.label}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-2xl font-bold text-orange-900">{data.peakHour.label}</p>
+            {comparisonData && data.peakHour.hour !== comparisonData.peakHour.hour && (
+              <span className="text-xs text-orange-600 bg-orange-200 px-2 py-0.5 rounded">
+                היה: {comparisonData.peakHour.label}
+              </span>
+            )}
+          </div>
           <p className="text-sm text-orange-600">הכי הרבה משתמשים</p>
         </div>
         
@@ -173,7 +261,14 @@ export default function TimeAnalysisTab({ businessId, startDate, endDate }: Time
             <Calendar className="w-4 h-4 text-blue-600" />
             <span className="text-sm text-blue-700">יום הכי פעיל</span>
           </div>
-          <p className="text-2xl font-bold text-blue-900">יום {data.peakDay.day}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-2xl font-bold text-blue-900">יום {data.peakDay.day}</p>
+            {comparisonData && data.peakDay.dayNum !== comparisonData.peakDay.dayNum && (
+              <span className="text-xs text-blue-600 bg-blue-200 px-2 py-0.5 rounded">
+                היה: {comparisonData.peakDay.day}
+              </span>
+            )}
+          </div>
           <p className="text-sm text-blue-600">הכי הרבה תנועה</p>
         </div>
         
@@ -192,11 +287,15 @@ export default function TimeAnalysisTab({ businessId, startDate, endDate }: Time
           <h4 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
             <Clock className="w-4 h-4 text-orange-500" />
             פעילות לפי שעה (24 שעות)
+            {comparisonEnabled && comparisonData && (
+              <span className="text-xs text-gray-500 font-normal mr-2">| השוואה מופעלת</span>
+            )}
           </h4>
           
           {/* Heat map style */}
           <div className="grid grid-cols-12 gap-1 mb-4">
             {data.hourly.slice(0, 12).map((hour) => {
+              const compHour = comparisonData?.hourly.find(h => h.hour === hour.hour);
               const intensity = maxHourlyUsers > 0 ? hour.users / maxHourlyUsers : 0;
               return (
                 <div
@@ -215,8 +314,14 @@ export default function TimeAnalysisTab({ businessId, startDate, endDate }: Time
                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10">
                     <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap">
                       <div className="font-semibold">{getHourLabel(hour.hour)}</div>
-                      <div>משתמשים: {hour.users}</div>
-                      <div>המרות: {hour.conversions}</div>
+                      <div className="flex items-center gap-2">
+                        <span>משתמשים: {hour.users}</span>
+                        {renderChange(hour.users, compHour?.users)}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span>המרות: {hour.conversions}</span>
+                        {renderChange(hour.conversions, compHour?.conversions)}
+                      </div>
                       <div>הכנסות: {formatCurrency(hour.revenue)}</div>
                     </div>
                   </div>
@@ -226,6 +331,7 @@ export default function TimeAnalysisTab({ businessId, startDate, endDate }: Time
           </div>
           <div className="grid grid-cols-12 gap-1">
             {data.hourly.slice(12, 24).map((hour) => {
+              const compHour = comparisonData?.hourly.find(h => h.hour === hour.hour);
               const intensity = maxHourlyUsers > 0 ? hour.users / maxHourlyUsers : 0;
               return (
                 <div
@@ -244,8 +350,14 @@ export default function TimeAnalysisTab({ businessId, startDate, endDate }: Time
                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10">
                     <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap">
                       <div className="font-semibold">{getHourLabel(hour.hour)}</div>
-                      <div>משתמשים: {hour.users}</div>
-                      <div>המרות: {hour.conversions}</div>
+                      <div className="flex items-center gap-2">
+                        <span>משתמשים: {hour.users}</span>
+                        {renderChange(hour.users, compHour?.users)}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span>המרות: {hour.conversions}</span>
+                        {renderChange(hour.conversions, compHour?.conversions)}
+                      </div>
                       <div>הכנסות: {formatCurrency(hour.revenue)}</div>
                     </div>
                   </div>
@@ -281,6 +393,7 @@ export default function TimeAnalysisTab({ businessId, startDate, endDate }: Time
           
           <div className="space-y-3">
             {data.daily.map((day) => {
+              const compDay = comparisonData?.daily.find(d => d.dayNum === day.dayNum);
               const widthPercent = maxDailyUsers > 0 ? (day.users / maxDailyUsers) * 100 : 0;
               return (
                 <div key={day.dayNum} className="flex items-center gap-4">
@@ -295,6 +408,7 @@ export default function TimeAnalysisTab({ businessId, startDate, endDate }: Time
                     <div className="absolute inset-0 flex items-center justify-between px-3">
                       <span className="text-sm font-medium text-gray-800">
                         {day.users.toLocaleString()} משתמשים
+                        {renderChange(day.users, compDay?.users)}
                       </span>
                       <span className="text-sm text-gray-600">
                         {day.conversions} המרות | {formatCurrency(day.revenue)}

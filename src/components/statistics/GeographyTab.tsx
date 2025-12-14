@@ -2,6 +2,7 @@
  * GeographyTab Component
  * 
  * טאב גיאוגרפיה - מאיפה הלקוחות, שיעור המרה לפי אזור
+ * עם תמיכה בהשוואה בין תקופות
  */
 
 'use client';
@@ -18,6 +19,7 @@ import {
   RefreshCw,
   Target
 } from 'lucide-react';
+import ComparisonSelector from './ComparisonSelector';
 
 interface GeoData {
   countries: { country: string; users: number; sessions: number; conversions: number; revenue: number; conversionRate: number }[];
@@ -33,29 +35,76 @@ interface GeographyTabProps {
 
 export default function GeographyTab({ businessId, startDate, endDate }: GeographyTabProps) {
   const [data, setData] = useState<GeoData | null>(null);
+  const [comparisonData, setComparisonData] = useState<GeoData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<'countries' | 'cities'>('countries');
+  
+  // Comparison state
+  const [comparisonEnabled, setComparisonEnabled] = useState(false);
+  const [comparisonType, setComparisonType] = useState<'previous' | 'year' | 'custom'>('previous');
+  const [customCompareStart, setCustomCompareStart] = useState('');
+  const [customCompareEnd, setCustomCompareEnd] = useState('');
+
+  // Calculate comparison dates
+  const getComparisonDates = () => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (comparisonType === 'previous') {
+      const compEnd = new Date(start);
+      compEnd.setDate(compEnd.getDate() - 1);
+      const compStart = new Date(compEnd);
+      compStart.setDate(compStart.getDate() - daysDiff);
+      return {
+        start: compStart.toISOString().split('T')[0],
+        end: compEnd.toISOString().split('T')[0]
+      };
+    } else if (comparisonType === 'year') {
+      const compStart = new Date(start);
+      compStart.setFullYear(compStart.getFullYear() - 1);
+      const compEnd = new Date(end);
+      compEnd.setFullYear(compEnd.getFullYear() - 1);
+      return {
+        start: compStart.toISOString().split('T')[0],
+        end: compEnd.toISOString().split('T')[0]
+      };
+    } else {
+      return { start: customCompareStart, end: customCompareEnd };
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     
     try {
-      const params = new URLSearchParams({
-        businessId,
-        startDate,
-        endDate,
-      });
-      
+      const params = new URLSearchParams({ businessId, startDate, endDate });
       const res = await fetch(`/api/analytics/geography?${params}`);
       const json = await res.json();
       
-      if (!res.ok) {
-        throw new Error(json.error || 'Failed to fetch geography data');
-      }
-      
+      if (!res.ok) throw new Error(json.error || 'Failed to fetch geography data');
       setData(json);
+
+      // Fetch comparison data if enabled
+      if (comparisonEnabled) {
+        const compDates = getComparisonDates();
+        if (compDates.start && compDates.end) {
+          const compParams = new URLSearchParams({
+            businessId,
+            startDate: compDates.start,
+            endDate: compDates.end,
+          });
+          const compRes = await fetch(`/api/analytics/geography?${compParams}`);
+          if (compRes.ok) {
+            const compJson = await compRes.json();
+            setComparisonData(compJson);
+          }
+        }
+      } else {
+        setComparisonData(null);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -67,7 +116,7 @@ export default function GeographyTab({ businessId, startDate, endDate }: Geograp
     if (businessId && startDate && endDate) {
       fetchData();
     }
-  }, [businessId, startDate, endDate]);
+  }, [businessId, startDate, endDate, comparisonEnabled, comparisonType, customCompareStart, customCompareEnd]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('he-IL', {
@@ -76,6 +125,24 @@ export default function GeographyTab({ businessId, startDate, endDate }: Geograp
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(value);
+  };
+
+  const getChangePercent = (current: number, previous: number): number | null => {
+    if (previous === 0) return current > 0 ? 100 : null;
+    return ((current - previous) / previous) * 100;
+  };
+
+  const renderChange = (current: number, previous: number | undefined) => {
+    if (!comparisonEnabled || previous === undefined) return null;
+    const change = getChangePercent(current, previous);
+    if (change === null) return <span className="text-gray-400 text-xs">—</span>;
+    
+    return (
+      <span className={`text-xs flex items-center gap-0.5 ${change >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+        {change >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+        {Math.abs(change).toFixed(1)}%
+      </span>
+    );
   };
 
   if (loading) {
@@ -103,6 +170,9 @@ export default function GeographyTab({ businessId, startDate, endDate }: Geograp
 
   if (!data) return null;
 
+  // Find comparison values for summary
+  const compSummary = comparisonData?.summary;
+
   return (
     <div className="space-y-6">
       {/* כותרת */}
@@ -112,6 +182,19 @@ export default function GeographyTab({ businessId, startDate, endDate }: Geograp
           <h3 className="text-lg font-semibold text-gray-900">ניתוח גיאוגרפי</h3>
         </div>
         <div className="flex items-center gap-3">
+          <ComparisonSelector
+            enabled={comparisonEnabled}
+            onToggle={setComparisonEnabled}
+            comparisonType={comparisonType}
+            onTypeChange={setComparisonType}
+            customStartDate={customCompareStart}
+            customEndDate={customCompareEnd}
+            onCustomDateChange={(start, end) => {
+              setCustomCompareStart(start);
+              setCustomCompareEnd(end);
+            }}
+            currentPeriodLabel={`${startDate} - ${endDate}`}
+          />
           {/* Toggle בין מדינות לערים */}
           <div className="flex bg-gray-100 rounded-lg p-1">
             <button
@@ -148,7 +231,10 @@ export default function GeographyTab({ businessId, startDate, endDate }: Geograp
             <Globe className="w-4 h-4 text-blue-600" />
             <span className="text-sm text-blue-700">מדינות פעילות</span>
           </div>
-          <p className="text-2xl font-bold text-blue-900">{data.summary.totalCountries}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-2xl font-bold text-blue-900">{data.summary.totalCountries}</p>
+            {renderChange(data.summary.totalCountries, compSummary?.totalCountries)}
+          </div>
         </div>
         
         <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
@@ -157,7 +243,10 @@ export default function GeographyTab({ businessId, startDate, endDate }: Geograp
             <span className="text-sm text-green-700">מדינה מובילה</span>
           </div>
           <p className="text-2xl font-bold text-green-900">{data.summary.topCountry}</p>
-          <p className="text-sm text-green-600">{data.summary.topCountryPercent}% מהתנועה</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm text-green-600">{data.summary.topCountryPercent}% מהתנועה</p>
+            {renderChange(data.summary.topCountryPercent, compSummary?.topCountryPercent)}
+          </div>
         </div>
         
         <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200">
@@ -165,16 +254,20 @@ export default function GeographyTab({ businessId, startDate, endDate }: Geograp
             <Target className="w-4 h-4 text-purple-600" />
             <span className="text-sm text-purple-700">המרה הכי גבוהה</span>
           </div>
-          {data.countries.length > 0 && (
-            <>
-              <p className="text-2xl font-bold text-purple-900">
-                {Math.max(...data.countries.map(c => c.conversionRate)).toFixed(1)}%
-              </p>
-              <p className="text-sm text-purple-600">
-                {data.countries.find(c => c.conversionRate === Math.max(...data.countries.map(x => x.conversionRate)))?.country}
-              </p>
-            </>
-          )}
+          {data.countries.length > 0 && (() => {
+            const maxRate = Math.max(...data.countries.map(c => c.conversionRate));
+            const bestCountry = data.countries.find(c => c.conversionRate === maxRate);
+            const compBest = comparisonData?.countries.find(c => c.country === bestCountry?.country);
+            return (
+              <>
+                <div className="flex items-center gap-2">
+                  <p className="text-2xl font-bold text-purple-900">{maxRate.toFixed(1)}%</p>
+                  {compBest && renderChange(maxRate, compBest.conversionRate)}
+                </div>
+                <p className="text-sm text-purple-600">{bestCountry?.country}</p>
+              </>
+            );
+          })()}
         </div>
       </div>
 
@@ -191,36 +284,47 @@ export default function GeographyTab({ businessId, startDate, endDate }: Geograp
                 <tr className="border-b border-gray-100">
                   <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">מדינה</th>
                   <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">משתמשים</th>
+                  {comparisonEnabled && <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">שינוי</th>}
                   <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">סשנים</th>
                   <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">המרות</th>
                   <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">% המרה</th>
                   <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">הכנסות</th>
+                  {comparisonEnabled && <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">שינוי</th>}
                 </tr>
               </thead>
               <tbody>
-                {data.countries.map((country, idx) => (
-                  <tr key={country.country} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{getCountryFlag(country.country)}</span>
-                        <span className="font-medium text-gray-800">{country.country}</span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-gray-900">{country.users.toLocaleString()}</td>
-                    <td className="py-3 px-4 text-gray-900">{country.sessions.toLocaleString()}</td>
-                    <td className="py-3 px-4 text-gray-900">{country.conversions}</td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        country.conversionRate >= 3 ? 'bg-green-100 text-green-700' :
-                        country.conversionRate >= 1 ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-red-100 text-red-700'
-                      }`}>
-                        {country.conversionRate.toFixed(2)}%
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-green-600 font-semibold">{formatCurrency(country.revenue)}</td>
-                  </tr>
-                ))}
+                {data.countries.map((country) => {
+                  const compCountry = comparisonData?.countries.find(c => c.country === country.country);
+                  return (
+                    <tr key={country.country} className="border-b border-gray-50 hover:bg-gray-50">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{getCountryFlag(country.country)}</span>
+                          <span className="font-medium text-gray-800">{country.country}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-gray-900">{country.users.toLocaleString()}</td>
+                      {comparisonEnabled && (
+                        <td className="py-3 px-4">{renderChange(country.users, compCountry?.users)}</td>
+                      )}
+                      <td className="py-3 px-4 text-gray-900">{country.sessions.toLocaleString()}</td>
+                      <td className="py-3 px-4 text-gray-900">{country.conversions}</td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          country.conversionRate >= 3 ? 'bg-green-100 text-green-700' :
+                          country.conversionRate >= 1 ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {country.conversionRate.toFixed(2)}%
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-green-600 font-semibold">{formatCurrency(country.revenue)}</td>
+                      {comparisonEnabled && (
+                        <td className="py-3 px-4">{renderChange(country.revenue, compCountry?.revenue)}</td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -241,20 +345,31 @@ export default function GeographyTab({ businessId, startDate, endDate }: Geograp
                   <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">עיר</th>
                   <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">מדינה</th>
                   <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">משתמשים</th>
+                  {comparisonEnabled && <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">שינוי</th>}
                   <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">המרות</th>
                   <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">הכנסות</th>
+                  {comparisonEnabled && <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">שינוי</th>}
                 </tr>
               </thead>
               <tbody>
-                {data.cities.map((city, idx) => (
-                  <tr key={`${city.city}-${city.country}`} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="py-3 px-4 font-medium text-gray-800">{city.city}</td>
-                    <td className="py-3 px-4 text-gray-600">{city.country}</td>
-                    <td className="py-3 px-4 text-gray-900">{city.users.toLocaleString()}</td>
-                    <td className="py-3 px-4 text-gray-900">{city.conversions}</td>
-                    <td className="py-3 px-4 text-green-600 font-semibold">{formatCurrency(city.revenue)}</td>
-                  </tr>
-                ))}
+                {data.cities.map((city) => {
+                  const compCity = comparisonData?.cities.find(c => c.city === city.city && c.country === city.country);
+                  return (
+                    <tr key={`${city.city}-${city.country}`} className="border-b border-gray-50 hover:bg-gray-50">
+                      <td className="py-3 px-4 font-medium text-gray-800">{city.city}</td>
+                      <td className="py-3 px-4 text-gray-600">{city.country}</td>
+                      <td className="py-3 px-4 text-gray-900">{city.users.toLocaleString()}</td>
+                      {comparisonEnabled && (
+                        <td className="py-3 px-4">{renderChange(city.users, compCity?.users)}</td>
+                      )}
+                      <td className="py-3 px-4 text-gray-900">{city.conversions}</td>
+                      <td className="py-3 px-4 text-green-600 font-semibold">{formatCurrency(city.revenue)}</td>
+                      {comparisonEnabled && (
+                        <td className="py-3 px-4">{renderChange(city.revenue, compCity?.revenue)}</td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
