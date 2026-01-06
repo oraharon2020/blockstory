@@ -27,6 +27,7 @@ export {
   downloadAttachment,
   getMonthlyEmails,
 } from './scanner';
+export type { ScanStats } from './scanner';
 
 // Processor
 export {

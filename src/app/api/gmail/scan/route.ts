@@ -94,18 +94,24 @@ export async function POST(request: NextRequest) {
     
     // Scan emails - either by date range or by month
     let emails;
+    let scanStats;
     if (startDate && endDate) {
       // Use custom date range
-      emails = await searchInvoiceEmails(validTokens, {
+      const scanResult = await searchInvoiceEmails(validTokens, {
         afterDate: new Date(startDate),
         beforeDate: new Date(endDate),
-        maxResults: 50, // סריקה אגרסיבית עם timeout של 300 שניות
+        maxResults: 100, // סריקה אגרסיבית עם timeout של 300 שניות
       });
+      emails = scanResult.emails;
+      scanStats = scanResult.stats;
     } else {
       // Use month/year
       const targetYear = year || new Date().getFullYear();
       const targetMonth = month || new Date().getMonth() + 1;
-      emails = await getMonthlyEmails(validTokens, targetYear, targetMonth);
+      const monthResult = await getMonthlyEmails(validTokens, targetYear, targetMonth);
+      // getMonthlyEmails עדיין מחזיר את הפורמט הישן
+      emails = Array.isArray(monthResult) ? monthResult : monthResult.emails;
+      scanStats = Array.isArray(monthResult) ? null : monthResult.stats;
     }
     
     if (emails.length === 0) {
@@ -113,6 +119,7 @@ export async function POST(request: NextRequest) {
         success: true,
         invoices: [],
         message: 'לא נמצאו מיילים עם קבצים מצורפים בחודש זה',
+        scanStats,
       });
     }
     
@@ -145,6 +152,7 @@ export async function POST(request: NextRequest) {
         newInvoices: newInvoices.length,
         duplicates: duplicates.length,
       },
+      scanStats, // סטטיסטיקות סריקה מפורטות
     });
   } catch (error: any) {
     console.error('Gmail scan error:', error);

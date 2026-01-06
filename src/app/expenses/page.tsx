@@ -3,7 +3,10 @@
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense } from 'react';
 import ExpensesManager from '@/components/ExpensesManager';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Calendar } from 'lucide-react';
+
+const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 
+                    'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
 function ExpensesPageContent() {
   const searchParams = useSearchParams();
@@ -13,35 +16,43 @@ function ExpensesPageContent() {
   const year = parseInt(searchParams.get('year') || String(new Date().getFullYear()));
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Header */}
-      <div className="bg-white border-b shadow-sm sticky top-0 z-10">
-        <div className="max-w-[1800px] mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Compact Header */}
+      <div className="bg-white border-b shadow-sm sticky top-0 z-20">
+        <div className="px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
             <button
-              onClick={() => router.back()}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              title="חזור"
+              onClick={() => window.close()}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600"
+              title="סגור חלון"
             >
               <ArrowRight className="w-5 h-5" />
             </button>
-            <h1 className="text-2xl font-bold text-gray-900">
-              ניהול הוצאות - {month}/{year}
-            </h1>
+            <div className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-[#217346]" />
+              <h1 className="text-lg font-bold text-gray-900">
+                ניהול הוצאות
+              </h1>
+              <span className="px-2 py-0.5 bg-[#217346] text-white text-sm rounded-md font-medium">
+                {monthNames[month - 1]} {year}
+              </span>
+            </div>
+          </div>
+          
+          <div className="text-xs text-gray-400">
+            דאבל-קליק לעריכה • Enter לשמירה
           </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="max-w-[1800px] mx-auto p-6">
-        <div className="bg-white rounded-xl shadow-lg">
-          <ExpensesManager
-            month={month}
-            year={year}
-            onClose={() => router.back()}
-            isFullPage={true}
-          />
-        </div>
+      {/* Full Height Content */}
+      <div className="flex-1 flex flex-col">
+        <ExpensesManager
+          month={month}
+          year={year}
+          onClose={() => window.close()}
+          isFullPage={true}
+        />
       </div>
     </div>
   );
@@ -50,7 +61,7 @@ function ExpensesPageContent() {
 export default function ExpensesPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-gray-500">טוען...</div>
       </div>
     }>

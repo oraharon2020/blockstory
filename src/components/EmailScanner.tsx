@@ -71,6 +71,14 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
   const [adding, setAdding] = useState(false);
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scanStats, setScanStats] = useState<{
+    totalEmailsSearched: number;
+    emailsWithAttachments: number;
+    totalAttachments: number;
+    filteredByType: number;
+    filteredBySize: number;
+    fromKnownSenders: number;
+  } | null>(null);
   
   // Date range mode
   const [useDateRange, setUseDateRange] = useState(false);
@@ -229,6 +237,11 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
       }));
       
       setInvoices(processedInvoices);
+      
+      // שמירת סטטיסטיקות הסריקה
+      if (data.scanStats) {
+        setScanStats(data.scanStats);
+      }
       
       // Build progress message
       let progressMsg = `✓ נמצאו ${data.summary.totalAttachments} חשבוניות (${data.summary.newInvoices} חדשות, ${data.summary.duplicates} כפולות)`;
@@ -558,6 +571,54 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
               </button>
             </div>
           </div>
+
+          {/* Scan Statistics - Professional Report */}
+          {scanStats && (
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-semibold text-gray-700">📊 דוח סריקה</span>
+                <span className="text-xs text-gray-500">מידע מקצועי</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                  <span className="text-gray-600">מיילים נסרקו:</span>
+                  <span className="font-medium">{scanStats.totalEmailsSearched}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                  <span className="text-gray-600">עם קבצים:</span>
+                  <span className="font-medium">{scanStats.emailsWithAttachments}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+                  <span className="text-gray-600">קבצים מצורפים:</span>
+                  <span className="font-medium">{scanStats.totalAttachments}</span>
+                </div>
+                {scanStats.fromKnownSenders > 0 && (
+                  <div className="flex items-center gap-1">
+                    <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
+                    <span className="text-gray-600">מספקים ידועים:</span>
+                    <span className="font-medium">{scanStats.fromKnownSenders}</span>
+                  </div>
+                )}
+                {scanStats.filteredByType > 0 && (
+                  <div className="flex items-center gap-1 text-gray-400">
+                    <span className="w-2 h-2 bg-gray-300 rounded-full"></span>
+                    <span>נדחו (סוג קובץ):</span>
+                    <span>{scanStats.filteredByType}</span>
+                  </div>
+                )}
+                {scanStats.filteredBySize > 0 && (
+                  <div className="flex items-center gap-1 text-gray-400">
+                    <span className="w-2 h-2 bg-gray-300 rounded-full"></span>
+                    <span>נדחו (גודל):</span>
+                    <span>{scanStats.filteredBySize}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Invoice List */}
           <div className="space-y-2 max-h-96 overflow-auto">

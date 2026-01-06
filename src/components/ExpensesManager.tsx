@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, KeyboardEvent, useMemo, useCallback } from 'react';
-import { Plus, Trash2, Loader2, Receipt, Globe, Copy, Users, RotateCcw, Pencil, Check, X, Pin, PinOff, Search, Maximize2, Minimize2, ExternalLink, FileText, Paperclip, Upload, Mail } from 'lucide-react';
+import { Plus, Trash2, Loader2, Receipt, Globe, Copy, Users, RotateCcw, Pencil, Check, X, Pin, PinOff, Search, Maximize2, Minimize2, ExternalLink, FileText, Paperclip, Upload, Mail, Download, CheckCircle2, Circle, Filter, ArrowRight } from 'lucide-react';
 import { formatCurrency } from '@/lib/calculations';
 import EmployeesManager from './EmployeesManager';
 import EmailScanner from './EmailScanner';
@@ -20,6 +20,8 @@ interface Expense {
   payment_method?: 'credit' | 'bank_transfer' | 'check';
   invoice_number?: string;
   file_url?: string;
+  is_verified?: boolean;
+  verified_at?: string;
 }
 
 interface ExpensesManagerProps {
@@ -48,6 +50,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
   const [uploadingFile, setUploadingFile] = useState(false);
   const [pendingFileUrl, setPendingFileUrl] = useState<string | null>(null);
   const [showEmailScanner, setShowEmailScanner] = useState(false);
+  const [filterMode, setFilterMode] = useState<'all' | 'verified' | 'unverified'>('all');
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Use external expanded state if provided, otherwise use internal
@@ -337,6 +340,73 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
     setHighlightedIds(new Set());
   }, []);
 
+  // Toggle verified status
+  const handleToggleVerified = async (id: number, type: 'vat' | 'noVat', isVerified: boolean) => {
+    try {
+      const res = await fetch('/api/expenses', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          type,
+          is_verified: isVerified,
+          verified_at: isVerified ? new Date().toISOString() : null,
+          businessId: currentBusiness?.id,
+        }),
+      });
+
+      if (res.ok) {
+        // Update local state immediately for better UX
+        if (type === 'vat') {
+          setVatExpenses(prev => prev.map(e => e.id === id ? { ...e, is_verified: isVerified } : e));
+        } else {
+          setNoVatExpenses(prev => prev.map(e => e.id === id ? { ...e, is_verified: isVerified } : e));
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling verified:', error);
+    }
+  };
+
+  // Export to Excel
+  const handleExportExcel = () => {
+    const expenses = activeTab === 'vat' ? vatExpenses : noVatExpenses;
+    const headers = activeTab === 'vat' 
+      ? ['תאריך', 'תיאור', 'ספק', 'מס׳ חשבונית', 'סכום', 'מע"מ', 'אמצעי תשלום', 'נבדק']
+      : ['תאריך', 'תיאור', 'ספק', 'מס׳ חשבונית', 'סכום', 'אמצעי תשלום', 'נבדק'];
+    
+    const paymentMethodHeb = (pm?: string) => 
+      pm === 'bank_transfer' ? 'העברה' : pm === 'check' ? "צ'ק" : 'אשראי';
+    
+    const rows = expenses.map(e => {
+      const base = [
+        e.expense_date,
+        e.description,
+        e.supplier_name || '',
+        e.invoice_number || '',
+        e.amount,
+      ];
+      if (activeTab === 'vat') {
+        base.push(e.vat_amount || 0);
+      }
+      base.push(paymentMethodHeb(e.payment_method));
+      base.push(e.is_verified ? '✓' : '');
+      return base;
+    });
+    
+    // Create CSV content with BOM for Hebrew support
+    const BOM = '\uFEFF';
+    const csv = BOM + [headers, ...rows].map(row => row.join(',')).join('\n');
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `הוצאות_${activeTab === 'vat' ? 'מעמ' : 'ללא_מעמ'}_${month}_${year}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   // Toggle recurring status
   const handleToggleRecurring = async (id: number, type: 'vat' | 'noVat', isRecurring: boolean) => {
     try {
@@ -416,19 +486,32 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
   const vatVatTotal = vatExpenses.reduce((sum, e) => sum + (parseFloat(String(e.vat_amount)) || 0), 0);
   const noVatTotal = noVatExpenses.reduce((sum, e) => sum + (parseFloat(String(e.amount)) || 0), 0);
 
-  // Sort and filter expenses: recurring (pinned) first, then by date descending, with search
+  // Verification stats
+  const currentAllExpenses = activeTab === 'vat' ? vatExpenses : noVatExpenses;
+  const verifiedCount = currentAllExpenses.filter(e => e.is_verified).length;
+  const unverifiedCount = currentAllExpenses.length - verifiedCount;
+
+  // Sort and filter expenses: recurring (pinned) first, then by date descending, with search and filter
   const sortedExpenses = useMemo(() => {
     const expenses = activeTab === 'vat' ? vatExpenses : noVatExpenses;
     
+    // Filter by verification status
+    let filtered = expenses;
+    if (filterMode === 'verified') {
+      filtered = expenses.filter(e => e.is_verified);
+    } else if (filterMode === 'unverified') {
+      filtered = expenses.filter(e => !e.is_verified);
+    }
+    
     // Filter by search query
-    const filtered = searchQuery 
-      ? expenses.filter(e => 
-          e.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          e.supplier_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          e.invoice_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          String(e.amount).includes(searchQuery)
-        )
-      : expenses;
+    if (searchQuery) {
+      filtered = filtered.filter(e => 
+        e.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        e.supplier_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        e.invoice_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        String(e.amount).includes(searchQuery)
+      );
+    }
     
     return [...filtered].sort((a, b) => {
       // Recurring expenses first
@@ -437,7 +520,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
       // Then by date descending
       return new Date(b.expense_date).getTime() - new Date(a.expense_date).getTime();
     });
-  }, [activeTab, vatExpenses, noVatExpenses, searchQuery]);
+  }, [activeTab, vatExpenses, noVatExpenses, searchQuery, filterMode]);
 
   const currentExpenses = sortedExpenses;
   const recurringCount = currentExpenses.filter(e => e.is_recurring).length;
@@ -523,6 +606,13 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
           {(activeTab === 'vat' || activeTab === 'noVat') && (
             <>
               <button
+                onClick={handleExportExcel}
+                className="flex items-center gap-1 px-2 py-1 text-green-600 hover:bg-green-50 rounded text-xs"
+                title="ייצוא לאקסל"
+              >
+                <Download className="w-3 h-3" />
+              </button>
+              <button
                 onClick={handleCopyFromPreviousMonth}
                 disabled={copying}
                 className="flex items-center gap-1 px-2 py-1 text-purple-600 hover:bg-purple-50 rounded text-xs"
@@ -550,6 +640,57 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
           )}
         </div>
       </div>
+
+      {/* Verification Status Bar - only for expenses tabs */}
+      {(activeTab === 'vat' || activeTab === 'noVat') && currentAllExpenses.length > 0 && (
+        <div className="px-4 py-2 bg-gradient-to-l from-gray-50 to-white border-b flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            {/* Progress Bar */}
+            <div className="flex items-center gap-2">
+              <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-green-500 transition-all duration-300"
+                  style={{ width: `${(verifiedCount / currentAllExpenses.length) * 100}%` }}
+                />
+              </div>
+              <span className="text-xs text-gray-600">
+                {verifiedCount}/{currentAllExpenses.length}
+              </span>
+            </div>
+            
+            {/* Quick Stats */}
+            <div className="flex items-center gap-3 text-xs">
+              <button
+                onClick={() => setFilterMode('all')}
+                className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${filterMode === 'all' ? 'bg-gray-200 text-gray-800' : 'text-gray-500 hover:bg-gray-100'}`}
+              >
+                הכל ({currentAllExpenses.length})
+              </button>
+              <button
+                onClick={() => setFilterMode('verified')}
+                className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${filterMode === 'verified' ? 'bg-green-100 text-green-700' : 'text-green-600 hover:bg-green-50'}`}
+              >
+                <CheckCircle2 className="w-3 h-3" />
+                נבדקו ({verifiedCount})
+              </button>
+              <button
+                onClick={() => setFilterMode('unverified')}
+                className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${filterMode === 'unverified' ? 'bg-orange-100 text-orange-700' : 'text-orange-600 hover:bg-orange-50'}`}
+              >
+                <Circle className="w-3 h-3" />
+                ממתינים ({unverifiedCount})
+              </button>
+            </div>
+          </div>
+          
+          {unverifiedCount === 0 && (
+            <span className="text-xs text-green-600 font-medium flex items-center gap-1">
+              <CheckCircle2 className="w-4 h-4" />
+              כל ההוצאות נבדקו! 🎉
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Search bar - only for expenses tabs */}
       {(activeTab === 'vat' || activeTab === 'noVat') && (
@@ -592,6 +733,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
               <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-[#217346] text-white text-xs font-medium">
+                    <th className="px-1 py-2 w-10 border border-[#1a5c38] text-center">✓</th>
                     <th className="px-1 py-2 w-8 border border-[#1a5c38] text-center">#</th>
                     <th className="px-2 py-2 w-24 border border-[#1a5c38] text-right">תאריך</th>
                     <th className="px-2 py-2 border border-[#1a5c38] text-right">תיאור</th>
@@ -607,6 +749,9 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
                 <tbody className="text-sm">
                   {/* Quick Add Row - Excel style */}
                   <tr className="bg-[#e2efda] border-b-2 border-[#217346]">
+                    <td className="px-1 py-1 border border-gray-300 text-center text-gray-300">
+                      <Circle className="w-4 h-4 mx-auto" />
+                    </td>
                     <td className="px-1 py-1 border border-gray-300 text-center">
                       <button
                         onClick={() => setNewExpense({ ...newExpense, is_recurring: !newExpense.is_recurring })}
@@ -728,7 +873,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
                   {/* Expense rows - Excel style */}
                   {currentExpenses.length === 0 ? (
                     <tr>
-                      <td colSpan={activeTab === 'vat' ? 10 : 9} className="text-center py-16 text-gray-400 bg-gray-50">
+                      <td colSpan={activeTab === 'vat' ? 11 : 10} className="text-center py-16 text-gray-400 bg-gray-50">
                         <Receipt className="w-12 h-12 mx-auto mb-3 text-gray-200" />
                         <p className="text-sm">אין הוצאות לחודש זה</p>
                         <p className="text-xs mt-1">הזן את ההוצאה הראשונה בשורה הירוקה למעלה</p>
@@ -741,13 +886,29 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
                         onDoubleClick={() => editingId === expense.id ? null : handleStartEdit(expense)}
                         className={`
                           cursor-pointer transition-colors
+                          ${expense.is_verified ? 'bg-green-50/50' : ''}
                           ${highlightedIds.has(expense.id) ? 'bg-yellow-100' : ''}
-                          ${expense.is_recurring ? 'bg-purple-50' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                          ${expense.is_recurring ? 'bg-purple-50' : !expense.is_verified && index % 2 === 0 ? 'bg-white' : !expense.is_verified ? 'bg-gray-50' : ''}
                           ${lastAdded === expense.id ? 'bg-green-100' : ''}
                           ${editingId === expense.id ? 'bg-blue-50' : ''}
                           hover:bg-blue-50
                         `}
                       >
+                        {/* Verified Checkbox */}
+                        <td className="px-1 py-1.5 border border-gray-200 text-center">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleToggleVerified(expense.id, activeTab === 'vat' ? 'vat' : 'noVat', !expense.is_verified); }}
+                            className={`p-0.5 rounded transition-colors ${expense.is_verified ? 'text-green-600 hover:text-green-700' : 'text-gray-300 hover:text-green-500'}`}
+                            title={expense.is_verified ? 'בוצע ✓' : 'סמן כנבדק'}
+                          >
+                            {expense.is_verified ? (
+                              <CheckCircle2 className="w-4 h-4" />
+                            ) : (
+                              <Circle className="w-4 h-4" />
+                            )}
+                          </button>
+                        </td>
+                        
                         <td className="px-1 py-1.5 border border-gray-200 text-center text-xs text-gray-400">
                           <button
                             onClick={(e) => { e.stopPropagation(); handleToggleRecurring(expense.id, activeTab === 'vat' ? 'vat' : 'noVat', !expense.is_recurring); }}
@@ -896,8 +1057,8 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
                 {currentExpenses.length > 0 && (
                   <tfoot className="sticky bottom-0">
                     <tr className="bg-[#217346] text-white font-medium text-sm">
-                      <td colSpan={6} className="px-2 py-2 border border-[#1a5c38] text-right">
-                        סה"כ ({currentExpenses.length} שורות)
+                      <td colSpan={7} className="px-2 py-2 border border-[#1a5c38] text-right">
+                        סה"כ ({currentExpenses.length} שורות) • נבדקו: {verifiedCount}
                       </td>
                       <td className="px-2 py-2 border border-[#1a5c38] text-center font-bold">
                         {formatCurrency(activeTab === 'vat' ? vatTotal : noVatTotal)}
