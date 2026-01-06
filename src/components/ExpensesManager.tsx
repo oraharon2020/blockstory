@@ -586,47 +586,47 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
             <RefundsManager month={month} year={year} onUpdate={onUpdate} />
           </div>
         ) : (
-          <div className="p-3">
-            {/* Quick Add - Excel-like inline form in table */}
-            <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-50 border-b text-xs font-medium text-gray-500 uppercase">
-                    <th className="px-2 py-2.5 w-8"></th>
-                    <th className="px-2 py-2.5 text-right w-24">תאריך</th>
-                    <th className="px-2 py-2.5 text-right">תיאור</th>
-                    <th className="px-2 py-2.5 text-right w-24">ספק</th>
-                    <th className="px-2 py-2.5 text-center w-16">#</th>
-                    <th className="px-2 py-2.5 text-center w-10">📎</th>
-                    <th className="px-2 py-2.5 text-center w-20">סכום</th>
-                    <th className="px-2 py-2.5 text-center w-20">תשלום</th>
-                    {activeTab === 'vat' && <th className="px-2 py-2.5 text-center w-16">מע"מ</th>}
-                    <th className="px-2 py-2.5 w-14"></th>
+          <div className="p-0">
+            {/* Excel-like Grid Table */}
+            <div className="bg-white overflow-hidden">
+              <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-[#217346] text-white text-xs font-medium">
+                    <th className="px-1 py-2 w-8 border border-[#1a5c38] text-center">#</th>
+                    <th className="px-2 py-2 w-24 border border-[#1a5c38] text-right">תאריך</th>
+                    <th className="px-2 py-2 border border-[#1a5c38] text-right">תיאור</th>
+                    <th className="px-2 py-2 w-28 border border-[#1a5c38] text-right">ספק</th>
+                    <th className="px-2 py-2 w-20 border border-[#1a5c38] text-center">חשבונית</th>
+                    <th className="px-1 py-2 w-8 border border-[#1a5c38] text-center">📎</th>
+                    <th className="px-2 py-2 w-24 border border-[#1a5c38] text-center">סכום</th>
+                    <th className="px-2 py-2 w-20 border border-[#1a5c38] text-center">תשלום</th>
+                    {activeTab === 'vat' && <th className="px-2 py-2 w-20 border border-[#1a5c38] text-center">מע"מ</th>}
+                    <th className="px-1 py-2 w-16 border border-[#1a5c38] text-center">פעולות</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {/* Quick Add Row - Always at top */}
-                  <tr className="bg-blue-50/50 border-b-2 border-blue-200">
-                    <td className="px-2 py-1.5">
+                <tbody className="text-sm">
+                  {/* Quick Add Row - Excel style */}
+                  <tr className="bg-[#e2efda] border-b-2 border-[#217346]">
+                    <td className="px-1 py-1 border border-gray-300 text-center">
                       <button
                         onClick={() => setNewExpense({ ...newExpense, is_recurring: !newExpense.is_recurring })}
-                        className={`p-1 rounded transition-colors ${newExpense.is_recurring ? 'text-purple-600 bg-purple-100' : 'text-gray-300 hover:text-purple-400'}`}
-                        title={newExpense.is_recurring ? 'הסר הצמדה' : 'הצמד כהוצאה קבועה'}
+                        className={`p-0.5 rounded ${newExpense.is_recurring ? 'text-purple-600' : 'text-gray-400'}`}
+                        title={newExpense.is_recurring ? 'הסר הצמדה' : 'הוצאה קבועה'}
                       >
-                        {newExpense.is_recurring ? <Pin className="w-4 h-4" /> : <PinOff className="w-4 h-4" />}
+                        {newExpense.is_recurring ? <Pin className="w-3.5 h-3.5" /> : <PinOff className="w-3.5 h-3.5" />}
                       </button>
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-1 py-1 border border-gray-300">
                       <input
                         ref={dateRef}
                         type="date"
                         value={newExpense.expense_date}
                         onChange={(e) => setNewExpense({ ...newExpense, expense_date: e.target.value })}
                         onKeyDown={(e) => handleKeyDown(e, descRef)}
-                        className="w-full px-2 py-1.5 border rounded text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                        className="w-full px-1 py-1 text-xs border-0 focus:ring-2 focus:ring-[#217346] bg-transparent"
                       />
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-1 py-1 border border-gray-300">
                       <input
                         ref={descRef}
                         type="text"
@@ -634,10 +634,10 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
                         onChange={(e) => setNewExpense({ ...newExpense, description: e.target.value })}
                         onKeyDown={(e) => handleKeyDown(e, supplierRef)}
                         placeholder="תיאור ההוצאה..."
-                        className="w-full px-2 py-1.5 border rounded text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                        className="w-full px-1 py-1 text-xs border-0 focus:ring-2 focus:ring-[#217346] bg-transparent"
                       />
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-1 py-1 border border-gray-300">
                       <input
                         ref={supplierRef}
                         type="text"
@@ -645,10 +645,10 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
                         onChange={(e) => setNewExpense({ ...newExpense, supplier_name: e.target.value })}
                         onKeyDown={(e) => handleKeyDown(e, invoiceRef)}
                         placeholder="ספק"
-                        className="w-full px-2 py-1.5 border rounded text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                        className="w-full px-1 py-1 text-xs border-0 focus:ring-2 focus:ring-[#217346] bg-transparent"
                       />
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-1 py-1 border border-gray-300">
                       <input
                         ref={invoiceRef}
                         type="text"
@@ -656,10 +656,10 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
                         onChange={(e) => setNewExpense({ ...newExpense, invoice_number: e.target.value })}
                         onKeyDown={(e) => handleKeyDown(e, amountRef)}
                         placeholder="#"
-                        className="w-full px-2 py-1.5 border rounded text-sm text-center focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                        className="w-full px-1 py-1 text-xs border-0 focus:ring-2 focus:ring-[#217346] bg-transparent text-center"
                       />
                     </td>
-                    <td className="px-2 py-1.5 text-center">
+                    <td className="px-1 py-1 border border-gray-300 text-center">
                       <input
                         ref={fileInputRef}
                         type="file"
@@ -668,15 +668,11 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
                         className="hidden"
                       />
                       {pendingFileUrl ? (
-                        <div className="flex items-center justify-center gap-1">
-                          <a href={pendingFileUrl} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700">
-                            <FileText className="w-4 h-4" />
+                        <div className="flex items-center justify-center gap-0.5">
+                          <a href={pendingFileUrl} target="_blank" rel="noopener noreferrer" className="text-green-600">
+                            <FileText className="w-3.5 h-3.5" />
                           </a>
-                          <button
-                            onClick={() => setPendingFileUrl(null)}
-                            className="text-red-400 hover:text-red-600"
-                            title="הסר קובץ"
-                          >
+                          <button onClick={() => setPendingFileUrl(null)} className="text-red-400">
                             <X className="w-3 h-3" />
                           </button>
                         </div>
@@ -684,14 +680,13 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
                         <button
                           onClick={() => fileInputRef.current?.click()}
                           disabled={uploadingFile}
-                          className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                          title="העלה חשבונית"
+                          className="p-0.5 text-gray-400 hover:text-[#217346]"
                         >
-                          {uploadingFile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                          {uploadingFile ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
                         </button>
                       )}
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-1 py-1 border border-gray-300">
                       <input
                         ref={amountRef}
                         type="number"
@@ -699,14 +694,14 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
                         onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
                         onKeyDown={(e) => handleKeyDown(e)}
                         placeholder="₪"
-                        className="w-full px-2 py-1.5 border rounded text-sm text-center focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white font-medium"
+                        className="w-full px-1 py-1 text-xs border-0 focus:ring-2 focus:ring-[#217346] bg-transparent text-center font-medium"
                       />
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-1 py-1 border border-gray-300">
                       <select
                         value={newExpense.payment_method}
                         onChange={(e) => setNewExpense({ ...newExpense, payment_method: e.target.value as 'credit' | 'bank_transfer' | 'check' })}
-                        className="w-full px-2 py-1.5 border rounded text-sm focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white"
+                        className="w-full px-0.5 py-1 text-xs border-0 focus:ring-2 focus:ring-[#217346] bg-transparent"
                       >
                         <option value="credit">אשראי</option>
                         <option value="bank_transfer">העברה</option>
@@ -714,15 +709,15 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
                       </select>
                     </td>
                     {activeTab === 'vat' && (
-                      <td className="px-2 py-1.5 text-center text-xs text-green-600 font-medium">
+                      <td className="px-1 py-1 border border-gray-300 text-center text-xs text-[#217346] font-medium bg-[#d4edda]">
                         {newExpense.amount ? formatCurrency(calculateVatFromTotal(parseFloat(newExpense.amount) || 0)) : '-'}
                       </td>
                     )}
-                    <td className="px-2 py-1.5">
+                    <td className="px-1 py-1 border border-gray-300 text-center">
                       <button
                         onClick={() => handleAdd()}
                         disabled={saving || !newExpense.description || !newExpense.amount || !newExpense.expense_date}
-                        className="p-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        className="p-1 bg-[#217346] text-white rounded hover:bg-[#1a5c38] disabled:opacity-30"
                         title="הוסף (Enter)"
                       >
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
@@ -730,107 +725,93 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
                     </td>
                   </tr>
                   
-                  {/* Recurring expenses separator */}
-                  {recurringCount > 0 && (
-                    <tr className="bg-purple-50">
-                      <td colSpan={activeTab === 'vat' ? 9 : 8} className="px-3 py-1.5 text-xs font-medium text-purple-700 flex items-center gap-1">
-                        <Pin className="w-3 h-3" />
-                        הוצאות קבועות ({recurringCount})
-                      </td>
-                    </tr>
-                  )}
-                  
-                  {/* Expense rows */}
+                  {/* Expense rows - Excel style */}
                   {currentExpenses.length === 0 ? (
                     <tr>
-                      <td colSpan={activeTab === 'vat' ? 9 : 8} className="text-center py-12 text-gray-400">
-                        <Receipt className="w-10 h-10 mx-auto mb-2 text-gray-200" />
+                      <td colSpan={activeTab === 'vat' ? 10 : 9} className="text-center py-16 text-gray-400 bg-gray-50">
+                        <Receipt className="w-12 h-12 mx-auto mb-3 text-gray-200" />
                         <p className="text-sm">אין הוצאות לחודש זה</p>
-                        <p className="text-xs mt-1">הזן את ההוצאה הראשונה למעלה</p>
+                        <p className="text-xs mt-1">הזן את ההוצאה הראשונה בשורה הירוקה למעלה</p>
                       </td>
                     </tr>
                   ) : (
-                    currentExpenses.map((expense, index) => {
-                      // Show separator before first non-recurring if there were recurring ones
-                      const showSeparator = recurringCount > 0 && index === recurringCount;
-                      
-                      return (
-                      <React.Fragment key={expense.id}>
-                        {showSeparator && (
-                          <tr className="bg-gray-100">
-                            <td colSpan={activeTab === 'vat' ? 9 : 8} className="px-3 py-1.5 text-xs font-medium text-gray-500">
-                              הוצאות רגילות ({currentExpenses.length - recurringCount})
-                            </td>
-                          </tr>
-                        )}
-                        <tr 
-                          onDoubleClick={() => handleDoubleClick(expense.id)}
-                          className={`hover:bg-blue-50/50 transition-all duration-300 cursor-pointer select-none ${
-                            highlightedIds.has(expense.id)
-                              ? 'bg-orange-100 border-r-4 border-r-orange-400'
-                              : expense.is_recurring 
-                                ? 'bg-purple-50/70 border-r-4 border-r-purple-400' 
-                                : index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                          } ${lastAdded === expense.id ? 'bg-green-100 animate-pulse' : ''}`}
-                        >
+                    currentExpenses.map((expense, index) => (
+                      <tr 
+                        key={expense.id}
+                        onDoubleClick={() => editingId === expense.id ? null : handleStartEdit(expense)}
+                        className={`
+                          cursor-pointer transition-colors
+                          ${highlightedIds.has(expense.id) ? 'bg-yellow-100' : ''}
+                          ${expense.is_recurring ? 'bg-purple-50' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                          ${lastAdded === expense.id ? 'bg-green-100' : ''}
+                          ${editingId === expense.id ? 'bg-blue-50' : ''}
+                          hover:bg-blue-50
+                        `}
+                      >
+                        <td className="px-1 py-1.5 border border-gray-200 text-center text-xs text-gray-400">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleToggleRecurring(expense.id, activeTab === 'vat' ? 'vat' : 'noVat', !expense.is_recurring); }}
+                            className={`p-0.5 rounded ${expense.is_recurring ? 'text-purple-600' : 'text-gray-300 hover:text-purple-400'}`}
+                          >
+                            {expense.is_recurring ? <Pin className="w-3.5 h-3.5" /> : <PinOff className="w-3.5 h-3.5" />}
+                          </button>
+                        </td>
+                        
                         {editingId === expense.id ? (
                           <>
-                            <td className="px-2 py-1.5"></td>
-                            <td className="px-2 py-1.5">
+                            <td className="px-1 py-1 border border-blue-300 bg-blue-50">
                               <input
                                 type="date"
                                 value={editData.expense_date}
                                 onChange={(e) => setEditData({ ...editData, expense_date: e.target.value })}
-                                className="w-full px-1 py-1 border rounded text-sm"
+                                className="w-full px-1 py-0.5 text-xs border border-blue-400 rounded focus:ring-1 focus:ring-blue-500"
                               />
                             </td>
-                            <td className="px-2 py-1.5">
+                            <td className="px-1 py-1 border border-blue-300 bg-blue-50">
                               <input
                                 type="text"
                                 value={editData.description}
                                 onChange={(e) => setEditData({ ...editData, description: e.target.value })}
-                                className="w-full px-1 py-1 border rounded text-sm"
+                                className="w-full px-1 py-0.5 text-xs border border-blue-400 rounded focus:ring-1 focus:ring-blue-500"
+                                autoFocus
                               />
                             </td>
-                            <td className="px-2 py-1.5">
+                            <td className="px-1 py-1 border border-blue-300 bg-blue-50">
                               <input
                                 type="text"
                                 value={editData.supplier_name}
                                 onChange={(e) => setEditData({ ...editData, supplier_name: e.target.value })}
-                                className="w-full px-1 py-1 border rounded text-sm"
+                                className="w-full px-1 py-0.5 text-xs border border-blue-400 rounded focus:ring-1 focus:ring-blue-500"
                               />
                             </td>
-                            <td className="px-2 py-1.5">
+                            <td className="px-1 py-1 border border-blue-300 bg-blue-50">
                               <input
                                 type="text"
                                 value={editData.invoice_number}
                                 onChange={(e) => setEditData({ ...editData, invoice_number: e.target.value })}
-                                placeholder="#"
-                                className="w-full px-1 py-1 border rounded text-sm text-center"
+                                className="w-full px-1 py-0.5 text-xs border border-blue-400 rounded focus:ring-1 focus:ring-blue-500 text-center"
                               />
                             </td>
-                            <td className="px-2 py-1.5 text-center">
+                            <td className="px-1 py-1.5 border border-gray-200 text-center">
                               {expense.file_url ? (
-                                <a href={expense.file_url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700">
-                                  <FileText className="w-4 h-4" />
+                                <a href={expense.file_url} target="_blank" rel="noopener noreferrer" className="text-blue-500">
+                                  <FileText className="w-3.5 h-3.5 mx-auto" />
                                 </a>
-                              ) : (
-                                <span className="text-gray-300">-</span>
-                              )}
+                              ) : <span className="text-gray-300">-</span>}
                             </td>
-                            <td className="px-2 py-1.5">
+                            <td className="px-1 py-1 border border-blue-300 bg-blue-50">
                               <input
                                 type="number"
                                 value={editData.amount}
                                 onChange={(e) => setEditData({ ...editData, amount: e.target.value })}
-                                className="w-full px-1 py-1 border rounded text-sm text-center"
+                                className="w-full px-1 py-0.5 text-xs border border-blue-400 rounded focus:ring-1 focus:ring-blue-500 text-center"
                               />
                             </td>
-                            <td className="px-2 py-1.5">
+                            <td className="px-1 py-1 border border-blue-300 bg-blue-50">
                               <select
                                 value={editData.payment_method}
                                 onChange={(e) => setEditData({ ...editData, payment_method: e.target.value as 'credit' | 'bank_transfer' | 'check' })}
-                                className="w-full px-1 py-1 border rounded text-xs"
+                                className="w-full px-0.5 py-0.5 text-xs border border-blue-400 rounded focus:ring-1 focus:ring-blue-500"
                               >
                                 <option value="credit">אשראי</option>
                                 <option value="bank_transfer">העברה</option>
@@ -838,12 +819,12 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
                               </select>
                             </td>
                             {activeTab === 'vat' && (
-                              <td className="px-2 py-1.5 text-center text-xs text-green-600">
+                              <td className="px-1 py-1.5 border border-gray-200 text-center text-xs text-[#217346] font-medium">
                                 {editData.amount ? formatCurrency(calculateVatFromTotal(parseFloat(editData.amount) || 0)) : '-'}
                               </td>
                             )}
-                            <td className="px-2 py-1.5">
-                              <div className="flex gap-1">
+                            <td className="px-1 py-1 border border-gray-200 text-center">
+                              <div className="flex gap-0.5 justify-center">
                                 <button
                                   onClick={() => handleSaveEdit(expense.id, activeTab === 'vat' ? 'vat' : 'noVat')}
                                   disabled={saving}
@@ -851,10 +832,7 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
                                 >
                                   {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                                 </button>
-                                <button
-                                  onClick={handleCancelEdit}
-                                  className="p-1 text-red-500 hover:bg-red-50 rounded"
-                                >
+                                <button onClick={handleCancelEdit} className="p-1 text-red-500 hover:bg-red-50 rounded">
                                   <X className="w-3.5 h-3.5" />
                                 </button>
                               </div>
@@ -862,98 +840,83 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
                           </>
                         ) : (
                           <>
-                            <td className="px-2 py-2">
-                              <button
-                                onClick={() => handleToggleRecurring(expense.id, activeTab === 'vat' ? 'vat' : 'noVat', !expense.is_recurring)}
-                                className={`p-1 rounded transition-colors ${expense.is_recurring ? 'text-purple-600 hover:text-purple-800' : 'text-gray-300 hover:text-purple-400'}`}
-                                title={expense.is_recurring ? 'הסר מהוצאות קבועות' : 'הפוך להוצאה קבועה'}
-                              >
-                                {expense.is_recurring ? <Pin className="w-4 h-4" /> : <PinOff className="w-4 h-4" />}
-                              </button>
-                            </td>
-                            <td className="px-2 py-2 text-sm text-gray-500">
+                            <td className="px-1 py-1.5 border border-gray-200 text-xs text-gray-600">
                               {formatDate(expense.expense_date)}
                             </td>
-                            <td className="px-2 py-2">
-                              <span className="text-sm font-medium text-gray-900">{expense.description}</span>
+                            <td className="px-2 py-1.5 border border-gray-200 text-xs font-medium text-gray-900 truncate">
+                              {expense.description}
                             </td>
-                            <td className="px-2 py-2 text-sm text-gray-500">
+                            <td className="px-1 py-1.5 border border-gray-200 text-xs text-gray-600 truncate">
                               {expense.supplier_name || '-'}
                             </td>
-                            <td className="px-2 py-2 text-center text-xs text-gray-400">
+                            <td className="px-1 py-1.5 border border-gray-200 text-center text-xs text-gray-500">
                               {expense.invoice_number || '-'}
                             </td>
-                            <td className="px-2 py-2 text-center">
+                            <td className="px-1 py-1.5 border border-gray-200 text-center">
                               {expense.file_url ? (
-                                <a
-                                  href={expense.file_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-blue-500 hover:text-blue-700 text-xs"
-                                  title="צפה בחשבונית"
-                                >
-                                  <FileText className="w-3.5 h-3.5" />
+                                <a href={expense.file_url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700">
+                                  <FileText className="w-3.5 h-3.5 mx-auto" />
                                 </a>
-                              ) : (
-                                <span className="text-gray-300 text-xs">-</span>
-                              )}
+                              ) : <span className="text-gray-300">-</span>}
                             </td>
-                            <td className="px-2 py-2 text-center text-sm font-semibold text-gray-900">
+                            <td className="px-1 py-1.5 border border-gray-200 text-center text-xs font-semibold text-gray-900">
                               {formatCurrency(expense.amount)}
                             </td>
-                            <td className="px-2 py-2 text-center text-xs text-gray-500">
+                            <td className="px-1 py-1.5 border border-gray-200 text-center text-xs text-gray-600">
                               {expense.payment_method === 'bank_transfer' ? 'העברה' : expense.payment_method === 'check' ? "צ'ק" : 'אשראי'}
                             </td>
                             {activeTab === 'vat' && (
-                              <td className="px-2 py-2 text-center text-sm font-medium text-green-600">
+                              <td className="px-1 py-1.5 border border-gray-200 text-center text-xs font-medium text-[#217346] bg-[#f0f9f0]">
                                 {formatCurrency(expense.vat_amount || 0)}
                               </td>
                             )}
-                            <td className="px-2 py-2 text-center">
-                              <div className="flex gap-1 justify-center">
+                            <td className="px-1 py-1.5 border border-gray-200 text-center">
+                              <div className="flex gap-0.5 justify-center opacity-40 hover:opacity-100 transition-opacity">
                                 <button
-                                  onClick={() => handleStartEdit(expense)}
-                                  className="p-1 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded transition-colors"
+                                  onClick={(e) => { e.stopPropagation(); handleStartEdit(expense); }}
+                                  className="p-0.5 text-gray-500 hover:text-blue-500 hover:bg-blue-50 rounded"
                                 >
-                                  <Pencil className="w-3.5 h-3.5" />
+                                  <Pencil className="w-3 h-3" />
                                 </button>
                                 <button
-                                  onClick={() => handleDelete(expense.id, activeTab === 'vat' ? 'vat' : 'noVat')}
-                                  className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                                  onClick={(e) => { e.stopPropagation(); handleDelete(expense.id, activeTab === 'vat' ? 'vat' : 'noVat'); }}
+                                  className="p-0.5 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded"
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Trash2 className="w-3 h-3" />
                                 </button>
                               </div>
                             </td>
                           </>
                         )}
                       </tr>
-                      {/* Separator line */}
-                      <tr>
-                        <td colSpan={activeTab === 'vat' ? 9 : 8} className="p-0">
-                          <div className="h-px bg-gray-200"></div>
-                        </td>
-                      </tr>
-                      </React.Fragment>
-                    )})
+                    ))
                   )}
                 </tbody>
+                {/* Excel-like Footer */}
+                {currentExpenses.length > 0 && (
+                  <tfoot className="sticky bottom-0">
+                    <tr className="bg-[#217346] text-white font-medium text-sm">
+                      <td colSpan={6} className="px-2 py-2 border border-[#1a5c38] text-right">
+                        סה"כ ({currentExpenses.length} שורות)
+                      </td>
+                      <td className="px-2 py-2 border border-[#1a5c38] text-center font-bold">
+                        {formatCurrency(activeTab === 'vat' ? vatTotal : noVatTotal)}
+                      </td>
+                      <td className="px-2 py-2 border border-[#1a5c38]"></td>
+                      {activeTab === 'vat' && (
+                        <td className="px-2 py-2 border border-[#1a5c38] text-center font-bold bg-[#1a5c38]">
+                          {formatCurrency(vatVatTotal)}
+                        </td>
+                      )}
+                      <td className="px-2 py-2 border border-[#1a5c38]"></td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
-              
-              {/* Table Footer */}
-              {currentExpenses.length > 0 && (
-                <div className="bg-gray-50 border-t px-4 py-2 flex justify-between items-center text-sm">
-                  <span className="text-gray-500">{currentExpenses.length} הוצאות</span>
-                  <div className="flex gap-4 font-semibold">
-                    <span className="text-gray-900">{formatCurrency(activeTab === 'vat' ? vatTotal : noVatTotal)}</span>
-                    {activeTab === 'vat' && (
-                      <span className="text-green-600">מע"מ: {formatCurrency(vatVatTotal)}</span>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
+        )}
+      </div>
         )}
       </div>
 
