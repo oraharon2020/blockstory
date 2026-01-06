@@ -303,8 +303,8 @@ export async function processInvoiceBatch(
     }
   }
   
-  // Limit to 50 attachments (with 300 sec timeout on Vercel Pro)
-  const MAX_ATTACHMENTS = 50;
+  // Limit to 75 attachments (with 300 sec timeout on Vercel Pro)
+  const MAX_ATTACHMENTS = 75;
   const totalFound = allAttachments.length;
   const hasMore = totalFound > MAX_ATTACHMENTS;
   const toProcess = allAttachments.slice(0, MAX_ATTACHMENTS);
@@ -312,8 +312,8 @@ export async function processInvoiceBatch(
   
   console.log(`Processing ${totalAttachments} of ${totalFound} attachments${hasMore ? ' (limited)' : ''}`);
   
-  // Process 3 at a time in parallel for speed
-  const batchSize = 3;
+  // Process 5 at a time in parallel for speed
+  const batchSize = 5;
   
   for (let i = 0; i < toProcess.length; i += batchSize) {
     const batch = toProcess.slice(i, i + batchSize);

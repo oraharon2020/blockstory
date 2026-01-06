@@ -22,14 +22,23 @@ export async function searchInvoiceEmails(
   const validTokens = await ensureValidTokens(tokens);
   const gmail = getGmailClient(validTokens);
   
-  // No limit on results
-  const { maxResults = 100, afterDate, beforeDate } = options;
+  // Increased limit for better coverage
+  const { maxResults = 50, afterDate, beforeDate } = options;
   
-  // Build search query - look for invoice-related keywords
-  // Search only for files with invoice-related names or subjects
-  // filename: searches in attachment filename
-  // subject: searches in email subject
-  let query = `has:attachment ((filename:חשבונית OR filename:קבלה OR filename:invoice OR filename:receipt) OR (subject:חשבונית OR subject:קבלה OR subject:חשבון OR subject:invoice OR subject:receipt OR subject:payment))`;
+  // Build search query - AGGRESSIVE invoice search
+  // מחפש כל מייל עם קובץ מצורף שיכול להיות חשבונית
+  let query = `has:attachment (` +
+    // חיפוש בשם הקובץ
+    `filename:חשבונית OR filename:קבלה OR filename:invoice OR filename:receipt OR ` +
+    `filename:tax OR filename:bill OR filename:מס OR filename:עסקה OR ` +
+    // חיפוש בנושא
+    `subject:חשבונית OR subject:קבלה OR subject:חשבון OR subject:invoice OR ` +
+    `subject:receipt OR subject:payment OR subject:bill OR subject:order OR ` +
+    `subject:הזמנה OR subject:תשלום OR subject:אישור OR subject:confirmation OR ` +
+    // מיילים מספקים ידועים (noreply בדרך כלל שולח חשבוניות)
+    `from:noreply OR from:no-reply OR from:billing OR from:invoice OR ` +
+    `from:accounts OR from:finance` +
+  `)`;
   if (afterDate) {
     query += ` after:${formatDateForSearch(afterDate)}`;
   }
@@ -49,9 +58,9 @@ export async function searchInvoiceEmails(
   const messages = response.data.messages || [];
   console.log(`Found ${messages.length} emails matching invoice keywords`);
   
-  // Fetch messages in parallel (batch of 5 at a time)
+  // Fetch messages in parallel (batch of 10 at a time for speed)
   const emailMessages: EmailMessage[] = [];
-  const batchSize = 5;
+  const batchSize = 10;
   
   for (let i = 0; i < messages.length; i += batchSize) {
     const batch = messages.slice(i, i + batchSize);
@@ -185,6 +194,6 @@ export async function getMonthlyEmails(
   return searchInvoiceEmails(tokens, {
     afterDate: startDate,
     beforeDate: endDate,
-    maxResults: 20, // הגבלת מספר המיילים למניעת timeout
+    maxResults: 50, // סריקה רחבה יותר
   });
 }

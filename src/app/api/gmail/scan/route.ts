@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
       emails = await searchInvoiceEmails(validTokens, {
         afterDate: new Date(startDate),
         beforeDate: new Date(endDate),
-        maxResults: 20, // הגבלה למניעת timeout
+        maxResults: 50, // סריקה אגרסיבית עם timeout של 300 שניות
       });
     } else {
       // Use month/year

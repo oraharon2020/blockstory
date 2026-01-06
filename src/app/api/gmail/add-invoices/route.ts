@@ -68,6 +68,8 @@ async function uploadInvoiceFile(
     const safeFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
     const path = `${businessId}/invoices/${timestamp}-${safeFilename}`;
     
+    console.log(`📤 Uploading file: ${path}, size: ${buffer.length} bytes, type: ${mimeType}`);
+    
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage
       .from('invoices')
@@ -77,7 +79,11 @@ async function uploadInvoiceFile(
       });
     
     if (error) {
-      console.error('Upload error:', error);
+      console.error('❌ Upload error:', error.message);
+      // Try to create bucket if it doesn't exist
+      if (error.message.includes('not found') || error.message.includes('Bucket')) {
+        console.error('⚠️ Bucket "invoices" may not exist. Please create it in Supabase Storage.');
+      }
       return null;
     }
     
@@ -86,9 +92,10 @@ async function uploadInvoiceFile(
       .from('invoices')
       .getPublicUrl(path);
     
+    console.log(`✅ File uploaded successfully: ${urlData.publicUrl}`);
     return urlData.publicUrl;
-  } catch (err) {
-    console.error('Upload error:', err);
+  } catch (err: any) {
+    console.error('❌ Upload exception:', err.message);
     return null;
   }
 }
@@ -140,8 +147,15 @@ export async function POST(request: NextRequest) {
         // Upload file to Storage if we have the data
         let fileUrl: string | null = null;
         if (fileData && mimeType) {
+          console.log(`📎 File data present for ${filename}, length: ${fileData.length}`);
           fileUrl = await uploadInvoiceFile(businessId, filename, mimeType, fileData);
-          console.log(`Uploaded ${filename} -> ${fileUrl}`);
+          if (fileUrl) {
+            console.log(`✅ Uploaded ${filename} -> ${fileUrl}`);
+          } else {
+            console.log(`⚠️ Failed to upload ${filename}, continuing without file...`);
+          }
+        } else {
+          console.log(`⚠️ No file data for ${filename} - fileData: ${!!fileData}, mimeType: ${mimeType}`);
         }
         
         // Determine table based on VAT
