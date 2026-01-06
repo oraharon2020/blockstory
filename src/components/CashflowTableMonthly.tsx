@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { DailyData } from '@/types';
 import { formatCurrency, formatPercent } from '@/lib/calculations';
 import { getMonthDays } from './MonthPicker';
@@ -187,10 +187,15 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
 
   const isColumnVisible = (key: string) => visibleColumns.includes(key);
 
-  // Get date range for the month (month is 1-12)
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
+  // Get date range for the month (month is 1-12) - use useMemo to ensure proper updates
+  const { daysInMonth, startDate, endDate } = useMemo(() => {
+    const days = new Date(year, month, 0).getDate();
+    return {
+      daysInMonth: days,
+      startDate: `${year}-${String(month).padStart(2, '0')}-01`,
+      endDate: `${year}-${String(month).padStart(2, '0')}-${String(days).padStart(2, '0')}`,
+    };
+  }, [month, year]);
 
   // Build query params with businessId
   const buildQueryParams = useCallback((params: Record<string, string>) => {
@@ -201,9 +206,18 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
     return queryParams.toString();
   }, [currentBusiness?.id]);
 
+  // Track current month/year to prevent stale data from overwriting
+  const currentMonthYearRef = useRef(`${year}-${month}`);
+  useEffect(() => {
+    currentMonthYearRef.current = `${year}-${month}`;
+  }, [month, year]);
+
   const fetchData = useCallback(async (showLoading = true) => {
     // Don't fetch if no business selected
     if (!currentBusiness?.id) return;
+    
+    // Capture current month/year at the start of the fetch
+    const fetchMonthYear = `${year}-${month}`;
     
     try {
       if (showLoading) setLoading(true);
@@ -217,6 +231,12 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
         fetch(`/api/refunds?${buildQueryParams({ startDate, endDate })}`),
         fetch(`/api/business-settings?${buildQueryParams({})}`),
       ]);
+      
+      // Check if month changed while fetching - if so, discard results
+      if (currentMonthYearRef.current !== fetchMonthYear) {
+        console.log('🚫 Discarding stale fetch results for', fetchMonthYear, '(now viewing', currentMonthYearRef.current, ')');
+        return;
+      }
       
       const cashflowJson = await cashflowRes.json();
       const costsJson = await costsRes.json();
@@ -446,27 +466,32 @@ export default function CashflowTable({ month, year, onSync, isLoading }: Cashfl
     return () => clearInterval(interval);
   }, [autoRefresh, fetchData]);
 
-  // Auto sync from WooCommerce every 5 minutes (only for today)
+  // Auto sync from WooCommerce every 5 minutes (only for today, only when viewing current month)
   useEffect(() => {
     if (!autoSync || !currentBusiness?.id) return;
     
+    // Only run auto-sync if viewing current month
+    const currentMonth = new Date().getMonth() + 1; // Convert to 1-12
+    const currentYear = new Date().getFullYear();
+    const isCurrentMonth = month === currentMonth && year === currentYear;
+    
+    if (!isCurrentMonth) {
+      // Not viewing current month, skip auto-sync
+      return;
+    }
+    
     const syncToday = async () => {
       const today = new Date().toISOString().split('T')[0];
-      // Only sync if we're viewing the current month (month is 1-12)
-      const currentMonth = new Date().getMonth() + 1; // Convert to 1-12
-      const currentYear = new Date().getFullYear();
-      if (month === currentMonth && year === currentYear) {
-        console.log('🔄 Auto-syncing today from WooCommerce...');
-        try {
-          await fetch(`/api/sync?date=${today}&businessId=${currentBusiness.id}`);
-          await fetchData(false);
-        } catch (error) {
-          console.error('Auto-sync error:', error);
-        }
+      console.log('🔄 Auto-syncing today from WooCommerce...');
+      try {
+        await fetch(`/api/sync?date=${today}&businessId=${currentBusiness.id}`);
+        await fetchData(false);
+      } catch (error) {
+        console.error('Auto-sync error:', error);
       }
     };
     
-    // Sync immediately on mount
+    // Sync immediately on mount (only for current month)
     syncToday();
     
     // Then sync every 5 minutes

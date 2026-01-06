@@ -49,7 +49,21 @@ export const KNOWN_INVOICE_SENDERS = [
 
 // OAuth redirect URI
 export const getRedirectUri = () => {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  // בסביבת production ב-Vercel, משתמשים בדומיין האמתי
+  let baseUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  
+  if (!baseUrl && process.env.VERCEL_URL) {
+    baseUrl = `https://${process.env.VERCEL_URL}`;
+  }
+  
+  if (!baseUrl && typeof window !== 'undefined') {
+    baseUrl = window.location.origin;
+  }
+  
+  if (!baseUrl) {
+    baseUrl = 'http://localhost:3000';
+  }
+  
   return `${baseUrl}/api/gmail/callback`;
 };
 

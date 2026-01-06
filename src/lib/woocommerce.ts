@@ -27,16 +27,40 @@ export async function fetchOrders(
     dayBefore.setDate(dayBefore.getDate() - 1);
     const dayBeforeStr = dayBefore.toISOString().split('T')[0];
     
-    // Use dates_are_gmt=false to use the store's timezone
-    // after is EXCLUSIVE, before is EXCLUSIVE
-    const response = await client.get('orders', {
-      after: `${dayBeforeStr}T23:59:59`,  // After end of previous day = start of dateFrom
-      before: `${dateTo}T23:59:59`,        // Before end of dateTo
-      per_page: 100,
-      status: statuses,
-      dates_are_gmt: false,
-    });
-    return response.data;
+    // Fetch ALL orders with pagination
+    let allOrders: any[] = [];
+    let page = 1;
+    const perPage = 100;
+    
+    while (true) {
+      const response = await client.get('orders', {
+        after: `${dayBeforeStr}T23:59:59`,
+        before: `${dateTo}T23:59:59`,
+        per_page: perPage,
+        page: page,
+        status: statuses,
+        dates_are_gmt: false,
+      });
+      
+      const orders = response.data || [];
+      allOrders = allOrders.concat(orders);
+      
+      // If we got less than perPage, we've reached the end
+      if (orders.length < perPage) {
+        break;
+      }
+      
+      page++;
+      
+      // Safety limit - max 50 pages (5000 orders for date range)
+      if (page > 50) {
+        console.log(`⚠️ Reached page limit (50 pages, ${allOrders.length} orders)`);
+        break;
+      }
+    }
+    
+    console.log(`📦 Fetched ${allOrders.length} orders (${page} page${page > 1 ? 's' : ''})`);
+    return allOrders;
   } catch (error) {
     console.error('Error fetching WooCommerce orders:', error);
     throw error;
@@ -59,19 +83,40 @@ export async function fetchOrdersByDate(
     dayBefore.setDate(dayBefore.getDate() - 1);
     const dayBeforeStr = dayBefore.toISOString().split('T')[0];
     
-    // Use dates_are_gmt=false to use the store's timezone (Jerusalem)
-    // after is EXCLUSIVE (orders created AFTER this datetime)
-    // before is EXCLUSIVE (orders created BEFORE this datetime)
-    const response = await client.get('orders', {
-      after: `${dayBeforeStr}T23:59:59`,  // After end of previous day = start of target day
-      before: `${date}T23:59:59`,          // Before end of target day
-      per_page: 100,
-      status: statuses,
-      dates_are_gmt: false,
-    });
+    // Fetch ALL orders with pagination
+    let allOrders: any[] = [];
+    let page = 1;
+    const perPage = 100;
     
-    console.log(`   📦 Response: ${response.data?.length || 0} orders`);
-    return response.data;
+    while (true) {
+      const response = await client.get('orders', {
+        after: `${dayBeforeStr}T23:59:59`,
+        before: `${date}T23:59:59`,
+        per_page: perPage,
+        page: page,
+        status: statuses,
+        dates_are_gmt: false,
+      });
+      
+      const orders = response.data || [];
+      allOrders = allOrders.concat(orders);
+      
+      // If we got less than perPage, we've reached the end
+      if (orders.length < perPage) {
+        break;
+      }
+      
+      page++;
+      
+      // Safety limit - max 10 pages (1000 orders per day should be enough)
+      if (page > 10) {
+        console.log(`⚠️ Reached page limit (10 pages, ${allOrders.length} orders)`);
+        break;
+      }
+    }
+    
+    console.log(`   📦 Response: ${allOrders.length} orders (${page} page${page > 1 ? 's' : ''})`);
+    return allOrders;
   } catch (error: any) {
     console.error('Error fetching WooCommerce orders for date:', date);
     console.error('Error details:', error?.response?.data || error.message);

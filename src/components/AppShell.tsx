@@ -51,9 +51,9 @@ export default function AppShell({ children }: AppShellProps) {
         { name: 'Google Ads', href: '/google-ads' },
       ]
     },
+    { name: 'מעצבות', href: '/designers', icon: Users },
     { name: 'עלויות מוצרים', href: '/products', icon: Package },
     { name: 'הזמנות לספקים', href: '/supplier-orders', icon: Truck },
-    { name: 'משתמשים', href: '/users', icon: Users },
     { name: 'הגדרות', href: '/settings', icon: Settings },
   ];
 

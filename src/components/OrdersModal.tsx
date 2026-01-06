@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { X, Package, Loader2, User, MapPin, CreditCard, Save, TrendingUp, AlertCircle, Building2, ChevronDown, ChevronUp, Star, Check, ChevronsUpDown, Plus, Truck, StickyNote } from 'lucide-react';
+import { X, Package, Loader2, User, MapPin, CreditCard, Save, TrendingUp, AlertCircle, Building2, ChevronDown, ChevronUp, Star, Check, ChevronsUpDown, Plus, Truck, StickyNote, PlusCircle, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/calculations';
 import { useAuth } from '@/contexts/AuthContext';
+import AddManualOrderModal from './AddManualOrderModal';
 
 interface LineItem {
   id: number;
@@ -80,6 +81,33 @@ interface ItemCostState {
   isVariationCost: boolean; // האם העלות מגיעה מוריאציה ספציפית
   isReady: boolean; // האם מסומן כמוכן
   note: string; // הערה לפריט
+}
+
+// Interface for manual orders
+interface ManualOrder {
+  id: string;
+  order_date: string;
+  customer_name: string | null;
+  customer_phone: string | null;
+  customer_email: string | null;
+  total: number;
+  shipping_total: number;
+  status: string;
+  payment_method: string;
+  notes: string | null;
+  created_at: string;
+  items: ManualOrderItem[];
+  isManual: true; // Flag to identify manual orders
+}
+
+interface ManualOrderItem {
+  id: string;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+  total: number;
+  unit_cost: number;
+  supplier_name: string | null;
 }
 
 interface OrdersModalProps {
@@ -199,7 +227,13 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
   const [itemCostStates, setItemCostStates] = useState<Map<string, ItemCostState>>(new Map());
   const [loadingCosts, setLoadingCosts] = useState(false);
   const [manualShippingPerItem, setManualShippingPerItem] = useState(false);
-  const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
+  const [expandedOrders, setExpandedOrders] = useState<Set<number | string>>(new Set());
+  
+  // Manual orders state
+  const [manualOrders, setManualOrders] = useState<ManualOrder[]>([]);
+  const [loadingManualOrders, setLoadingManualOrders] = useState(false);
+  const [showAddManualOrder, setShowAddManualOrder] = useState(false);
+  const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   
   // VAT settings for shipping
   const [vatRate, setVatRate] = useState(18);
@@ -211,7 +245,7 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
   const [addingSupplier, setAddingSupplier] = useState(false);
 
   // Toggle single order expansion
-  const toggleOrder = (orderId: number) => {
+  const toggleOrder = (orderId: number | string) => {
     setExpandedOrders(prev => {
       const newSet = new Set(prev);
       if (newSet.has(orderId)) {
@@ -225,13 +259,58 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
 
   // Expand all orders
   const expandAll = () => {
-    setExpandedOrders(new Set(orders.map(o => o.id)));
+    const allIds: (number | string)[] = [...orders.map(o => o.id), ...manualOrders.map(o => o.id)];
+    setExpandedOrders(new Set(allIds));
   };
 
   // Collapse all orders
   const collapseAll = () => {
     setExpandedOrders(new Set());
   };
+
+  // Load manual orders
+  const loadManualOrders = useCallback(async () => {
+    if (!currentBusiness?.id || !date) return;
+    
+    setLoadingManualOrders(true);
+    try {
+      const res = await fetch(`/api/manual-orders?businessId=${currentBusiness.id}&date=${date}`);
+      const json = await res.json();
+      if (json.orders) {
+        setManualOrders(json.orders.map((o: any) => ({ ...o, isManual: true })));
+      }
+    } catch (error) {
+      console.error('Error loading manual orders:', error);
+    } finally {
+      setLoadingManualOrders(false);
+    }
+  }, [currentBusiness?.id, date]);
+
+  // Load manual orders when modal opens
+  useEffect(() => {
+    if (isOpen && currentBusiness?.id && date) {
+      loadManualOrders();
+    }
+  }, [isOpen, currentBusiness?.id, date, loadManualOrders]);
+
+  // Delete manual order
+  const handleDeleteManualOrder = async (orderId: string) => {
+    if (!confirm('האם אתה בטוח שברצונך למחוק את ההזמנה?')) return;
+    
+    setDeletingOrderId(orderId);
+    try {
+      const res = await fetch(`/api/manual-orders?orderId=${orderId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setManualOrders(prev => prev.filter(o => o.id !== orderId));
+      }
+    } catch (error) {
+      console.error('Error deleting manual order:', error);
+    } finally {
+      setDeletingOrderId(null);
+    }
+  };
+
+  // Add new supplier
 
   // Add new supplier
   const handleAddSupplier = async () => {
@@ -687,7 +766,16 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
     return { profit, totalCost, hasMissingCosts };
   };
 
+  // Calculate manual order profit
+  const calculateManualOrderProfit = (order: ManualOrder) => {
+    const totalCost = order.items.reduce((sum, item) => sum + (item.unit_cost * item.quantity), 0);
+    const profit = order.total - totalCost;
+    return { profit, totalCost, hasMissingCosts: false };
+  };
+
   const totalRevenue = orders.reduce((sum, order) => sum + parseFloat(order.total || '0'), 0);
+  const manualOrdersRevenue = manualOrders.reduce((sum, order) => sum + order.total, 0);
+  const combinedRevenue = totalRevenue + manualOrdersRevenue;
   
   // Calculate total profit
   let totalProfit = 0;
@@ -697,6 +785,14 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
     totalProfit += profit;
     if (hasMissingCosts) hasAnyMissingCosts = true;
   });
+  
+  // Add manual orders profit
+  manualOrders.forEach(order => {
+    const { profit } = calculateManualOrderProfit(order);
+    totalProfit += profit;
+  });
+
+  const totalOrdersCount = orders.length + manualOrders.length;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-gray-100" dir="rtl">
@@ -710,10 +806,13 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
             </h2>
             <div className="flex items-center gap-4 text-blue-100 text-sm">
               <span className="bg-white/20 px-2 py-0.5 rounded-full font-medium">
-                {orders.length} הזמנות
+                {totalOrdersCount} הזמנות
+                {manualOrders.length > 0 && (
+                  <span className="text-green-300 mr-1">({manualOrders.length} ידניות)</span>
+                )}
               </span>
               <span className="font-semibold">
-                סה"כ: {formatCurrency(totalRevenue)}
+                סה"כ: {formatCurrency(combinedRevenue)}
               </span>
               {!loadingCosts && (
                 <span className={`flex items-center gap-1.5 font-semibold ${hasAnyMissingCosts ? 'text-yellow-300' : 'text-green-300'}`}>
@@ -728,13 +827,22 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
               )}
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-            title="סגור (Esc)"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowAddManualOrder(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors text-sm font-medium"
+            >
+              <PlusCircle className="w-4 h-4" />
+              הזמנה ידנית
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              title="סגור (Esc)"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1098,6 +1206,172 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
                   </div>
                 );
               })}
+
+              {/* Manual Orders Section */}
+              {manualOrders.length > 0 && (
+                <>
+                  <div className="flex items-center gap-2 mt-4 mb-2">
+                    <div className="h-px flex-1 bg-green-200" />
+                    <span className="text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded">
+                      הזמנות ידניות ({manualOrders.length})
+                    </span>
+                    <div className="h-px flex-1 bg-green-200" />
+                  </div>
+                  
+                  {manualOrders.map((order, index) => {
+                    const { profit, totalCost } = calculateManualOrderProfit(order);
+                    const isExpanded = expandedOrders.has(order.id);
+                    const orderIndex = orders.length + index + 1;
+                    
+                    return (
+                      <div
+                        key={order.id}
+                        className="bg-white rounded-lg overflow-hidden border border-green-300 shadow-sm hover:shadow transition-all"
+                      >
+                        {/* Order header */}
+                        <div 
+                          onClick={() => toggleOrder(order.id)}
+                          className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-green-50/30 transition-colors bg-green-50/10"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold bg-green-100 text-green-700">
+                              {orderIndex}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-sm text-gray-900">ידנית</span>
+                                <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
+                                  {STATUS_LABELS[order.status]?.label || order.status}
+                                </span>
+                                <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
+                                  הזמנה ידנית
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-gray-500">
+                                {order.customer_name && (
+                                  <>
+                                    <span>{order.customer_name}</span>
+                                    <span className="text-gray-300">|</span>
+                                  </>
+                                )}
+                                <span>{new Date(order.created_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</span>
+                                <span className="text-gray-300">|</span>
+                                <span>{order.items.length} פריטים</span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-4">
+                            <div className="text-left">
+                              <span className="font-bold text-sm text-gray-900 block">
+                                {formatCurrency(order.total)}
+                              </span>
+                              <span className="text-xs font-medium text-green-600">
+                                רווח: {formatCurrency(profit)}
+                              </span>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteManualOrder(order.id);
+                              }}
+                              disabled={deletingOrderId === order.id}
+                              className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                              title="מחק הזמנה"
+                            >
+                              {deletingOrderId === order.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </button>
+                            <div className={`p-1.5 bg-gray-100 rounded transition-transform duration-200 ${isExpanded ? 'rotate-180 bg-green-100' : ''}`}>
+                              <ChevronDown className={`w-4 h-4 ${isExpanded ? 'text-green-600' : 'text-gray-400'}`} />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Expanded content */}
+                        {isExpanded && (
+                          <div className="border-t border-green-100 px-3 py-2 bg-green-50/30">
+                            {/* Customer info */}
+                            {(order.customer_name || order.customer_phone || order.payment_method) && (
+                              <div className="flex flex-wrap gap-3 text-xs mb-2 text-gray-600">
+                                {order.customer_name && (
+                                  <span className="flex items-center gap-1">
+                                    <User className="w-3 h-3 text-blue-500" />
+                                    {order.customer_name}
+                                  </span>
+                                )}
+                                {order.customer_phone && (
+                                  <span className="flex items-center gap-1">
+                                    📞 {order.customer_phone}
+                                  </span>
+                                )}
+                                {order.payment_method && (
+                                  <span className="flex items-center gap-1">
+                                    <CreditCard className="w-3 h-3 text-purple-500" />
+                                    {order.payment_method === 'cash' ? 'מזומן' : 
+                                     order.payment_method === 'credit' ? 'כרטיס אשראי' :
+                                     order.payment_method === 'bit' ? 'ביט' :
+                                     order.payment_method === 'bank_transfer' ? 'העברה בנקאית' :
+                                     order.payment_method}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Notes */}
+                            {order.notes && (
+                              <div className="text-xs text-gray-500 mb-2 bg-yellow-50 px-2 py-1 rounded border border-yellow-200">
+                                📝 {order.notes}
+                              </div>
+                            )}
+
+                            {/* Line items */}
+                            <div className="space-y-1.5">
+                              {order.items.map((item) => (
+                                <div
+                                  key={item.id}
+                                  className="flex items-center justify-between bg-white rounded-lg px-2 py-1.5 border border-gray-100"
+                                >
+                                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                                    <span className="w-6 h-6 flex items-center justify-center bg-gray-100 text-gray-600 rounded text-xs font-medium">
+                                      {item.quantity}x
+                                    </span>
+                                    <span className="text-sm font-medium text-gray-800 truncate">
+                                      {item.product_name}
+                                    </span>
+                                    {item.supplier_name && (
+                                      <span className="text-xs text-gray-400">({item.supplier_name})</span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 text-xs">
+                                    <span className="text-gray-500">
+                                      עלות: {formatCurrency(item.unit_cost * item.quantity)}
+                                    </span>
+                                    <span className="font-medium text-gray-700">
+                                      {formatCurrency(item.total)}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                              
+                              {/* Shipping total */}
+                              {order.shipping_total > 0 && (
+                                <div className="flex justify-between text-xs text-gray-500 pt-2 mt-2 border-t border-gray-100">
+                                  <span>משלוח</span>
+                                  <span className="font-medium">{formatCurrency(order.shipping_total)}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
             </div>
           )}
         </div>
@@ -1108,7 +1382,8 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
             <div className="flex items-center gap-4 text-xs text-gray-600">
               <span className="flex items-center gap-1">
                 <Package className="w-3.5 h-3.5" />
-                {orders.length} הזמנות
+                {totalOrdersCount} הזמנות
+                {manualOrders.length > 0 && <span className="text-green-600">({manualOrders.length} ידניות)</span>}
               </span>
               {hasAnyMissingCosts && (
                 <span className="flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded">
@@ -1184,6 +1459,20 @@ export default function OrdersModal({ isOpen, onClose, date, orders, isLoading }
             </div>
           </div>
         </div>
+      )}
+
+      {/* Add Manual Order Modal */}
+      {showAddManualOrder && currentBusiness?.id && (
+        <AddManualOrderModal
+          isOpen={showAddManualOrder}
+          onClose={() => setShowAddManualOrder(false)}
+          date={date}
+          businessId={currentBusiness.id}
+          onOrderAdded={() => {
+            loadManualOrders();
+            setShowAddManualOrder(false);
+          }}
+        />
       )}
     </div>
   );

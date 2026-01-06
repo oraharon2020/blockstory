@@ -193,6 +193,23 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
       
       clearInterval(progressInterval);
       
+      // Check if response is OK before parsing JSON
+      if (!res.ok) {
+        const text = await res.text();
+        console.error('Gmail scan error response:', text);
+        try {
+          const errorData = JSON.parse(text);
+          if (errorData.needsAuth) {
+            setAccounts([]);
+            setError('נדרשת התחברות מחדש ל-Gmail');
+            return;
+          }
+          throw new Error(errorData.error || 'שגיאה בסריקת המייל');
+        } catch {
+          throw new Error('שגיאה בסריקת המייל: ' + text.substring(0, 100));
+        }
+      }
+      
       const data = await res.json();
       
       if (data.needsAuth) {
