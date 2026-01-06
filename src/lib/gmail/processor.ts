@@ -291,7 +291,7 @@ export async function processInvoiceBatch(
   getAttachmentData: (emailId: string, attachmentId: string) => Promise<string>,
   businessId: string,
   onProgress?: (current: number, total: number) => void
-): Promise<ScannedInvoice[]> {
+): Promise<{ results: ScannedInvoice[]; hasMore: boolean; totalFound: number }> {
   const results: ScannedInvoice[] = [];
   let processed = 0;
   
@@ -303,11 +303,14 @@ export async function processInvoiceBatch(
     }
   }
   
-  // Process all attachments (no limit)
-  const toProcess = allAttachments;
+  // Limit to 50 attachments (with 300 sec timeout on Vercel Pro)
+  const MAX_ATTACHMENTS = 50;
+  const totalFound = allAttachments.length;
+  const hasMore = totalFound > MAX_ATTACHMENTS;
+  const toProcess = allAttachments.slice(0, MAX_ATTACHMENTS);
   const totalAttachments = toProcess.length;
   
-  console.log(`Processing ${totalAttachments} attachments`);
+  console.log(`Processing ${totalAttachments} of ${totalFound} attachments${hasMore ? ' (limited)' : ''}`);
   
   // Process 3 at a time in parallel for speed
   const batchSize = 3;
@@ -341,5 +344,5 @@ export async function processInvoiceBatch(
     onProgress?.(processed, totalAttachments);
   }
   
-  return results;
+  return { results, hasMore, totalFound };
 }

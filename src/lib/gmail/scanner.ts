@@ -185,6 +185,6 @@ export async function getMonthlyEmails(
   return searchInvoiceEmails(tokens, {
     afterDate: startDate,
     beforeDate: endDate,
-    maxResults: 100,
+    maxResults: 20, // הגבלת מספר המיילים למניעת timeout
   });
 }

@@ -229,7 +229,13 @@ export default function EmailScanner({ month, year, onInvoicesAdded, onClose }: 
       }));
       
       setInvoices(processedInvoices);
-      setScanProgress(`✓ נמצאו ${data.summary.totalAttachments} חשבוניות (${data.summary.newInvoices} חדשות, ${data.summary.duplicates} כפולות)`);
+      
+      // Build progress message
+      let progressMsg = `✓ נמצאו ${data.summary.totalAttachments} חשבוניות (${data.summary.newInvoices} חדשות, ${data.summary.duplicates} כפולות)`;
+      if (data.summary.hasMore) {
+        progressMsg += ` | ⚠️ יש עוד ${data.summary.totalFound - data.summary.totalAttachments} קבצים - צמצם את טווח התאריכים לסריקה נוספת`;
+      }
+      setScanProgress(progressMsg);
     } catch (err: any) {
       clearInterval(progressInterval);
       setError(err.message);

@@ -16,7 +16,7 @@ import {
 } from '@/lib/gmail';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // Allow up to 60 seconds for scanning
+export const maxDuration = 300; // 5 minutes - Vercel Pro allows up to 300 seconds
 
 export async function POST(request: NextRequest) {
   try {
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
       emails = await searchInvoiceEmails(validTokens, {
         afterDate: new Date(startDate),
         beforeDate: new Date(endDate),
-        maxResults: 100,
+        maxResults: 20, // הגבלה למניעת timeout
       });
     } else {
       // Use month/year
@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Process invoices with Claude Vision
-    const invoices = await processInvoiceBatch(
+    const { results: invoices, hasMore, totalFound } = await processInvoiceBatch(
       emails,
       async (emailId, attachmentId) => {
         return downloadAttachment(validTokens, emailId, attachmentId);
@@ -139,6 +139,8 @@ export async function POST(request: NextRequest) {
       summary: {
         totalEmails: emails.length,
         totalAttachments: invoices.length,
+        totalFound, // כמה קבצים נמצאו בסה"כ
+        hasMore, // האם יש עוד קבצים שלא נסרקו
         skippedNonInvoices,
         newInvoices: newInvoices.length,
         duplicates: duplicates.length,
