@@ -917,8 +917,6 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
           </div>
         )}
       </div>
-        )}
-      </div>
 
       {/* Email Scanner Modal */}
       {showEmailScanner && (
