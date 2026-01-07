@@ -53,17 +53,17 @@ export async function searchInvoiceEmails(
     dateQuery += ` before:${formatDateForSearch(beforeDate)}`;
   }
   
-  // === אסטרטגיה 1: כל מייל עם קובץ PDF/תמונה מצורף ===
-  const query1 = `has:attachment (filename:pdf OR filename:jpg OR filename:jpeg OR filename:png)${dateQuery}`;
+  // === אסטרטגיה 1: כל מייל עם קובץ PDF מצורף (לא תמונות - יש בהן הרבה זבל) ===
+  const query1 = `has:attachment filename:*.pdf${dateQuery}`;
   
-  // === אסטרטגיה 2: חיפוש לפי מילות מפתח בשם קובץ או נושא ===
+  // === אסטרטגיה 2: חיפוש לפי מילות מפתח בשם קובץ או נושא (כולל תמונות) ===
   const query2 = `has:attachment (` +
     `filename:חשבונית OR filename:קבלה OR filename:invoice OR filename:receipt OR ` +
     `filename:bill OR filename:BILL OR filename:INV OR filename:inv OR filename:tax OR ` +
     `filename:payment OR filename:order OR filename:מס OR filename:עסקה OR ` +
     `subject:חשבונית OR subject:קבלה OR subject:invoice OR subject:receipt OR ` +
     `subject:bill OR subject:payment OR subject:order OR subject:confirmation OR ` +
-    `subject:הזמנה OR subject:תשלום OR subject:אישור OR subject:פירוט` +
+    `subject:הזמנה OR subject:תשלום OR subject:אישור OR subject:פירוט OR subject:tax` +
   `)${dateQuery}`;
   
   // === אסטרטגיה 3: מיילים מספקים ידועים ===
@@ -188,7 +188,22 @@ function extractAttachments(payload?: gmail_v1.Schema$MessagePart, stats?: ScanS
     // בדיקה אם גודל הקובץ תקין
     const isValidSize = size <= MAX_ATTACHMENT_SIZE;
     
-    if (isValidType && isValidSize) {
+    // פילטר תמונות קטנות מדי (לוגואים, חתימות וכו') - פחות מ-30KB
+    const isImage = mimeType.startsWith('image/');
+    const MIN_IMAGE_SIZE = 30 * 1024; // 30KB
+    const isTooSmallImage = isImage && size < MIN_IMAGE_SIZE;
+    
+    // סינון קבצים לא רלוונטיים לפי שם
+    const isJunkFile = filename.includes('logo') || 
+                       filename.includes('signature') || 
+                       filename.includes('banner') ||
+                       filename.includes('icon') ||
+                       filename.includes('button') ||
+                       filename.includes('footer') ||
+                       filename.includes('header') ||
+                       filename.includes('unsubscribe');
+    
+    if (isValidType && isValidSize && !isTooSmallImage && !isJunkFile) {
       attachments.push({
         id: payload.body.attachmentId,
         filename: payload.filename,
@@ -200,6 +215,7 @@ function extractAttachments(payload?: gmail_v1.Schema$MessagePart, stats?: ScanS
       if (stats) {
         if (!isValidType) stats.filteredByType++;
         if (!isValidSize) stats.filteredBySize++;
+        if (isTooSmallImage || isJunkFile) stats.filteredByType++; // נספור כ"סוג לא מתאים"
       }
     }
   }

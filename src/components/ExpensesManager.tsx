@@ -407,6 +407,102 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
     URL.revokeObjectURL(url);
   };
 
+  // Import from Excel/CSV
+  const excelInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const lines = text.split('\n').filter(line => line.trim());
+      
+      // Skip header row
+      const dataLines = lines.slice(1);
+      
+      // Parse payment method from Hebrew
+      const parsePaymentMethod = (heb: string): 'credit' | 'bank_transfer' | 'check' => {
+        if (heb.includes('העברה')) return 'bank_transfer';
+        if (heb.includes('צ\'ק') || heb.includes('צק')) return 'check';
+        return 'credit';
+      };
+
+      let addedCount = 0;
+      let errorCount = 0;
+
+      for (const line of dataLines) {
+        // Parse CSV line (handle commas in quoted strings)
+        const values = line.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g)?.map(v => v.replace(/^"|"$/g, '').trim()) || [];
+        
+        if (values.length < 5) continue;
+
+        const isVatTab = activeTab === 'vat';
+        const [date, description, supplier, invoiceNum, amountStr, ...rest] = values;
+        
+        // Skip if essential fields are missing
+        if (!date || !description || !amountStr) continue;
+        
+        // Parse amount (remove currency symbols)
+        const amount = parseFloat(amountStr.replace(/[₪,]/g, '')) || 0;
+        if (amount === 0) continue;
+        
+        // Get payment method and vat
+        let vatAmount = 0;
+        let paymentMethod: 'credit' | 'bank_transfer' | 'check' = 'credit';
+        
+        if (isVatTab) {
+          vatAmount = parseFloat(rest[0]?.replace(/[₪,]/g, '') || '0') || 0;
+          paymentMethod = parsePaymentMethod(rest[1] || '');
+        } else {
+          paymentMethod = parsePaymentMethod(rest[0] || '');
+        }
+
+        try {
+          const res = await fetch('/api/expenses', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: isVatTab ? 'vat' : 'noVat',
+              expense_date: date,
+              description,
+              amount,
+              vat_amount: isVatTab ? vatAmount : undefined,
+              supplier_name: supplier || null,
+              invoice_number: invoiceNum || null,
+              payment_method: paymentMethod,
+              businessId: currentBusiness?.id,
+            }),
+          });
+
+          if (res.ok) {
+            addedCount++;
+          } else {
+            errorCount++;
+          }
+        } catch {
+          errorCount++;
+        }
+      }
+
+      // Reload data
+      await loadExpenses();
+      onUpdate?.();
+      
+      alert(`ייבוא הושלם!\n✅ נוספו: ${addedCount} הוצאות\n${errorCount > 0 ? `❌ שגיאות: ${errorCount}` : ''}`);
+      
+    } catch (error) {
+      console.error('Import error:', error);
+      alert('שגיאה בייבוא הקובץ');
+    } finally {
+      setImporting(false);
+      // Reset input
+      if (excelInputRef.current) excelInputRef.current.value = '';
+    }
+  };
+
   // Toggle recurring status
   const handleToggleRecurring = async (id: number, type: 'vat' | 'noVat', isRecurring: boolean) => {
     try {
@@ -605,12 +701,28 @@ export default function ExpensesManager({ month, year, onUpdate, onClose, isExpa
           <span className="text-blue-600 font-semibold">{formatCurrency(noVatTotal)}</span>
           {(activeTab === 'vat' || activeTab === 'noVat') && (
             <>
+              {/* Excel Export/Import */}
+              <input
+                ref={excelInputRef}
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                onChange={handleImportExcel}
+                className="hidden"
+              />
               <button
                 onClick={handleExportExcel}
                 className="flex items-center gap-1 px-2 py-1 text-green-600 hover:bg-green-50 rounded text-xs"
                 title="ייצוא לאקסל"
               >
                 <Download className="w-3 h-3" />
+              </button>
+              <button
+                onClick={() => excelInputRef.current?.click()}
+                disabled={importing}
+                className="flex items-center gap-1 px-2 py-1 text-orange-600 hover:bg-orange-50 rounded text-xs"
+                title="ייבוא מאקסל"
+              >
+                {importing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
               </button>
               <button
                 onClick={handleCopyFromPreviousMonth}

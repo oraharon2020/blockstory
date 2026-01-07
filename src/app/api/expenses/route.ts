@@ -162,7 +162,7 @@ export async function DELETE(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, type, expense_date, description, amount, vat_amount, supplier_name, businessId, payment_method, is_recurring, invoice_number } = body;
+    const { id, type, expense_date, description, amount, vat_amount, supplier_name, businessId, payment_method, is_recurring, invoice_number, is_verified, verified_at } = body;
 
     if (!id || !type) {
       return NextResponse.json({ error: 'Missing id or type' }, { status: 400 });
@@ -180,6 +180,8 @@ export async function PUT(request: NextRequest) {
     if (payment_method !== undefined) updateData.payment_method = payment_method || 'credit';
     if (is_recurring !== undefined) updateData.is_recurring = is_recurring;
     if (invoice_number !== undefined) updateData.invoice_number = invoice_number || null;
+    if (is_verified !== undefined) updateData.is_verified = is_verified;
+    if (verified_at !== undefined) updateData.verified_at = verified_at;
 
     // Only add vat_amount for VAT expenses
     if (type === 'vat' && vat_amount !== undefined) {
